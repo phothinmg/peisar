@@ -1,0 +1,19 @@
+[package]
+name = "peisar"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.151", features = ["preserve_order"] }
+
+
+[dev-dependencies]
+
+
+[lib]
+name = "peisar"
+path = "src/lib.rs"
+
+[features]
+plugin = []
