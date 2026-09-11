@@ -9,7 +9,7 @@ system, and configurable HTML output.
 - **CommonMark** — headings, paragraphs, code blocks, block quotes, lists,
   thematic breaks, HTML blocks, emphasis, links, images, inline code,
   hard/soft breaks.
-- **GFM** — tables (with column alignment), strikethrough, task lists,
+- **GFM** — tables (with column alignment), strikethroughs, task lists,
   autolinks.
 - **Kramdown attributes** — `{:#id .class key="value"}` on any block element.
 - **Plugin system** — extend the parser/AST/renderer via `Plugin` trait.
@@ -58,7 +58,8 @@ let opts = RenderOptions {
 ## Plugins
 
 ```rust
-use peisar::plugin::{Plugin, PluginPipeline, PluginContext, WrapDiv};
+use peisar::plugin_factory::{Plugin, PluginPipeline, PluginContext};
+use peisar::plugins::WrapDiv;
 
 let doc = peisar::parser::parse("# Hello");
 
@@ -77,7 +78,7 @@ let html = peisar::html::render_document_with(
 ### Writing a custom plugin
 
 ```rust
-use peisar::plugin::{Plugin, PluginContext};
+use peisar::plugin_factory::{Plugin, PluginContext};
 use peisar::ast::{Block, Document, KramdownAttributes};
 
 struct AddHeadingClass { class: String }

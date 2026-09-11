@@ -518,7 +518,7 @@ mod tests {
 
     #[test]
     fn plugin_wrap_div() {
-        use crate::plugin_factory::WrapDiv;
+        use crate::plugins::WrapDiv;
 
         let doc = parse("# Hi");
         let ctx = PluginContext::new(ParseOptions::default());
@@ -534,7 +534,7 @@ mod tests {
 
     #[test]
     fn plugin_pipeline_names() {
-        use crate::plugin_factory::WrapDiv;
+        use crate::plugins::WrapDiv;
 
         let mut pipeline = PluginPipeline::new();
         pipeline.add(WrapDiv {
