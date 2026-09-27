@@ -1,4 +1,7 @@
 {
+    "[markdown]": {
+    "editor.formatOnSave": false
+},
     "cSpell.words": [
         "autolinks",
         "inlines",

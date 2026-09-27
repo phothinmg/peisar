@@ -1,45 +1,29 @@
-//! Configuration options for parsing and rendering.
-//!
-//! Use [`ParseOptions`] to control which Markdown extensions are active,
-//! and [`RenderOptions`] to control HTML output format (full document vs.
-//! fragment).
-
+use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 
-/// Options that control how Markdown is parsed.
+#[napi(object)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ParseOptions {
+pub struct PeisarOptions {
     /// Enable GitHub Flavored Markdown (tables, strikethrough, task lists,
     /// autolinks).  Default: `true`.
-    pub gfm: bool,
+    pub gfm: Option<bool>,
     /// Enable Kramdown-style block attributes (`{:#id .class key="val"}`).
     /// Default: `true`.
-    pub kramdown: bool,
-}
-
-impl Default for ParseOptions {
-    fn default() -> Self {
-        Self {
-            gfm: true,
-            kramdown: true,
-        }
-    }
-}
-
-/// Options that control how the AST is rendered to HTML.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RenderOptions {
+    pub kramdown: Option<bool>,
+    /// Optional file name to attach to the parsed [`Document`](crate::Document).
+    /// Optional file name to attach to the parsed [`Document`](crate::Document).
+    pub file_name: Option<String>,
     /// If `true`, emit only the body content (no `<!DOCTYPE>`, `<html>`,
     /// `<head>`, or `<body>` wrapper).  If `false`, emit a full HTML
     /// document.  Default: `true` (fragment).
-    pub fragment: bool,
+    pub fragment: Option<bool>,
     /// Include a `<meta charset="utf-8">` in the head (only relevant when
     /// `fragment` is `false`).  Default: `true`.
-    pub charset: bool,
+    pub charset: Option<bool>,
     /// Include a `<meta name="viewport" content="width=device-width,
     /// initial-scale=1.0">` in the head (only relevant when `fragment` is
     /// `false`).  Default: `true`.
-    pub viewport: bool,
+    pub viewport: Option<bool>,
     /// Optional `<title>` for the HTML head (only relevant when
     /// `fragment` is `false`).  Default: `None`.
     pub title: Option<String>,
@@ -50,27 +34,19 @@ pub struct RenderOptions {
     /// Default: `None`.
     pub style: Option<String>,
 }
-
-impl Default for RenderOptions {
+#[napi]
+impl Default for PeisarOptions {
     fn default() -> Self {
         Self {
-            fragment: true,
-            charset: true,
-            viewport: true,
+            gfm: Some(true),
+            kramdown: Some(true),
+            file_name: None,
+            fragment: Some(false),
+            charset: Some(true),
+            viewport: Some(true),
             title: None,
             body_class: None,
             style: None,
-        }
-    }
-}
-
-/// Convenience: create `Some(true)` for fragment mode (backward-compatible
-/// with the old `render_document(doc, Some(bool))` API).
-impl From<bool> for RenderOptions {
-    fn from(fragment: bool) -> Self {
-        Self {
-            fragment,
-            ..Default::default()
         }
     }
 }

@@ -2,18 +2,30 @@
 name = "peisar"
 version = "0.1.0"
 edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/phothinmg/peisar"
+readme = "README.md"
+description = "A practical Markdown parser written in Rust"
+# Exclude the internal test binary and its generated JSON output from the
+# published crate. `src/main.rs` is a local test harness, not a shipped binary.
+exclude = ["src/main.rs"]
+
 
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["preserve_order"] }
+napi = "3"
+napi-derive = "3"
+peisar_ast = { version = "0.1.1", features = ["napi"] }
+peisar_html = { version = "0.1.1", features = ["napi"] }
 
-
-[dev-dependencies]
+[build-dependencies]
+napi-build = "2"
 
 
 [lib]
 name = "peisar"
 path = "src/lib.rs"
-
-[features]
-plugin = []
+# `rlib` for the CLI binary + integration tests; `cdylib` for the Node
+# native addon (only built when the `napi` feature is on).
+crate-type = ["rlib", "cdylib"]
