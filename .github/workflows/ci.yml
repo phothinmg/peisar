@@ -1,0 +1,155 @@
+# cspell:disable
+name: CI
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+env:
+  RUST_BACKTRACE: 1
+  MACOSX_DEPLOYMENT_TARGET: "10.13"
+
+jobs:
+  # ── Native builds for every supported platform ─────────────────────────
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - host: macos-latest
+            target: aarch64-apple-darwin
+          - host: macos-latest
+            target: x86_64-apple-darwin
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            flags: --use-napi-cross
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            flags: --use-napi-cross
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            flags: --cross-compile
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            flags: --cross-compile
+          - host: windows-latest
+            target: x86_64-pc-windows-msvc
+          - host: windows-latest
+            target: aarch64-pc-windows-msvc
+
+    name: Build ${{ matrix.settings.target }}
+    runs-on: ${{ matrix.settings.host }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.settings.target }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Install Zig for musl cross-compilation
+      - name: Setup Zig
+        if: contains(matrix.settings.flags, '--cross-compile')
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Build & package artifacts
+        run: |
+          npx napi build --release --platform --config-path napi.config.json --target ${{ matrix.settings.target }} ${{ matrix.settings.flags }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: peisar-${{ matrix.settings.target }}
+          path: "*.node"
+          if-no-files-found: error
+
+  # ── Publish
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 0. Generate JS binding (index.js) and type declarations (index.d.ts)
+      #    for the root package — these are needed at publish time but are
+      #    not uploaded as build artifacts (only *.node files are).
+      - name: Generate JS binding & types
+        run: |
+          bash scripts/build.sh
+
+      # 1. Download compiled artifacts from the build matrix
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          digest-mismatch: warn
+
+      # 2. Generate target platform package directories under /npm
+      - name: Scaffolding platform package dirs
+        run: npx napi create-npm-dirs --config-path napi.config.json
+
+      # 3. Move binaries from artifacts folder into target /npm dirs
+      - name: Distribute build artifacts to npm dirs
+        run: npx napi artifacts --config-path napi.config.json
+
+      # 3b. Ensure package.json version matches the release tag so we never
+      #     accidentally publish a stale version from a mistagged commit.
+      - name: Sync version from release tag
+        if: github.event.release.tag_name != ''
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          # Strip optional leading 'v' (e.g. v0.2.0 → 0.2.0)
+          VERSION="${TAG#v}"
+          echo "Release tag: $TAG  →  version: $VERSION"
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            if (pkg.version !== '$VERSION') {
+              console.warn('package.json version (' + pkg.version + ') != tag ($VERSION). Fixing.');
+              pkg.version = '$VERSION';
+              fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+            } else {
+              console.log('package.json version already matches: ' + pkg.version);
+            }
+          "
+
+      # 4. Sync package versions across root and /npm platform packages
+      - name: Prepare publish
+        run: npx napi prepublish --config-path napi.config.json -t npm
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # 5. Publish platform packages and root package to registry
+      - name: Publish to npm
+        run: |
+          npm config set provenance true
+          npm publish --access public
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
