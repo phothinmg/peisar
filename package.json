@@ -1,11 +1,15 @@
 {
   "name": "peisar",
-  "version": "0.0.1",
-  "description": "",
+  "version": "0.1.1",
+  "description": "A practical Markdown parser written in Rust",
   "main": "index.js",
+  "types": "index.d.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build:local": "napi build --platform --config-path napi.config.json"
   },
   "keywords": [],
-  "type": "commonjs"
+  "type": "commonjs",
+  "devDependencies": {
+    "@napi-rs/cli": "^3.10.5"
+  }
 }

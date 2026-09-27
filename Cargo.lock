@@ -240,47 +240,9 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
- "peisar_ast",
- "peisar_html",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "peisar_ast"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc483a996fbc8ff16dcad078a3486ec14402b1c33ff955dd1cecf9595816aa4d"
-dependencies = [
- "napi",
- "napi-derive",
- "peisar_frontmatter",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "peisar_frontmatter"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8407a29a8bf77384d311e032aea8dbce439e4cadb4d0cb101613f00a72e8d96e"
-dependencies = [
- "napi-derive",
  "serde",
  "serde_json",
  "serde_yaml",
-]
-
-[[package]]
-name = "peisar_html"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d64db720a422e92378da2a05638384209d3206e5a1d10088760fc1d341848b0"
-dependencies = [
- "napi",
- "napi-derive",
- "peisar_ast",
- "serde",
 ]
 
 [[package]]

@@ -14,13 +14,16 @@ exclude = ["src/main.rs"]
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["preserve_order"] }
-napi = "3"
+napi = { version = "3", features = ["serde-json"] }
 napi-derive = "3"
-peisar_ast = { version = "0.1.1", features = ["napi"] }
-peisar_html = { version = "0.1.1", features = ["napi"] }
+serde_yaml = "0.9"
 
 [build-dependencies]
 napi-build = "2"
+
+[features]
+default = []
+napi = []
 
 
 [lib]

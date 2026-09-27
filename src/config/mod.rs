@@ -1,3 +1,5 @@
+use crate::ast::AstOptions;
+use crate::html::RenderOptions;
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 
@@ -48,5 +50,31 @@ impl Default for PeisarOptions {
             body_class: None,
             style: None,
         }
+    }
+}
+
+pub struct GetOptions {
+    pub ast_opts: AstOptions,
+    pub render_opts: RenderOptions,
+}
+
+pub fn get_options(options: Option<PeisarOptions>) -> GetOptions {
+    let opts = options.unwrap_or(PeisarOptions::default());
+    let ast_opts = AstOptions {
+        gfm: opts.gfm.unwrap(),
+        kramdown: opts.kramdown.unwrap(),
+        file_name: opts.file_name,
+    };
+    let render_opts = RenderOptions {
+        fragment: opts.fragment.unwrap(),
+        charset: opts.charset.unwrap(),
+        viewport: opts.viewport.unwrap(),
+        title: opts.title,
+        body_class: opts.body_class,
+        style: opts.style,
+    };
+    GetOptions {
+        ast_opts,
+        render_opts,
     }
 }

@@ -1,4 +1,12 @@
-# Peisar
+<!-- markdownlint-disable MD033 -->
+<!-- markdownlint-disable MD041 -->
+<div align="center">
+<img src="https://pub-c9ba018358dd48a99b70013b65a25e5f.r2.dev/logo/peisar.webp" width="160" height="160" alt="peisar" />
+  <h1>Peisar</h1>
+  <p>A lossless Markdown toolchain written in Rust — parse, transform, and render with source-span precision.</p>
+</div>
+
+---
 
 A practical Markdown parser written in Rust, supporting CommonMark,
 GitHub Flavored Markdown (GFM), Kramdown-style block attributes, a plugin

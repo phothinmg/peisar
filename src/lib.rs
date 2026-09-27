@@ -1,51 +1,59 @@
+mod ast;
 mod config;
+pub mod frontmatter;
+mod html;
 pub use config::PeisarOptions;
+use napi::Env;
 use napi_derive::napi;
-use peisar_ast::{AstOptions, BlockCallback, Document, InlineCallback, JsVisitor, PeisarAstJs};
-use peisar_html::{RenderOptions, render_document_html};
+
+use crate::html::{RenderOptions, render_document_html};
+pub use ast::{
+    Document, JsVisitor, PeisarAst,
+    tokens::{Attributes, span, token},
+    visitor,
+};
+use config::get_options;
+use serde_json::Value;
 
 #[napi]
 pub struct Peisar {
-    ast: Document,
-    visitors: Vec<JsVisitor>,
-    frontmatter: Option<String>,
     render_opts: RenderOptions,
-    peisar_ast: PeisarAstJs,
+    peisar_ast: PeisarAst,
 }
 
+#[napi]
 impl Peisar {
-    pub fn new(raw_md: String, options: Option<PeisarOptions>) {
+    #[napi(constructor)]
+    pub fn new(raw_md: String, options: Option<PeisarOptions>) -> Self {
         let opts = get_options(options);
         let ast_opts = opts.ast_opts;
         let render_opts = opts.render_opts;
-        let mut peisar_ast = PeisarAstJs::new(raw_md, Some(ast_opts));
-        let frontmatter = peisar_ast.get_frontmatter();
-        let ast = peisar_ast.ast();
+        let peisar_ast = PeisarAst::new(raw_md, Some(ast_opts));
+        Self {
+            render_opts,
+            peisar_ast,
+        }
     }
-}
-
-struct GetOptions {
-    pub ast_opts: AstOptions,
-    pub render_opts: RenderOptions,
-}
-
-fn get_options(options: Option<PeisarOptions>) -> GetOptions {
-    let opts = options.unwrap_or(PeisarOptions::default());
-    let ast_opts = AstOptions {
-        gfm: opts.gfm.unwrap(),
-        kramdown: opts.kramdown.unwrap(),
-        file_name: opts.file_name,
-    };
-    let render_opts = RenderOptions {
-        fragment: opts.fragment.unwrap(),
-        charset: opts.charset.unwrap(),
-        viewport: opts.viewport.unwrap(),
-        title: opts.title,
-        body_class: opts.body_class,
-        style: opts.style,
-    };
-    GetOptions {
-        ast_opts,
-        render_opts,
+    #[napi(getter)]
+    pub fn ast(&mut self) -> Document {
+        self.peisar_ast.get_ast()
+    }
+    #[napi]
+    pub fn use_visitor(&mut self, env: Env, visitor: JsVisitor) {
+        self.peisar_ast.add_visitor(env, visitor);
+    }
+    #[napi(getter)]
+    pub fn html(&mut self) -> String {
+        let doc = self.ast();
+        let html = render_document_html(&doc, Some(self.render_opts.clone()));
+        html
+    }
+    #[napi(getter)]
+    pub fn frontmatter(&mut self) -> Option<Value> {
+        self.peisar_ast.get_frontmatter()
+    }
+    #[napi(getter)]
+    pub fn ast_json(&mut self) -> String {
+        self.peisar_ast.ast_json()
     }
 }
