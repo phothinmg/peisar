@@ -8,9 +8,9 @@ pub use parsers::Document;
 pub use parsers::visitor;
 
 use crate::frontmatter::parse_markdown_frontmatter;
-use napi::Env;
-pub use js::JsVisitor;
 use js::RegisteredJsVisitor;
+pub use js::Visitor;
+use napi::Env;
 use parsers::visitor::visit_document_mut;
 use serde_json::Value;
 pub struct PeisarAst {
@@ -60,14 +60,14 @@ impl PeisarAst {
     /// Either callback may be `null` / omitted to skip that node kind.
     /// The JS function receives a `Block` or `Inline` and returns a
     /// `VisitControlJs` / `InlineVisitControlJs` (or `undefined`).
-    pub fn add_visitor(&mut self, env: Env, visitor: JsVisitor) {
+    pub fn add_visitor(&mut self, env: Env, visitor: Visitor) {
         self.visitors.push(visitor.register(env));
     }
 
     /// Run all registered visitors in insertion order.
     ///
     /// This is called automatically by the [`ast`][Self::get_ast],
-    /// [`ast_json`][Self::get_ast_json] and
+    /// [`ast_json`][Self::ast_json] and
     /// [`frontmatter`][Self::get_frontmatter] getters when there are
     /// registered visitors, but can also be called manually.
     pub fn visit_all(&mut self) {

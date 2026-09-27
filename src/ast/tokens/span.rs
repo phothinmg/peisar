@@ -26,7 +26,7 @@ pub struct Position {
 
 /// A half-open span `[start, end)` covering a node's source text.
 ///
-/// Both `start` and `end` are inclusive [`Position`]s that point into the
+/// `start` is inclusive and `end` is exclusive; both positions point into the
 /// original source string.
 #[napi(object)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]

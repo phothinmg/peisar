@@ -32,7 +32,6 @@ pub struct AstOptions {
     /// Default: `true`.
     pub kramdown: bool,
     /// Optional file name to attach to the parsed [`Document`](crate::Document).
-    /// Optional file name to attach to the parsed [`Document`](crate::Document).
     pub file_name: Option<String>,
 }
 

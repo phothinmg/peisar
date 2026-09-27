@@ -5,11 +5,18 @@
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "build:local": "napi build --platform --config-path napi.config.json"
+    "build:local": "napi build --platform --config-path napi.config.json",
+    "build:wasi": "napi build --release --target wasm32-wasip1-threads --config-path napi.config.json"
   },
   "keywords": [],
   "type": "commonjs",
   "devDependencies": {
     "@napi-rs/cli": "^3.10.5"
+  },
+  "dependencies": {
+    "@emnapi/core": "^2.0.0-alpha.5",
+    "@emnapi/runtime": "^2.0.0-alpha.5",
+    "@napi-rs/wasm-runtime": "^1.2.4",
+    "emnapi": "^2.0.0-alpha.5"
   }
 }

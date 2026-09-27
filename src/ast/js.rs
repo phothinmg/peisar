@@ -157,14 +157,14 @@ pub type InlineCallback = FunctionRef<(Inline,), InlineVisitControlJs>;
 /// Either property may be omitted / `null` to skip that node kind.
 #[napi(object, object_to_js = false)]
 #[derive(Default)]
-pub struct JsVisitor {
+pub struct Visitor {
     /// Optional JS callback for block nodes (JS: `visitBlock`).
     pub visit_block: Option<BlockCallback>,
     /// Optional JS callback for inline nodes (JS: `visitInline`).
     pub visit_inline: Option<InlineCallback>,
 }
 
-impl JsVisitor {
+impl Visitor {
     pub(crate) fn register(self, env: Env) -> RegisteredJsVisitor {
         RegisteredJsVisitor {
             visit_block: self.visit_block,

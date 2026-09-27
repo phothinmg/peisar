@@ -2,11 +2,14 @@ use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+/// The Markdown body and YAML metadata parsed from a front-matter document.
 #[napi(object)]
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ParseResult {
+    /// Markdown source after the leading YAML front matter is removed.
     pub pure_markdown_content: String,
+    /// Deserialized YAML front matter, or `null` when no front matter exists.
     #[napi(ts_type = "Record<string, any>")]
     pub yaml_data: Option<Value>,
 }
@@ -29,6 +32,10 @@ impl ParseResult {
     }
 }
 
+/// Parses leading YAML front matter from Markdown source.
+///
+/// The returned [`ParseResult`] preserves the Markdown body and, when present,
+/// deserializes the YAML metadata into a JSON-compatible value.
 pub fn parse_markdown_frontmatter(content: &str) -> Result<ParseResult, String> {
     let trimmed = content.trim_start();
     let has_frontmatter_start = trimmed.starts_with("---\n") || trimmed.starts_with("---\r\n");

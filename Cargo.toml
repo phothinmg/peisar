@@ -32,3 +32,7 @@ path = "src/lib.rs"
 # `rlib` for the CLI binary + integration tests; `cdylib` for the Node
 # native addon (only built when the `napi` feature is on).
 crate-type = ["rlib", "cdylib"]
+
+[[bin]]
+name = "peisar-test-harness"
+path = "src/main.rs"

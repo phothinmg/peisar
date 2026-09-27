@@ -36,6 +36,34 @@ let doc = parser::parse("# Hello **world**");
 let html = html::render_document(&doc, Some(false));
 ```
 
+## Node.js WASI build
+
+Build the threaded WASI binding with:
+
+```sh
+rustup target add wasm32-wasip1-threads
+npm run build:wasi
+```
+
+The generated binding uses Node's WASI and worker-thread APIs, so use it in
+Node.js rather than instantiating the `.wasm` file directly in a browser. Keep
+[`index.js`](./index.js), [`peisar.wasi.cjs`](./peisar.wasi.cjs), and
+[`peisar.wasm32-wasi.wasm`](./peisar.wasm32-wasi.wasm) together when deploying
+the package.
+
+To require the WASI binding instead of a native addon:
+
+```sh
+NAPI_RS_FORCE_WASI=error node app.js
+```
+
+```js
+const { Peisar } = require('peisar')
+
+const parser = new Peisar('# Hello from WASI')
+console.log(parser.html)
+```
+
 ## Configuration
 
 ### Parse options

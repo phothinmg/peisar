@@ -3,6 +3,11 @@ use crate::html::RenderOptions;
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 
+/// JavaScript options for Markdown parsing and HTML rendering.
+///
+/// Every property is optional. Omitted parsing options enable GFM and
+/// Kramdown; omitted rendering options produce a complete HTML document with
+/// charset and viewport metadata.
 #[napi(object)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PeisarOptions {
@@ -12,7 +17,6 @@ pub struct PeisarOptions {
     /// Enable Kramdown-style block attributes (`{:#id .class key="val"}`).
     /// Default: `true`.
     pub kramdown: Option<bool>,
-    /// Optional file name to attach to the parsed [`Document`](crate::Document).
     /// Optional file name to attach to the parsed [`Document`](crate::Document).
     pub file_name: Option<String>,
     /// If `true`, emit only the body content (no `<!DOCTYPE>`, `<html>`,

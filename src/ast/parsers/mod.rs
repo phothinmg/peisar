@@ -77,7 +77,7 @@ impl Default for Document {
 impl Document {
     /// Parse a Markdown string into a [`Document`] with the given options.
     ///
-    /// This is a convenience wrapper around [`md_to_ast`].
+    /// This is a convenience wrapper around the module's `md_to_ast` parser.
     ///
     /// # Example
     ///
