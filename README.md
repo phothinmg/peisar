@@ -213,10 +213,9 @@ parsing API.
 
 ```toml
 [dependencies]
-peisar = { git = "https://github.com/phothinmg/peisar" }
+peisar = "0.1.2"
 ```
 
-*(Once published, replace this with `peisar = "0.1"`.)*
 
 ### Parse Markdown into an AST
 
