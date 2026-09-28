@@ -54,6 +54,7 @@ HTML document.
 ```sh
 npm install
 npm run build:local
+npm test
 ```
 
 ## Configuration

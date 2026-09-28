@@ -5,7 +5,8 @@
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "build:local": "napi build --platform --config-path napi.config.json"
+    "build:local": "napi build --platform --config-path napi.config.json",
+    "test": "node --test"
   },
   "keywords": [],
   "type": "commonjs",
