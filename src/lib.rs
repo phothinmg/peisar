@@ -14,7 +14,8 @@ use napi_derive::napi;
 
 use crate::html::{RenderOptions, render_document_html};
 pub use ast::{
-    AstVisitor, Document, PeisarAst, Visitor,
+    AstOptions, AstParser, AstVisitor, BlockParseContext, Document, InlineParseContext,
+    ParseHooks, PeisarAst, Parser, Visitor,
     tokens::{Attributes, span, token},
     visitor,
 };
@@ -68,6 +69,22 @@ impl Peisar {
     #[napi]
     pub fn use_visitor(&mut self, env: Env, visitor: Visitor) {
         self.peisar_ast.add_visitor(env, visitor);
+    }
+
+    /// Registers a JavaScript custom parser hook.
+    ///
+    /// The parser can provide `parseBlock` and/or `parseInline` callbacks.
+    /// `parseBlock` receives `{ line, lineIndex, lines }` and returns
+    /// `{ block, consumed }`; `parseInline` receives `{ rest, index }` and
+    /// returns `{ inline, consumed }`.  Return `undefined` (or omit the
+    /// node) to decline a position.
+    ///
+    /// Hooks run before the built-in parsers, in registration order.  Since
+    /// the document is parsed at construction, registering a parser hook
+    /// re-parses the original Markdown so hook syntax is recognized.
+    #[napi]
+    pub fn use_parser(&mut self, env: Env, parser: Parser) {
+        self.peisar_ast.add_parser(env, parser);
     }
 
     /// Renders the parsed Markdown as HTML using the configured render options.

@@ -16,11 +16,13 @@
 
 mod atters;
 pub mod block;
+pub mod hooks;
 pub mod inline;
 mod table;
 pub mod visitor;
 
 use crate::ast::options::AstOptions;
+use crate::ast::parsers::hooks::ParseHooks;
 use crate::ast::tokens::{span::Span, token::Block};
 use inline::LinkRefMap;
 use napi_derive::napi;
@@ -115,6 +117,20 @@ impl Document {
 /// assert_eq!(doc.children.len(), 2);
 /// ```
 pub fn md_to_ast(input: &str, opts: &AstOptions, file_name: Option<String>) -> Document {
+    md_to_ast_with_hooks(input, opts, file_name, &ParseHooks::empty())
+}
+
+/// Like [`md_to_ast`] but with custom parser hooks (see
+/// [`hooks`](self::hooks)).
+///
+/// Hooks run before the built-in block and inline matchers; the first hook
+/// to claim a position wins.
+pub fn md_to_ast_with_hooks(
+    input: &str,
+    opts: &AstOptions,
+    file_name: Option<String>,
+    hooks: &ParseHooks,
+) -> Document {
     let line_starts = block::compute_line_starts(input);
     let lines: Vec<&str> = input.lines().collect();
 
@@ -138,6 +154,7 @@ pub fn md_to_ast(input: &str, opts: &AstOptions, file_name: Option<String>) -> D
         opts,
         file_name.clone(),
         &ref_map,
+        hooks,
     );
     let start = p.position_at(0);
 

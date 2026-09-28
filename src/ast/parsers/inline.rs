@@ -21,6 +21,7 @@
 //! [`parse_inline_with_refs`] when you have a ref map, or [`parse_inline`]
 //! when you do not need reference resolution.
 
+use super::hooks::{InlineParseContext, ParseHooks, finalize_hook_inline};
 use crate::ast::options::AstOptions;
 use crate::ast::tokens::{
     span::{Position, Span},
@@ -44,6 +45,20 @@ pub fn parse_inline_with_refs(
     options: Option<&AstOptions>,
     refs: Option<&LinkRefMap>,
 ) -> Vec<Inline> {
+    parse_inline_with_hooks(input, options, refs, &ParseHooks::empty())
+}
+
+/// Parse inline markdown with custom parser hooks (see
+/// [`hooks`](super::hooks)).
+///
+/// Hooks run before the built-in inline matchers at every character
+/// position; the first hook to claim a position wins.
+pub fn parse_inline_with_hooks(
+    input: &str,
+    options: Option<&AstOptions>,
+    refs: Option<&LinkRefMap>,
+    hooks: &ParseHooks,
+) -> Vec<Inline> {
     let binding = AstOptions::default();
     let opts = options.unwrap_or(&binding);
     let mut tokens: Vec<Inline> = Vec::new();
@@ -55,6 +70,30 @@ pub fn parse_inline_with_refs(
 
     while i < chars.len() {
         let c = chars[i];
+
+        // Custom parser hooks — tried before every built-in matcher so an
+        // extension can both introduce new syntax and override built-ins.
+        if !hooks.is_empty() {
+            let rest: String = chars[i..].iter().collect();
+            let hctx = InlineParseContext {
+                rest,
+                index: i as u32,
+            };
+            if let Some((node, consumed)) = hooks.try_parse_inline(&hctx) {
+                if consumed > 0 {
+                    flush_text(&mut tokens, &mut text, &mut text_start, &ctx, &chars);
+                    let end = (i + consumed).min(chars.len());
+                    let pos = Span::new(
+                        ctx.position(i, chars.len()),
+                        ctx.position(end, chars.len()),
+                    );
+                    tokens.push(finalize_hook_inline(node, pos));
+                    i = end;
+                    text_start = i;
+                    continue;
+                }
+            }
+        }
 
         // Inline code: `code` or ``code``
         if c == '`' {
@@ -73,7 +112,7 @@ pub fn parse_inline_with_refs(
 
         // GFM strikethrough: ~~text~~
         if opts.gfm && c == '~' && i + 1 < chars.len() && chars[i + 1] == '~' {
-            if let Some((node, end)) = match_strikethrough(&chars, i, &ctx, options) {
+            if let Some((node, end)) = match_strikethrough(&chars, i, &ctx, options, hooks) {
                 flush_text(&mut tokens, &mut text, &mut text_start, &ctx, &chars);
                 tokens.push(node);
                 i = end;
@@ -96,7 +135,7 @@ pub fn parse_inline_with_refs(
         // Link: [text](url) or reference link [text][label], [label][], [label]
         if c == '[' {
             // First try inline link `[text](url)`
-            if let Some((link, end)) = match_link(&chars, i, &ctx, options) {
+            if let Some((link, end)) = match_link(&chars, i, &ctx, options, hooks) {
                 flush_text(&mut tokens, &mut text, &mut text_start, &ctx, &chars);
                 tokens.push(link);
                 i = end;
@@ -104,7 +143,8 @@ pub fn parse_inline_with_refs(
                 continue;
             }
             // Then try reference link `[text][label]`, `[label][]`, `[label]`
-            if let Some((link, end)) = match_reference_link(&chars, i, &ctx, options, refs) {
+            if let Some((link, end)) = match_reference_link(&chars, i, &ctx, options, refs, hooks)
+            {
                 flush_text(&mut tokens, &mut text, &mut text_start, &ctx, &chars);
                 tokens.push(link);
                 i = end;
@@ -138,7 +178,7 @@ pub fn parse_inline_with_refs(
 
         // Emphasis: **bold** / *italic* / __bold__ / _italic_
         if c == '*' || c == '_' {
-            if let Some((node, end)) = match_emphasis(&chars, i, c, &ctx, options) {
+            if let Some((node, end)) = match_emphasis(&chars, i, c, &ctx, options, hooks) {
                 flush_text(&mut tokens, &mut text, &mut text_start, &ctx, &chars);
                 tokens.push(node);
                 i = end;
@@ -276,6 +316,7 @@ fn match_strikethrough(
     start: usize,
     ctx: &InlineCtx,
     options: Option<&AstOptions>,
+    hooks: &ParseHooks,
 ) -> Option<(Inline, usize)> {
     if chars[start] != '~' || start + 1 >= chars.len() || chars[start + 1] != '~' {
         return None;
@@ -285,7 +326,7 @@ fn match_strikethrough(
     let after_str: String = after.iter().collect();
     let close = after_str.find("~~")?;
     let inner: String = after_str[..close].to_string();
-    let children = parse_inline(&inner, options);
+    let children = parse_inline_with_hooks(&inner, options, None, hooks);
     let end = start + 2 + close + 2;
 
     Some((
@@ -383,6 +424,7 @@ fn match_reference_link(
     ctx: &InlineCtx,
     options: Option<&AstOptions>,
     refs: Option<&LinkRefMap>,
+    hooks: &ParseHooks,
 ) -> Option<(Inline, usize)> {
     let refs = refs?;
     if chars.get(start)? != &'[' {
@@ -411,7 +453,7 @@ fn match_reference_link(
     let normalized = super::block::normalize_label(&label);
     let (url, title) = refs.get(&normalized)?;
 
-    let children = parse_inline(&text, options);
+    let children = parse_inline_with_hooks(&text, options, None, hooks);
     Some((
         Inline::LinkReference {
             text: children,
@@ -432,10 +474,11 @@ fn match_link(
     start: usize,
     ctx: &InlineCtx,
     options: Option<&AstOptions>,
+    hooks: &ParseHooks,
 ) -> Option<(Inline, usize)> {
     let (text, after_text) = match_bracket(chars, start, '[')?;
     let (url, title, after_url) = match_paren(chars, after_text)?;
-    let children = parse_inline(&text, options);
+    let children = parse_inline_with_hooks(&text, options, None, hooks);
     Some((
         Inline::Link {
             text: children,
@@ -550,6 +593,7 @@ fn match_emphasis(
     marker: char,
     ctx: &InlineCtx,
     options: Option<&AstOptions>,
+    hooks: &ParseHooks,
 ) -> Option<(Inline, usize)> {
     let run = chars[start..].iter().take_while(|&c| *c == marker).count();
     // Try bold first (double marker)
@@ -557,7 +601,7 @@ fn match_emphasis(
         let close = find_emphasis_close(chars, start + 2, marker, 2);
         if let Some(end) = close {
             let inner: String = chars[start + 2..end].iter().collect();
-            let children = parse_inline(&inner, options);
+            let children = parse_inline_with_hooks(&inner, options, None, hooks);
             let after = end + 2;
             return Some((
                 Inline::Emphasis {
@@ -575,7 +619,7 @@ fn match_emphasis(
     // Single — italic
     let end = find_emphasis_close(chars, start + 1, marker, 1)?;
     let inner: String = chars[start + 1..end].iter().collect();
-    let children = parse_inline(&inner, options);
+    let children = parse_inline_with_hooks(&inner, options, None, hooks);
     let after = end + 1;
     Some((
         Inline::Emphasis {

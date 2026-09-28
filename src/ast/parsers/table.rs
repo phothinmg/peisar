@@ -1,3 +1,4 @@
+use super::hooks::ParseHooks;
 use super::inline;
 use crate::ast::options::AstOptions;
 use crate::ast::tokens::span::Span;
@@ -64,19 +65,21 @@ pub fn split_table_row(line: &str) -> Vec<String> {
     s.split('|').map(|c| c.trim().to_string()).collect()
 }
 /// Build a [`Block::Table`] from lines `[header_line, delimiter_line, ...body_lines]`.
+#[allow(clippy::too_many_arguments)]
 pub fn build_table(
     header_line: &str,
     _delimiter_line: &str,
     alignments: Vec<TableCellAlignment>,
     body_lines: &[&str],
     options: Option<&AstOptions>,
+    hooks: &ParseHooks,
 ) -> Block {
     let header_cells: Vec<String> = split_table_row(header_line);
     let header = TableRow {
         cells: header_cells
             .iter()
             .map(|c| TableCell {
-                children: inline::parse_inline(c, options),
+                children: inline::parse_inline_with_hooks(c, options, None, hooks),
             })
             .collect(),
     };
@@ -89,7 +92,7 @@ pub fn build_table(
                 cells: cells
                     .iter()
                     .map(|c| TableCell {
-                        children: inline::parse_inline(c, options),
+                        children: inline::parse_inline_with_hooks(c, options, None, hooks),
                     })
                     .collect(),
             }

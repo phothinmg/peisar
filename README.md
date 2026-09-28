@@ -8,9 +8,11 @@
 
 ---
 
+[![NPM](https://nodei.co/npm/peisar.svg)](https://nodei.co/npm/peisar/)
+
 Peisar parses CommonMark Markdown with GitHub Flavored Markdown (GFM),
 Kramdown-style block attributes, YAML front matter, source spans, AST
-visitors, and configurable HTML output.
+visitors, custom parser hooks, and configurable HTML output.
 
 ## Features
 
@@ -24,6 +26,8 @@ visitors, and configurable HTML output.
   Markdown.
 - **AST visitors** — transform the parsed AST from JavaScript before reading
   it or rendering HTML.
+- **Custom parser hooks** — parse extension syntax (directives, wikilinks,
+  mentions) during parsing, before the built-in matchers.
 - **Node.js bindings** — native N-API addon with TypeScript declarations.
 
 ## Quick start
@@ -103,6 +107,78 @@ document.useVisitor({
 
 console.log(document.html) // <h1 class="title">Hello</h1>
 ```
+
+## Custom parser hooks
+
+Visitors transform the AST *after* parsing; parser hooks let extensions
+parse custom syntax *during* parsing. Hooks run **before** the built-in
+parsers (so they can both introduce new syntax and override built-ins), in
+registration order — the first hook to claim a position wins.
+
+`useParser` takes an object with two optional callbacks:
+
+```js
+const document = new Peisar(':::note\nmy note\n:::\n\nSee [[Some Page]].', {
+  fragment: true,
+})
+
+// Positions must be complete objects — the hook's own `pos` value is a
+// placeholder; accurate spans are computed automatically.
+const zero = { line: 0, column: 0, offset: 0 }
+
+document.useParser({
+  // Block hook: receives { line, lineIndex, lines }
+  parseBlock([{ line, lines }]) {
+    if (!line.startsWith(':::')) return // decline — let other parsers try
+    const name = line.slice(3).trim()
+    const closeIndex = lines.findIndex((l, i) => i > 0 && l.trim() === ':::')
+    if (closeIndex === -1) return
+    return {
+      block: {
+        type: 'HtmlBlock',
+        html: `<div class="note" data-name="${name}"></div>`,
+        pos: { start: zero, end: zero },
+      },
+      consumed: closeIndex + 1, // lines consumed (at least 1)
+    }
+  },
+
+  // Inline hook: receives { rest, index }
+  parseInline([{ rest }]) {
+    if (!rest.startsWith('[[')) return // decline
+    const close = rest.indexOf(']]')
+    if (close === -1) return
+    const target = rest.slice(2, close)
+    return {
+      inline: {
+        type: 'Link',
+        text: [{ type: 'Text', value: target, pos: { start: zero, end: zero } }],
+        url: `https://wiki.example.com/${target.replace(/ /g, '_')}`,
+        autolink: false,
+        pos: { start: zero, end: zero },
+      },
+      consumed: close + 4, // characters consumed
+    }
+  },
+})
+
+console.log(document.html)
+// <div class="note" data-name="note"></div>
+// <p>See <a href="https://wiki.example.com/Some_Page">Some Page</a>.</p>
+```
+
+Notes:
+
+- Hooks apply everywhere Markdown is parsed — headings, emphasis/link
+  children, block quotes, list items, and table cells included.
+- `parseBlock` must consume **at least one line**; `parseInline` should
+  report `consumed: 0` (or return `undefined`) to decline.
+- Source spans of hook-returned nodes are computed from `consumed`; a
+  Kramdown `{:...}` attribute line after a hook-parsed block is applied
+  automatically.
+- Because the document is parsed at construction, `useParser` re-parses the
+  original Markdown. Register hooks before reading `ast`, `html`,
+  `frontmatter`, or `astJson`.
 
 ## YAML front matter
 

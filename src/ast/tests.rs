@@ -12,6 +12,7 @@ use super::parsers::block::{
     compute_line_starts, is_link_ref_def, is_list_marker, is_thematic_break, normalize_label,
     parse_link_ref_def_line, parse_link_title, parse_link_url,
 };
+use super::parsers::hooks::{AstParser, BlockParseContext, InlineParseContext, ParseHooks};
 use super::parsers::inline::{LinkRefMap, parse_inline, parse_inline_with_refs};
 use super::parsers::md_to_ast;
 use super::parsers::visitor::{VisitControl, visit_document_mut};
@@ -580,4 +581,233 @@ fn replacing_a_node_does_not_revisit_its_replacement() {
 
     assert_eq!(visitor.calls, 1);
     assert!(matches!(doc.children.as_slice(), [Block::Heading { .. }]));
+}
+
+// ---------------------------------------------------------------------------
+// Custom parser hooks
+// ---------------------------------------------------------------------------
+
+/// Hook that converts `:::name ... :::` container blocks into HtmlBlock
+/// nodes (consuming all lines between the markers).
+struct DirectiveHook;
+
+impl AstParser for DirectiveHook {
+    fn try_parse_block(&self, ctx: &BlockParseContext) -> Option<(Block, usize)> {
+        let name = ctx.line.trim().strip_prefix(":::")?;
+        if name.is_empty() {
+            return None;
+        }
+        // Find the closing `:::` line.
+        let close = ctx
+            .lines
+            .iter()
+            .skip(1)
+            .position(|l| l.trim() == ":::")?;
+        let html = format!("<div class=\"directive\" data-name=\"{}\">", name);
+        Some((
+            Block::HtmlBlock {
+                html,
+                pos: Default::default(),
+                attrs: None,
+            },
+            close + 2,
+        ))
+    }
+}
+
+#[test]
+fn block_hook_parses_custom_directive_syntax() {
+    let hook = DirectiveHook;
+    let hooks = ParseHooks::empty().with(&hook);
+    let doc = super::parsers::md_to_ast_with_hooks(
+        ":::note\ncontent stays\n:::\n\n# After\n",
+        &AstOptions::default(),
+        None,
+        &hooks,
+    );
+
+    assert_eq!(doc.children.len(), 2);
+    match &doc.children[0] {
+        Block::HtmlBlock { html, pos, .. } => {
+            assert_eq!(
+                html,
+                "<div class=\"directive\" data-name=\"note\">"
+            );
+            // Span covers the directive lines [0, 3).
+            assert_eq!(pos.start.line, 0);
+            assert_eq!(pos.end.line, 3);
+        }
+        other => panic!("expected HtmlBlock, got {:?}", other),
+    }
+    assert!(matches!(doc.children[1], Block::Heading { level: 1, .. }));
+}
+
+/// Hook that overrides a built-in construct: turns `!` lines into
+/// ThematicBreak nodes instead of paragraphs.
+struct ExclamationHook;
+
+impl AstParser for ExclamationHook {
+    fn try_parse_block(&self, ctx: &BlockParseContext) -> Option<(Block, usize)> {
+        if ctx.line.trim() != "!" {
+            return None;
+        }
+        Some((Block::ThematicBreak { pos: Default::default() }, 1))
+    }
+}
+
+#[test]
+fn block_hook_runs_before_builtin_matchers() {
+    let hook = ExclamationHook;
+    let hooks = ParseHooks::empty().with(&hook);
+    // A lone `!` line would normally parse as a paragraph; the hook must
+    // claim it first.
+    let doc = super::parsers::md_to_ast_with_hooks("!\n", &AstOptions::default(), None, &hooks);
+
+    assert!(matches!(doc.children[0], Block::ThematicBreak { .. }));
+}
+
+/// Inline hook that parses `[[wikilink]]` into a link node.
+struct WikiLinkHook;
+
+impl AstParser for WikiLinkHook {
+    fn try_parse_inline(&self, ctx: &InlineParseContext) -> Option<(Inline, usize)> {
+        let rest = ctx.rest.strip_prefix("[[")?;
+        let close = rest.find("]]")?;
+        let target = &rest[..close];
+        let url = format!("https://wiki.example.com/{}", target.replace(' ', "_"));
+        Some((
+            Inline::Link {
+                text: vec![Inline::Text {
+                    value: target.to_string(),
+                    pos: Default::default(),
+                }],
+                url,
+                title: None,
+                autolink: false,
+                pos: Default::default(),
+            },
+            close + 4,
+        ))
+    }
+}
+
+#[test]
+fn inline_hook_parses_wikilinks() {
+    let hook = WikiLinkHook;
+    let hooks = ParseHooks::empty().with(&hook);
+    let doc = super::parsers::md_to_ast_with_hooks(
+        "See [[Some Page]] here.\n",
+        &AstOptions::default(),
+        None,
+        &hooks,
+    );
+
+    match &doc.children[0] {
+        Block::Paragraph { children, .. } => {
+            assert_eq!(children.len(), 3);
+            match &children[1] {
+                Inline::Link { text, url, pos, .. } => {
+                    assert!(matches!(
+                        text.as_slice(),
+                        [Inline::Text { value, .. }] if value == "Some Page"
+                    ));
+                    assert_eq!(url, "https://wiki.example.com/Some_Page");
+                    // Span computed by the engine from `consumed`
+                    // (`[[Some Page]]` = 13 chars starting at column 4).
+                    assert_eq!(pos.start.line, 0);
+                    assert_eq!(pos.start.column, 4);
+                    assert_eq!(pos.end.column, 17);
+                }
+                other => panic!("expected Link, got {:?}", other),
+            }
+        }
+        other => panic!("expected Paragraph, got {:?}", other),
+    }
+}
+
+#[test]
+fn inline_hook_applies_inside_emphasis_and_block_quotes() {
+    let hook = WikiLinkHook;
+    let hooks = ParseHooks::empty().with(&hook);
+    let doc = super::parsers::md_to_ast_with_hooks(
+        "> quote with **[[Bold Link]]**\n",
+        &AstOptions::default(),
+        None,
+        &hooks,
+    );
+
+    match &doc.children[0] {
+        Block::BlockQuote { children, .. } => match &children[0] {
+            Block::Paragraph { children, .. } => {
+                // Children: Text("quote with "), Emphasis(**[[Bold Link]]**)
+                match &children[1] {
+                    Inline::Emphasis { children, .. } => {
+                        assert!(matches!(
+                            children.as_slice(),
+                            [Inline::Link { url, .. }] if url == "https://wiki.example.com/Bold_Link"
+                        ));
+                    }
+                    other => panic!("expected Emphasis, got {:?}", other),
+                }
+            }
+            other => panic!("expected Paragraph, got {:?}", other),
+        },
+        other => panic!("expected BlockQuote, got {:?}", other),
+    }
+}
+
+/// First hook always declines; the second one must still get a chance.
+struct DecliningHook;
+impl AstParser for DecliningHook {
+    fn try_parse_block(&self, _ctx: &BlockParseContext) -> Option<(Block, usize)> {
+        None
+    }
+    fn try_parse_inline(&self, _ctx: &InlineParseContext) -> Option<(Inline, usize)> {
+        None
+    }
+}
+
+#[test]
+fn multiple_hooks_tried_in_registration_order() {
+    let declining = DecliningHook;
+    let wikilink = WikiLinkHook;
+    let hooks = ParseHooks::empty().with(&declining).with(&wikilink);
+    let doc = super::parsers::md_to_ast_with_hooks(
+        "plain text\n",
+        &AstOptions::default(),
+        None,
+        &hooks,
+    );
+    // Declining hooks must not disturb built-in parsing.
+    assert!(matches!(
+        doc.children[0],
+        Block::Paragraph { .. }
+    ));
+
+    let hooks = ParseHooks::empty().with(&wikilink);
+    let doc = super::parsers::md_to_ast_with_hooks(
+        "[[Link]]\n",
+        &AstOptions::default(),
+        None,
+        &hooks,
+    );
+    assert!(matches!(
+        &doc.children[0],
+        Block::Paragraph { children, .. } if matches!(children.as_slice(),
+            [Inline::Link { .. }])
+    ));
+}
+
+#[test]
+fn hooks_do_not_run_when_none_registered() {
+    // `[[wikilink]]` is plain text without a hook.
+    let doc = md_to_ast("See [[Some Page]] here.\n", &AstOptions::default(), None);
+    match &doc.children[0] {
+        Block::Paragraph { children, .. } => {
+            assert!(children
+                .iter()
+                .all(|c| matches!(c, Inline::Text { .. })));
+        }
+        other => panic!("expected Paragraph, got {:?}", other),
+    }
 }

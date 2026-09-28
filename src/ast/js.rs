@@ -39,6 +39,7 @@
 //! console.log(ast.frontmatter); // real JS object (or null)
 //! ```
 
+use crate::ast::parsers::hooks::{AstParser, BlockParseContext, InlineParseContext};
 use crate::ast::parsers::visitor::{AstVisitor, InlineVisitControl, VisitControl};
 use crate::ast::tokens::token::{Block, Inline};
 use napi::bindgen_prelude::{Env, Function, FunctionRef};
@@ -128,14 +129,14 @@ impl From<InlineVisitControlJs> for InlineVisitControl {
 // value.
 
 /// Synchronous block-visitor callback. Receives a `Block`, returns
-/// `VisitControlJs`.
+/// `VisitControlJs` (or `undefined` for no changes).
 #[napi]
-pub type BlockCallback = FunctionRef<(Block,), VisitControlJs>;
+pub type BlockCallback = FunctionRef<(Block,), Option<VisitControlJs>>;
 
 /// Synchronous inline-visitor callback. Receives an `Inline`, returns
-/// `InlineVisitControlJs`.
+/// `InlineVisitControlJs` (or `undefined` for no changes).
 #[napi]
-pub type InlineCallback = FunctionRef<(Inline,), InlineVisitControlJs>;
+pub type InlineCallback = FunctionRef<(Inline,), Option<InlineVisitControlJs>>;
 
 // ---------------------------------------------------------------------------
 // JsVisitor object shape and registered AstVisitor adapter
@@ -191,12 +192,13 @@ impl AstVisitor for RegisteredJsVisitor {
         };
         // `borrow_back` creates a short-lived `Function` bound to `env`;
         // calling it runs the JS function inline on this (main) thread.
-        let func: Function<(Block,), VisitControlJs> = match cb.borrow_back(&self.env) {
+        let func: Function<(Block,), Option<VisitControlJs>> = match cb.borrow_back(&self.env) {
             Ok(f) => f,
             Err(_) => return VisitControl::default(),
         };
         let snapshot = block.clone();
-        let js_ctrl = func.call((snapshot,)).unwrap_or_default();
+        // `undefined` (no result) means "keep, no changes".
+        let js_ctrl = func.call((snapshot,)).unwrap_or(None).unwrap_or_default();
         js_ctrl.into()
     }
 
@@ -205,12 +207,172 @@ impl AstVisitor for RegisteredJsVisitor {
             Some(cb) => cb,
             _ => return InlineVisitControl::default(),
         };
-        let func: Function<(Inline,), InlineVisitControlJs> = match cb.borrow_back(&self.env) {
-            Ok(f) => f,
-            Err(_) => return InlineVisitControl::default(),
-        };
+        let func: Function<(Inline,), Option<InlineVisitControlJs>> =
+            match cb.borrow_back(&self.env) {
+                Ok(f) => f,
+                Err(_) => return InlineVisitControl::default(),
+            };
         let snapshot = inline.clone();
-        let js_ctrl = func.call((snapshot,)).unwrap_or_default();
+        // `undefined` (no result) means "keep, no changes".
+        let js_ctrl = func.call((snapshot,)).unwrap_or(None).unwrap_or_default();
         js_ctrl.into()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Custom parser hooks (JS interop)
+// ---------------------------------------------------------------------------
+//
+// Mirrors the visitor pattern above: the JS-side `Parser` object holds two
+// optional sync callbacks (`parseBlock` / `parseInline`), each receiving a
+// context object and returning `{ block, consumed }` / `{ inline, consumed }`
+// or `undefined` to decline.  `RegisteredJsParser` adapts them to the Rust
+// [`AstParser`] trait so they can be threaded through the parsing engine via
+// [`ParseHooks`].
+
+/// Result returned from the JS `parseBlock` callback.
+///
+/// All fields are optional; omitting `block` (or returning `undefined`)
+/// declines the position so the next hook / built-in parser handles it.
+#[napi(object)]
+#[derive(Debug, Default, Clone)]
+pub struct BlockParseResultJs {
+    /// The parsed block node.
+    pub block: Option<Block>,
+    /// Number of source lines consumed (must be at least `1`).
+    pub consumed: Option<u32>,
+}
+
+/// Result returned from the JS `parseInline` callback.
+///
+/// All fields are optional; omitting `inline` (or returning `undefined`)
+/// declines the position so the next hook / built-in parser handles it.
+#[napi(object)]
+#[derive(Debug, Default, Clone)]
+pub struct InlineParseResultJs {
+    /// The parsed inline node.
+    pub inline: Option<Inline>,
+    /// Number of characters consumed (`0` or missing declines).
+    pub consumed: Option<u32>,
+}
+
+/// Synchronous block parser hook. Receives a [`BlockParseContext`], returns
+/// a [`BlockParseResultJs`] (or `undefined` to decline).
+#[napi]
+pub type BlockParseCallback = FunctionRef<(BlockParseContext,), Option<BlockParseResultJs>>;
+
+/// Synchronous inline parser hook. Receives an [`InlineParseContext`],
+/// returns an [`InlineParseResultJs`] (or `undefined` to decline).
+#[napi]
+pub type InlineParseCallback = FunctionRef<(InlineParseContext,), Option<InlineParseResultJs>>;
+
+/// JavaScript object shape for a parser hook pair.
+///
+/// ```js
+/// const myParser = {
+///   parseBlock(ctx) {
+///     if (!ctx.line.startsWith(':::')) return;         // decline
+///     const name = ctx.line.slice(3).trim();
+///     return {
+///       block: { type: 'HtmlBlock', html: `<div data-name="${name}"></div>`, pos: { start: {}, end: {} } },
+///       consumed: 1,
+///     };
+///   },
+///   parseInline(ctx) {
+///     if (!ctx.rest.startsWith('@@')) return;          // decline
+///     const end = ctx.rest.indexOf(' ', 2);
+///     const name = end === -1 ? ctx.rest.slice(2) : ctx.rest.slice(2, end);
+///     return {
+///       inline: { type: 'HtmlInline', html: `<span data-name="${name}"></span>`, pos: { start: {}, end: {} } },
+///       consumed: name.length + 2,
+///     };
+///   },
+/// };
+/// document.useParser(myParser);
+/// ```
+///
+/// Either property may be omitted / `null` to skip that phase.
+#[napi(object, object_to_js = false)]
+#[derive(Default)]
+pub struct Parser {
+    /// Optional JS block parser hook (JS: `parseBlock`).
+    pub parse_block: Option<BlockParseCallback>,
+    /// Optional JS inline parser hook (JS: `parseInline`).
+    pub parse_inline: Option<InlineParseCallback>,
+}
+
+impl Parser {
+    pub(crate) fn register(self, env: Env) -> RegisteredJsParser {
+        RegisteredJsParser {
+            parse_block: self.parse_block,
+            parse_inline: self.parse_inline,
+            env,
+        }
+    }
+}
+
+/// Internal adapter that keeps the environment required by callback
+/// references, implementing the Rust [`AstParser`] trait.
+pub(crate) struct RegisteredJsParser {
+    parse_block: Option<BlockParseCallback>,
+    parse_inline: Option<InlineParseCallback>,
+    /// The napi `Env` captured at registration time, used to `borrow_back`
+    /// the `FunctionRef`s when calling them.
+    env: Env,
+}
+
+impl AstParser for RegisteredJsParser {
+    fn try_parse_block(&self, ctx: &BlockParseContext) -> Option<(Block, usize)> {
+        let cb = self.parse_block.as_ref()?;
+        let func: Function<(BlockParseContext,), Option<BlockParseResultJs>> =
+            match cb.borrow_back(&self.env) {
+                Ok(f) => f,
+                Err(e) => {
+                    eprintln!("peisar: parseBlock hook could not be invoked: {e}");
+                    return None;
+                }
+            };
+        // `undefined` (no result) declines the position.
+        let result = match func.call((ctx.clone(),)) {
+            Ok(r) => r?,
+            Err(e) => {
+                eprintln!(
+                    "peisar: parseBlock hook returned an invalid result: {e}\n  \
+                     note: the returned `block` must be a complete node — every \
+                     field (including `pos` with line/column/offset) is required"
+                );
+                return None;
+            }
+        };
+        let block = result.block?;
+        let consumed = result.consumed.unwrap_or(1).max(1) as usize;
+        Some((block, consumed))
+    }
+
+    fn try_parse_inline(&self, ctx: &InlineParseContext) -> Option<(Inline, usize)> {
+        let cb = self.parse_inline.as_ref()?;
+        let func: Function<(InlineParseContext,), Option<InlineParseResultJs>> =
+            match cb.borrow_back(&self.env) {
+                Ok(f) => f,
+                Err(e) => {
+                    eprintln!("peisar: parseInline hook could not be invoked: {e}");
+                    return None;
+                }
+            };
+        // `undefined` (no result) declines the position.
+        let result = match func.call((ctx.clone(),)) {
+            Ok(r) => r?,
+            Err(e) => {
+                eprintln!(
+                    "peisar: parseInline hook returned an invalid result: {e}\n  \
+                     note: the returned `inline` must be a complete node — every \
+                     field (including `pos` with line/column/offset) is required"
+                );
+                return None;
+            }
+        };
+        let inline = result.inline?;
+        let consumed = result.consumed.unwrap_or(0) as usize;
+        Some((inline, consumed))
     }
 }

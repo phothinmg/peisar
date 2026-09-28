@@ -18,7 +18,8 @@
 //! `ParserState` and drives it to completion.
 
 use super::atters::parse_attrs;
-use super::inline::{LinkRefMap, parse_inline_with_refs};
+use super::hooks::{BlockParseContext, ParseHooks, finalize_hook_block};
+use super::inline::{LinkRefMap, parse_inline_with_hooks};
 use super::table::{build_table, is_table_start, parse_delimiter_alignments};
 use crate::ast::options::AstOptions;
 use crate::ast::tokens::{
@@ -52,8 +53,8 @@ pub fn compute_line_starts(input: &str) -> Vec<usize> {
 /// Internal parser state for block-level parsing.
 ///
 /// Holds a reference to the source text, the line slice, line-start offsets,
-/// parser options, and the link reference map (for resolving reference-style
-/// links during inline parsing).
+/// parser options, the link reference map (for resolving reference-style
+/// links during inline parsing), and the custom parser hooks.
 pub struct ParserState<'a> {
     /// The full source text.
     pub input: &'a str,
@@ -69,9 +70,12 @@ pub struct ParserState<'a> {
     pub file_name: Option<String>,
     /// Link reference definitions collected in the pre-pass.
     pub refs: &'a LinkRefMap,
+    /// Custom parser hooks (empty when none registered).
+    pub hooks: &'a ParseHooks<'a>,
 }
 impl<'a> ParserState<'a> {
     /// Create a new `ParserState` from the given source and options.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         input: &'a str,
         lines: &'a [&'a str],
@@ -79,6 +83,7 @@ impl<'a> ParserState<'a> {
         opts: &'a AstOptions,
         file_name: Option<String>,
         refs: &'a LinkRefMap,
+        hooks: &'a ParseHooks<'a>,
     ) -> Self {
         Self {
             input,
@@ -88,6 +93,7 @@ impl<'a> ParserState<'a> {
             opts,
             file_name,
             refs,
+            hooks,
         }
     }
 
@@ -141,6 +147,14 @@ impl<'a> ParserState<'a> {
     pub fn parse_block(&mut self) -> Option<Block> {
         let line = self.current()?;
         let start_line = self.pos;
+
+        // Custom parser hooks — tried before every built-in matcher so an
+        // extension can both introduce new syntax and override built-ins.
+        if !self.hooks.is_empty() {
+            if let Some(block) = self.try_hook_block() {
+                return Some(block);
+            }
+        }
 
         // GFM table
         if self.opts.gfm && is_table_start(self.lines, self.pos) {
@@ -202,6 +216,26 @@ impl<'a> ParserState<'a> {
         // Default: paragraph
         Some(self.parse_paragraph())
     }
+    /// Try the registered custom block hooks at the current position.
+    ///
+    /// Returns the hook-parsed block with an accurate source span and any
+    /// trailing Kramdown attribute block applied, or `None` when every
+    /// hook declined (in which case the built-in matchers proceed).
+    fn try_hook_block(&mut self) -> Option<Block> {
+        let ctx = BlockParseContext {
+            line: self.current()?.to_string(),
+            line_index: self.pos as u32,
+            lines: self.lines[self.pos..].iter().map(|l| l.to_string()).collect(),
+        };
+        let (block, consumed) = self.hooks.try_parse_block(&ctx)?;
+        // A hook must consume at least one line; clamp defensively.
+        let consumed = consumed.max(1);
+        let end_line = (self.pos + consumed).min(self.lines.len());
+        let pos = self.span(self.pos, end_line);
+        self.pos = end_line;
+        let attrs = self.try_trailing_attrs();
+        Some(finalize_hook_block(block, pos, attrs))
+    }
     /// After parsing a block, check if the next line is a Kramdown
     /// attribute block `{:...}` that applies to this block.  Blank lines
     /// between the block and the attribute marker are allowed.
@@ -256,6 +290,7 @@ impl<'a> ParserState<'a> {
             alignments,
             &body_lines,
             Some(self.opts),
+            self.hooks,
         );
         // Fix position + trailing attrs
         if let Block::Table { attrs, pos, .. } = &mut block {
@@ -390,7 +425,12 @@ impl<'a> ParserState<'a> {
         let heading_text = text.to_string();
         let attrs = self.try_trailing_attrs();
 
-        let children = parse_inline_with_refs(&heading_text, Some(self.opts), Some(self.refs));
+        let children = parse_inline_with_hooks(
+            &heading_text,
+            Some(self.opts),
+            Some(self.refs),
+            self.hooks,
+        );
         Some(Block::Heading {
             level: hashes as u8,
             children,
@@ -517,7 +557,12 @@ impl<'a> ParserState<'a> {
                 self.advance();
             }
         }
-        let inner_doc = super::md_to_ast(&inner.join("\n"), self.opts, self.file_name.clone());
+        let inner_doc = super::md_to_ast_with_hooks(
+            &inner.join("\n"),
+            self.opts,
+            self.file_name.clone(),
+            self.hooks,
+        );
         let attrs = self.try_trailing_attrs();
         Block::BlockQuote {
             children: inner_doc.children,
@@ -564,7 +609,12 @@ impl<'a> ParserState<'a> {
                     None
                 };
 
-                let inner = super::md_to_ast(&content, self.opts, self.file_name.clone());
+                let inner = super::md_to_ast_with_hooks(
+                    &content,
+                    self.opts,
+                    self.file_name.clone(),
+                    self.hooks,
+                );
                 items.push(ListItem {
                     children: inner.children,
                     task,
@@ -642,7 +692,7 @@ impl<'a> ParserState<'a> {
         let raw = text_lines.join("\n");
         let attrs = self.try_trailing_attrs();
 
-        let children = parse_inline_with_refs(&raw, Some(self.opts), Some(self.refs));
+        let children = parse_inline_with_hooks(&raw, Some(self.opts), Some(self.refs), self.hooks);
         Block::Paragraph {
             children,
             attrs,

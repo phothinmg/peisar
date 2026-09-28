@@ -7,12 +7,14 @@ mod tests;
 
 pub use options::AstOptions;
 pub use parsers::Document;
+pub use parsers::hooks::{AstParser, BlockParseContext, InlineParseContext, ParseHooks};
 pub use parsers::visitor::{self, AstVisitor};
 
 use crate::frontmatter::parse_markdown_frontmatter;
-use js::RegisteredJsVisitor;
-pub use js::Visitor;
+use js::{RegisteredJsParser, RegisteredJsVisitor};
+pub use js::{Parser, Visitor};
 use napi::Env;
+use parsers::md_to_ast_with_hooks;
 use parsers::visitor::visit_document_mut;
 use serde_json::Value;
 pub struct PeisarAst {
@@ -24,6 +26,13 @@ pub struct PeisarAst {
     visitors: Vec<RegisteredJsVisitor>,
     /// Parsed YAML front-matter (if any).
     frontmatter: Option<Value>,
+    /// The raw Markdown source (kept for re-parsing when parser hooks are
+    /// registered after construction).
+    raw_md: String,
+    /// Parsing options used for (re-)parsing.
+    ast_opts: AstOptions,
+    /// Registered JS parser hooks (adapter wrappers).
+    parsers: Vec<RegisteredJsParser>,
 }
 
 impl PeisarAst {
@@ -44,6 +53,9 @@ impl PeisarAst {
             ast,
             visitors: Vec::new(),
             frontmatter,
+            raw_md,
+            ast_opts: opts,
+            parsers: Vec::new(),
         }
     }
 
@@ -64,6 +76,60 @@ impl PeisarAst {
     /// `VisitControlJs` / `InlineVisitControlJs` (or `undefined`).
     pub fn add_visitor(&mut self, env: Env, visitor: Visitor) {
         self.visitors.push(visitor.register(env));
+    }
+
+    /// Register a JS parser hook.
+    ///
+    /// `parser` is a plain JS object with two optional function properties:
+    ///
+    /// ```js
+    /// ast.addParser({
+    ///   parseBlock(ctx)  { /* returns { block, consumed } or undefined */ },
+    ///   parseInline(ctx) { /* returns { inline, consumed } or undefined */ },
+    /// });
+    /// ```
+    ///
+    /// Because the document is parsed eagerly at construction, registering
+    /// a parser hook re-parses the stored raw Markdown immediately (then
+    /// re-runs any registered visitors on the fresh AST).
+    pub fn add_parser(&mut self, env: Env, parser: Parser) {
+        self.parsers.push(parser.register(env));
+        self.reparse();
+    }
+
+    /// Remove all registered parser hooks.
+    pub fn clear_parsers(&mut self) {
+        self.parsers.clear();
+        self.reparse();
+    }
+
+    /// Re-parse the stored raw Markdown with the currently registered
+    /// parser hooks, replacing the internal AST.  Front matter is
+    /// re-extracted; registered visitors run afterwards on next access.
+    pub fn reparse(&mut self) {
+        let (md_content, frontmatter) = match parse_markdown_frontmatter(&self.raw_md) {
+            Ok(parsed) => parsed.into_parts(),
+            Err(_) => (self.raw_md.clone(), None),
+        };
+
+        // Build the hook registry from the registered JS adapters.
+        let mut hooks = ParseHooks::empty();
+        for p in &self.parsers {
+            hooks.push(p);
+        }
+
+        self.ast = md_to_ast_with_hooks(
+            &md_content,
+            &self.ast_opts.clone(),
+            self.ast_opts.file_name.clone(),
+            &hooks,
+        );
+        self.frontmatter = frontmatter;
+
+        // Visitors registered before re-parse must re-apply to the fresh AST.
+        for v in &mut self.visitors {
+            visit_document_mut(&mut self.ast, v);
+        }
     }
 
     /// Run all registered visitors in insertion order.
