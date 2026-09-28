@@ -483,6 +483,30 @@ cargo doc --no-deps --open
 ~~deleted text~~
 ```
 
+## AI Integration
+
+Peisar provides [Agent Skills](https://skills.sh) for AI coding tools like
+Claude Code, Cursor, Copilot, Codex, and Windsurf. The skills teach the
+agent how to parse Markdown with Peisar, write AST visitors, add custom
+parser hooks, and contribute to the codebase itself.
+
+Install all skills with:
+
+```sh
+npx skills add phothinmg/peisar
+```
+
+Available skills:
+
+- **peisar-parse-markdown** — parse Markdown and render HTML with the npm
+  package or Rust crate (CommonMark + GFM + Kramdown + YAML front matter).
+- **peisar-ast-visitors** — transform the parsed AST with `useVisitor`
+  (JavaScript) or the `AstVisitor` trait (Rust) before rendering.
+- **peisar-parser-hooks** — extend the parser with custom syntax using
+  `useParser` (JavaScript) or the `AstParser` trait (Rust).
+- **peisar-development** — build, test, and modify the Peisar Rust/Node.js
+  codebase itself.
+
 ## Project structure
 
 ```text
