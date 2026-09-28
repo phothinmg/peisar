@@ -1,0 +1,18 @@
+#!/bin/bash
+
+subject=$(grep -vE '^\s*#' "$1" | sed '/^\s*$/d' | head -n1)
+
+if [[ -z "$subject" ]]; then
+  echo "ERROR: Commit message subject is empty."
+  echo "Expected format: <Type>: <message>"
+  exit 1
+fi
+
+pattern='^(⭐ feat|🐛 bug|🎨 modified|🔒 security|👕 refactor|⚠️ deprecated|🚀 release|✅ tests|📝 docs)[[:space:]]*:[[:space:]]+.+$'
+
+if [[ ! "$subject" =~ $pattern ]]; then
+  echo "ERROR: Invalid commit message format."
+  echo "Expected format: <Type>: <message>"
+  echo "Example: ⭐ feat: support tsx test hook"
+  exit 1
+fi

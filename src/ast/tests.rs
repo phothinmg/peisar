@@ -550,7 +550,8 @@ fn test_peisar_ast_frontmatter() {
     let md = "---\ntitle: Test\n---\n\n# Hello\n";
     let mut ast = PeisarAst::new(md.to_string(), None);
     assert_eq!(
-        ast.get_frontmatter().and_then(|value| value["title"].as_str().map(str::to_owned)),
+        ast.get_frontmatter()
+            .and_then(|value| value["title"].as_str().map(str::to_owned)),
         Some("Test".to_string())
     );
     assert!(
@@ -598,11 +599,7 @@ impl AstParser for DirectiveHook {
             return None;
         }
         // Find the closing `:::` line.
-        let close = ctx
-            .lines
-            .iter()
-            .skip(1)
-            .position(|l| l.trim() == ":::")?;
+        let close = ctx.lines.iter().skip(1).position(|l| l.trim() == ":::")?;
         let html = format!("<div class=\"directive\" data-name=\"{}\">", name);
         Some((
             Block::HtmlBlock {
@@ -629,10 +626,7 @@ fn block_hook_parses_custom_directive_syntax() {
     assert_eq!(doc.children.len(), 2);
     match &doc.children[0] {
         Block::HtmlBlock { html, pos, .. } => {
-            assert_eq!(
-                html,
-                "<div class=\"directive\" data-name=\"note\">"
-            );
+            assert_eq!(html, "<div class=\"directive\" data-name=\"note\">");
             // Span covers the directive lines [0, 3).
             assert_eq!(pos.start.line, 0);
             assert_eq!(pos.end.line, 3);
@@ -651,7 +645,12 @@ impl AstParser for ExclamationHook {
         if ctx.line.trim() != "!" {
             return None;
         }
-        Some((Block::ThematicBreak { pos: Default::default() }, 1))
+        Some((
+            Block::ThematicBreak {
+                pos: Default::default(),
+            },
+            1,
+        ))
     }
 }
 
@@ -772,25 +771,14 @@ fn multiple_hooks_tried_in_registration_order() {
     let declining = DecliningHook;
     let wikilink = WikiLinkHook;
     let hooks = ParseHooks::empty().with(&declining).with(&wikilink);
-    let doc = super::parsers::md_to_ast_with_hooks(
-        "plain text\n",
-        &AstOptions::default(),
-        None,
-        &hooks,
-    );
+    let doc =
+        super::parsers::md_to_ast_with_hooks("plain text\n", &AstOptions::default(), None, &hooks);
     // Declining hooks must not disturb built-in parsing.
-    assert!(matches!(
-        doc.children[0],
-        Block::Paragraph { .. }
-    ));
+    assert!(matches!(doc.children[0], Block::Paragraph { .. }));
 
     let hooks = ParseHooks::empty().with(&wikilink);
-    let doc = super::parsers::md_to_ast_with_hooks(
-        "[[Link]]\n",
-        &AstOptions::default(),
-        None,
-        &hooks,
-    );
+    let doc =
+        super::parsers::md_to_ast_with_hooks("[[Link]]\n", &AstOptions::default(), None, &hooks);
     assert!(matches!(
         &doc.children[0],
         Block::Paragraph { children, .. } if matches!(children.as_slice(),
@@ -804,9 +792,7 @@ fn hooks_do_not_run_when_none_registered() {
     let doc = md_to_ast("See [[Some Page]] here.\n", &AstOptions::default(), None);
     match &doc.children[0] {
         Block::Paragraph { children, .. } => {
-            assert!(children
-                .iter()
-                .all(|c| matches!(c, Inline::Text { .. })));
+            assert!(children.iter().all(|c| matches!(c, Inline::Text { .. })));
         }
         other => panic!("expected Paragraph, got {:?}", other),
     }

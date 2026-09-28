@@ -225,7 +225,10 @@ impl<'a> ParserState<'a> {
         let ctx = BlockParseContext {
             line: self.current()?.to_string(),
             line_index: self.pos as u32,
-            lines: self.lines[self.pos..].iter().map(|l| l.to_string()).collect(),
+            lines: self.lines[self.pos..]
+                .iter()
+                .map(|l| l.to_string())
+                .collect(),
         };
         let (block, consumed) = self.hooks.try_parse_block(&ctx)?;
         // A hook must consume at least one line; clamp defensively.
@@ -425,12 +428,8 @@ impl<'a> ParserState<'a> {
         let heading_text = text.to_string();
         let attrs = self.try_trailing_attrs();
 
-        let children = parse_inline_with_hooks(
-            &heading_text,
-            Some(self.opts),
-            Some(self.refs),
-            self.hooks,
-        );
+        let children =
+            parse_inline_with_hooks(&heading_text, Some(self.opts), Some(self.refs), self.hooks);
         Some(Block::Heading {
             level: hashes as u8,
             children,
