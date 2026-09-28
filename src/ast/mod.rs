@@ -1,18 +1,19 @@
 mod js;
 mod options;
 mod parsers;
-pub mod tokens;
 #[cfg(test)]
 mod tests;
+pub mod tokens;
 
 pub use options::AstOptions;
 pub use parsers::Document;
 pub use parsers::hooks::{AstParser, BlockParseContext, InlineParseContext, ParseHooks};
+pub use parsers::inline::{LinkRefMap, parse_inline, parse_inline_with_refs};
 pub use parsers::visitor::{self, AstVisitor};
 
 use crate::frontmatter::parse_markdown_frontmatter;
-use js::{RegisteredJsParser, RegisteredJsVisitor};
 pub use js::{Parser, Visitor};
+use js::{RegisteredJsParser, RegisteredJsVisitor};
 use napi::Env;
 use parsers::md_to_ast_with_hooks;
 use parsers::visitor::visit_document_mut;

@@ -14,8 +14,8 @@ use napi_derive::napi;
 
 use crate::html::{RenderOptions, render_document_html};
 pub use ast::{
-    AstOptions, AstParser, AstVisitor, BlockParseContext, Document, InlineParseContext,
-    ParseHooks, PeisarAst, Parser, Visitor,
+    AstOptions, AstParser, AstVisitor, BlockParseContext, Document, InlineParseContext, LinkRefMap,
+    ParseHooks, Parser, PeisarAst, Visitor, parse_inline, parse_inline_with_refs,
     tokens::{Attributes, span, token},
     visitor,
 };

@@ -10,6 +10,9 @@
 
 [![NPM](https://nodei.co/npm/peisar.svg)](https://nodei.co/npm/peisar/)
 
+---
+
+
 Peisar parses CommonMark Markdown with GitHub Flavored Markdown (GFM),
 Kramdown-style block attributes, YAML front matter, source spans, AST
 visitors, custom parser hooks, and configurable HTML output.

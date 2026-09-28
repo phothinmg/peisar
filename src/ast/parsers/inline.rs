@@ -32,8 +32,8 @@ use std::collections::HashMap;
 /// A map of normalised link reference labels to `(url, title)`.
 pub type LinkRefMap = HashMap<String, (String, Option<String>)>;
 
-/// Parse inline markdown into a list of [`Inline`] nodes.
-/// Parse inline markdown with the given options (controls GFM features).
+/// Parse inline markdown into a list of [`Inline`] nodes, with the given
+/// options (controls GFM features).
 pub fn parse_inline(input: &str, options: Option<&AstOptions>) -> Vec<Inline> {
     parse_inline_with_refs(input, options, None)
 }
@@ -83,10 +83,8 @@ pub fn parse_inline_with_hooks(
                 if consumed > 0 {
                     flush_text(&mut tokens, &mut text, &mut text_start, &ctx, &chars);
                     let end = (i + consumed).min(chars.len());
-                    let pos = Span::new(
-                        ctx.position(i, chars.len()),
-                        ctx.position(end, chars.len()),
-                    );
+                    let pos =
+                        Span::new(ctx.position(i, chars.len()), ctx.position(end, chars.len()));
                     tokens.push(finalize_hook_inline(node, pos));
                     i = end;
                     text_start = i;
@@ -143,8 +141,7 @@ pub fn parse_inline_with_hooks(
                 continue;
             }
             // Then try reference link `[text][label]`, `[label][]`, `[label]`
-            if let Some((link, end)) = match_reference_link(&chars, i, &ctx, options, refs, hooks)
-            {
+            if let Some((link, end)) = match_reference_link(&chars, i, &ctx, options, refs, hooks) {
                 flush_text(&mut tokens, &mut text, &mut text_start, &ctx, &chars);
                 tokens.push(link);
                 i = end;
