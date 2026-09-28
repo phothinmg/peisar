@@ -8,10 +8,17 @@
     "build:local": "napi build --platform --config-path napi.config.json",
     "test": "node --test"
   },
-  "keywords": [],
+  "keywords": [
+    "markdown",
+    "parser"
+  ],
   "type": "commonjs",
   "devDependencies": {
     "@napi-rs/cli": "^3.10.5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/phothinmg/peisar"
   },
   "files": [
     "README.md",
