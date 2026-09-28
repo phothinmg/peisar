@@ -2,10 +2,12 @@ mod js;
 mod options;
 mod parsers;
 pub mod tokens;
+#[cfg(test)]
+mod tests;
 
 pub use options::AstOptions;
 pub use parsers::Document;
-pub use parsers::visitor;
+pub use parsers::visitor::{self, AstVisitor};
 
 use crate::frontmatter::parse_markdown_frontmatter;
 use js::RegisteredJsVisitor;

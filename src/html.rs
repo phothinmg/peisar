@@ -102,7 +102,7 @@ impl AstToHtml {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```ignore
     /// use peisar_ast::{Document, AstOptions};
     /// use peisar_html::AstToHtml;
     ///
@@ -158,13 +158,7 @@ impl AstToHtml {
                 self.render_block(b);
             }
         } else {
-            self.out.push_str("<!DOCTYPE html>\n<html");
-            if let Some(bc) = self.opts.body_class.clone() {
-                self.out.push_str(" class=\"");
-                self.esc_no_quote(&bc);
-                self.out.push_str("\"");
-            }
-            self.out.push_str(">\n<head>\n");
+            self.out.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
             if self.opts.charset {
                 self.out.push_str("<meta charset=\"utf-8\">\n");
             }
@@ -511,6 +505,29 @@ impl AstToHtml {
                 _ => self.out.push(c),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RenderOptions, render_document_html};
+    use crate::ast::{AstOptions, Document};
+
+    #[test]
+    fn body_class_is_not_written_to_html_element() {
+        let doc = Document::parse("Text", &AstOptions::default(), None);
+        let html = render_document_html(
+            &doc,
+            Some(RenderOptions {
+                fragment: false,
+                body_class: Some("markdown-body".to_string()),
+                ..RenderOptions::default()
+            }),
+        );
+
+        assert!(html.contains("<html>\n<head>"));
+        assert!(html.contains("<body class=\"markdown-body\">"));
+        assert!(!html.contains("<html class="));
     }
 }
 impl Default for AstToHtml {

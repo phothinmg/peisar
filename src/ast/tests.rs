@@ -14,20 +14,9 @@ use super::parsers::block::{
 };
 use super::parsers::inline::{LinkRefMap, parse_inline, parse_inline_with_refs};
 use super::parsers::md_to_ast;
-use super::parsers::visitor::{InlineVisitControl, VisitControl};
+use super::parsers::visitor::{VisitControl, visit_document_mut};
 use super::tokens::token::{Block, Inline};
 use super::{AstOptions, AstVisitor};
-
-/// A no-op visitor that does nothing — used as the `V` type parameter in tests.
-struct NoopVisitor;
-impl AstVisitor for NoopVisitor {
-    fn visit_block(&mut self, _block: &mut Block) -> VisitControl {
-        VisitControl::default()
-    }
-    fn visit_inline(&mut self, _inline: &mut Inline) -> InlineVisitControl {
-        InlineVisitControl::default()
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Helper: count block variants in a document
@@ -540,33 +529,55 @@ fn test_empty_document() {
 fn test_peisar_ast_basic() {
     use super::PeisarAst;
     let md = "# Hello\n\nWorld.\n";
-    let mut ast: PeisarAst<NoopVisitor> = PeisarAst::new(md, None);
-    assert_eq!(ast.ast().children.len(), 2);
+    let mut ast = PeisarAst::new(md.to_string(), None);
+    assert_eq!(ast.get_ast().children.len(), 2);
 }
 
 #[test]
 fn test_peisar_ast_take_ast() {
     use super::PeisarAst;
-    let mut ast: PeisarAst<NoopVisitor> = PeisarAst::new("# T\n\nbody\n", None);
+    let mut ast = PeisarAst::new("# T\n\nbody\n".to_string(), None);
     let doc = ast.take_ast();
     assert_eq!(doc.children.len(), 2);
     // After taking, the ast should have a default Document
-    assert_eq!(ast.ast().children.len(), 0);
+    assert_eq!(ast.get_ast().children.len(), 0);
 }
 
 #[test]
 fn test_peisar_ast_frontmatter() {
     use super::PeisarAst;
     let md = "---\ntitle: Test\n---\n\n# Hello\n";
-    let mut ast: PeisarAst<NoopVisitor> = PeisarAst::new(md, None);
-    // Front-matter should be parsed (serde_json::Value by default)
-    // With () as front-matter type, frontmatter will be None or parsed
-    // depending on whether the YAML can deserialize into ().
-    // For this test, just verify the body was parsed correctly.
+    let mut ast = PeisarAst::new(md.to_string(), None);
+    assert_eq!(
+        ast.get_frontmatter().and_then(|value| value["title"].as_str().map(str::to_owned)),
+        Some("Test".to_string())
+    );
     assert!(
-        ast.ast()
+        ast.get_ast()
             .children
             .iter()
             .any(|b| matches!(b, Block::Heading { level: 1, .. }))
     );
+}
+
+struct ReplacingVisitor {
+    calls: usize,
+}
+
+impl AstVisitor for ReplacingVisitor {
+    fn visit_block(&mut self, block: &mut Block) -> VisitControl {
+        self.calls += 1;
+        VisitControl::replace_with(vec![block.clone()])
+    }
+}
+
+#[test]
+fn replacing_a_node_does_not_revisit_its_replacement() {
+    let mut doc = md_to_ast("# Heading\n", &AstOptions::default(), None);
+    let mut visitor = ReplacingVisitor { calls: 0 };
+
+    visit_document_mut(&mut doc, &mut visitor);
+
+    assert_eq!(visitor.calls, 1);
+    assert!(matches!(doc.children.as_slice(), [Block::Heading { .. }]));
 }

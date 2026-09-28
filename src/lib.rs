@@ -14,7 +14,7 @@ use napi_derive::napi;
 
 use crate::html::{RenderOptions, render_document_html};
 pub use ast::{
-    Document, PeisarAst, Visitor,
+    AstVisitor, Document, PeisarAst, Visitor,
     tokens::{Attributes, span, token},
     visitor,
 };
@@ -63,7 +63,7 @@ impl Peisar {
     /// Registers a JavaScript AST visitor.
     ///
     /// The visitor can provide `visitBlock` and/or `visitInline` callbacks.
-    /// Each callback receives a node and may return a control object that
+    /// Each callback receives a one-item node tuple and may return a control object that
     /// changes the node or determines whether its children are visited.
     #[napi]
     pub fn use_visitor(&mut self, env: Env, visitor: Visitor) {

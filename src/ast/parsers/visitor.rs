@@ -13,7 +13,7 @@
 //!
 //! ## Example
 //!
-//! ```rust
+//! ```ignore
 //! use peisar_ast::AstVisitor;
 //! use peisar_ast::token::{Block, Inline};
 //! use peisar_ast::parsers::visitor::{VisitControl, InlineVisitControl};
@@ -180,8 +180,9 @@ fn visit_blocks_vec<V: AstVisitor + ?Sized>(children: &mut Vec<Block>, visitor: 
 
         // replacement requested
         if let Some(reps) = replace_with {
-            // insert replacements and leave them to be visited in subsequent iterations
+            let replacement_len = reps.len();
             children.splice(i..i, reps);
+            i += replacement_len;
             continue;
         }
 

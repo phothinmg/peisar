@@ -63,16 +63,16 @@ pub struct GetOptions {
 }
 
 pub fn get_options(options: Option<PeisarOptions>) -> GetOptions {
-    let opts = options.unwrap_or(PeisarOptions::default());
+    let opts = options.unwrap_or_default();
     let ast_opts = AstOptions {
-        gfm: opts.gfm.unwrap(),
-        kramdown: opts.kramdown.unwrap(),
+        gfm: opts.gfm.unwrap_or(true),
+        kramdown: opts.kramdown.unwrap_or(true),
         file_name: opts.file_name,
     };
     let render_opts = RenderOptions {
-        fragment: opts.fragment.unwrap(),
-        charset: opts.charset.unwrap(),
-        viewport: opts.viewport.unwrap(),
+        fragment: opts.fragment.unwrap_or(false),
+        charset: opts.charset.unwrap_or(true),
+        viewport: opts.viewport.unwrap_or(true),
         title: opts.title,
         body_class: opts.body_class,
         style: opts.style,
@@ -80,5 +80,33 @@ pub fn get_options(options: Option<PeisarOptions>) -> GetOptions {
     GetOptions {
         ast_opts,
         render_opts,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{PeisarOptions, get_options};
+
+    #[test]
+    fn partial_options_use_defaults_for_omitted_fields() {
+        let options = PeisarOptions {
+            gfm: None,
+            kramdown: None,
+            file_name: None,
+            fragment: Some(true),
+            charset: None,
+            viewport: None,
+            title: None,
+            body_class: None,
+            style: None,
+        };
+
+        let resolved = get_options(Some(options));
+
+        assert!(resolved.ast_opts.gfm);
+        assert!(resolved.ast_opts.kramdown);
+        assert!(resolved.render_opts.fragment);
+        assert!(resolved.render_opts.charset);
+        assert!(resolved.render_opts.viewport);
     }
 }

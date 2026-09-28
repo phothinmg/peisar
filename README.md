@@ -3,147 +3,119 @@
 <div align="center">
 <img src="https://pub-c9ba018358dd48a99b70013b65a25e5f.r2.dev/logo/peisar.webp" width="160" height="160" alt="peisar" />
   <h1>Peisar</h1>
-  <p>A lossless Markdown toolchain written in Rust — parse, transform, and render with source-span precision.</p>
+  <p>A Markdown parser and HTML renderer for Node.js, written in Rust.</p>
 </div>
 
 ---
 
-A practical Markdown parser written in Rust, supporting CommonMark,
-GitHub Flavored Markdown (GFM), Kramdown-style block attributes, a plugin
-system, and configurable HTML output.
+Peisar parses CommonMark Markdown with GitHub Flavored Markdown (GFM),
+Kramdown-style block attributes, YAML front matter, source spans, AST
+visitors, and configurable HTML output.
 
 ## Features
 
 - **CommonMark** — headings, paragraphs, code blocks, block quotes, lists,
-  thematic breaks, HTML blocks, emphasis, links, images, inline code,
-  hard/soft breaks.
-- **GFM** — tables (with column alignment), strikethroughs, task lists,
+  thematic breaks, HTML blocks, emphasis, links, images, inline code, and
+  hard or soft breaks.
+- **GFM** — tables with column alignment, strikethrough, task lists, and
   autolinks.
-- **Kramdown attributes** — `{:#id .class key="value"}` on any block element.
-- **Plugin system** — extend the parser/AST/renderer via `Plugin` trait.
-- **Configurable** — full HTML document or fragment, custom title/CSS.
-- **Zero dependencies** — only `serde` for serialization.
+- **Kramdown attributes** — `{:#id .class key="value"}` on block elements.
+- **YAML front matter** — metadata is available separately from the parsed
+  Markdown.
+- **AST visitors** — transform the parsed AST from JavaScript before reading
+  it or rendering HTML.
+- **Node.js bindings** — native N-API addon with TypeScript declarations.
 
 ## Quick start
 
-```rust
-use peisar::{parser, html, config::{ParseOptions, RenderOptions}};
-
-// Parse with default options (GFM + Kramdown enabled)
-let doc = parser::parse("# Hello **world**");
-
-// Render as a full HTML document
-let html = html::render_document(&doc, Some(false));
-```
-
-## Node.js WASI build
-
-Build the threaded WASI binding with:
+Install the package:
 
 ```sh
-rustup target add wasm32-wasip1-threads
-npm run build:wasi
+npm install peisar
 ```
 
-The generated binding uses Node's WASI and worker-thread APIs, so use it in
-Node.js rather than instantiating the `.wasm` file directly in a browser. Keep
-[`index.js`](./index.js), [`peisar.wasi.cjs`](./peisar.wasi.cjs), and
-[`peisar.wasm32-wasi.wasm`](./peisar.wasm32-wasi.wasm) together when deploying
-the package.
-
-To require the WASI binding instead of a native addon:
-
-```sh
-NAPI_RS_FORCE_WASI=error node app.js
-```
+Parse Markdown and render it as HTML:
 
 ```js
 const { Peisar } = require('peisar')
 
-const parser = new Peisar('# Hello from WASI')
-console.log(parser.html)
+const document = new Peisar('# Hello **world**')
+
+console.log(document.html)
+console.log(document.ast)
+console.log(document.astJson)
+```
+
+By default, GFM and Kramdown extensions are enabled and `html` is a complete
+HTML document.
+
+## Development build
+
+```sh
+npm install
+npm run build:local
 ```
 
 ## Configuration
 
-### Parse options
+Pass only the options you need; omitted properties retain their defaults.
 
-```rust
-use peisar::config::ParseOptions;
+```js
+const { Peisar } = require('peisar')
 
-// Pure CommonMark (no GFM, no Kramdown)
-let opts = ParseOptions { gfm: false, kramdown: false };
-let doc = peisar::parser::parse_with("# Title", &opts);
+const document = new Peisar('# Title', {
+  gfm: false,
+  kramdown: false,
+  fragment: true,
+})
+
+console.log(document.html) // <h1>Title</h1>
 ```
 
-### Render options
+Supported options:
 
-```rust
-use peisar::config::RenderOptions;
+- `gfm` and `kramdown` enable their respective syntax extensions (default:
+  `true`).
+- `fileName` attaches a source name to the returned AST.
+- `fragment` returns only rendered body content when `true` (default:
+  `false`).
+- `charset`, `viewport`, `title`, `bodyClass`, and `style` configure the full
+  HTML document. `bodyClass` is applied to `<body>`.
 
-let opts = RenderOptions {
-    fragment: false,                          // full HTML document
-    charset: true,
-    viewport: true,
-    title: Some("My Page".to_string()),
-    body_class: Some("markdown-body".to_string()),
-    style: Some("body { max-width: 800px; }".to_string()),
-};
-```
+## AST visitors
 
-## Plugins
+```js
+const { Peisar } = require('peisar')
 
-```rust
-use peisar::plugin_factory::{Plugin, PluginPipeline, PluginContext};
-use peisar::plugins::WrapDiv;
+const document = new Peisar('# Hello', { fragment: true })
 
-let doc = peisar::parser::parse("# Hello");
-
-let mut pipeline = PluginPipeline::new();
-pipeline.add(WrapDiv { class: "container".to_string() });
-
-let ctx = PluginContext::new(ParseOptions::default());
-let html = peisar::html::render_document_with(
-    &doc,
-    &RenderOptions::default(),
-    &pipeline,
-    &ctx,
-);
-```
-
-### Writing a custom plugin
-
-```rust
-use peisar::plugin_factory::{Plugin, PluginContext};
-use peisar::ast::{Block, Document, KramdownAttributes};
-
-struct AddHeadingClass { class: String }
-
-impl Plugin for AddHeadingClass {
-    fn name(&self) -> &str { "add-heading-class" }
-
-    fn transform_ast(&self, doc: &mut Document, _ctx: &PluginContext) {
-        for block in &mut doc.children {
-            if let Block::Heading { attrs, .. } = block {
-                let mut a = attrs.take().unwrap_or_default();
-                a.classes.push(self.class.clone());
-                *attrs = Some(a);
-            }
-        }
+document.useVisitor({
+  visitBlock([block]) {
+    if (block.type === 'Heading') {
+      return {
+        replaceWith: [{ ...block, attrs: { ...block.attrs, classes: ['title'] } }],
+      }
     }
-}
+    return { recurse: true }
+  },
+})
+
+console.log(document.html) // <h1 class="title">Hello</h1>
 ```
 
-## Kramdown attributes
+## YAML front matter
 
-```markdown
-# Heading {#my-id .big .red data-toggle="modal"}
-```
+Leading YAML front matter is excluded from the rendered Markdown and exposed
+through `frontmatter`:
 
-code block
+```js
+const document = new Peisar(`---
+title: Hello
+---
 
-```
-{#code-id .highlight}
+# Hello`)
+
+console.log(document.frontmatter) // { title: 'Hello' }
 ```
 
 ## GFM examples
@@ -171,16 +143,13 @@ code block
 
 ## Project structure
 
-```
+```text
 src/
-├── ast/       — AST node definitions (mod, nodes, span)
-├── parser/    — Parser modules (block, inline, gfm, kramdown)
-├── config.rs  — ParseOptions, RenderOptions
-├── plugin.rs  — Plugin system
-├── html.rs    — HTML renderer
-├── visitor.rs — Visitor pattern
-└── tests.rs   — Test suite
+├── ast/            AST definitions, parsers, visitors, and tests
+├── config/         JavaScript option conversion
+├── frontmatter.rs  YAML front-matter extraction
+├── html.rs         HTML renderer
+└── lib.rs          Node.js N-API bindings
 ```
 
-See [CHANGELOG.md](CHANGELOG.md) for release history and [NOTES.md](NOTES.md)
-for design decisions and future plans.
+The generated TypeScript API is available in [index.d.ts](index.d.ts).

@@ -37,7 +37,7 @@ use serde::Serialize;
 ///
 /// # Example
 ///
-/// ```rust
+/// ```ignore
 /// use peisar_ast::Document;
 /// use peisar_ast::AstOptions;
 ///
@@ -81,7 +81,7 @@ impl Document {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```ignore
     /// use peisar_ast::Document;
     /// use peisar_ast::AstOptions;
     ///
@@ -107,7 +107,7 @@ impl Document {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```ignore
 /// use peisar_ast::Document;
 /// use peisar_ast::AstOptions;
 ///

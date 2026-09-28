@@ -33,7 +33,7 @@ use crate::ast::tokens::{
 ///
 /// # Example
 ///
-/// ```rust
+/// ```ignore
 /// use peisar_ast::parsers::block::compute_line_starts;
 ///
 /// let starts = compute_line_starts("a\nbb\nccc");

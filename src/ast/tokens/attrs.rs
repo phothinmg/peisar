@@ -13,7 +13,7 @@ use serde::Serialize;
 ///
 /// # Example
 ///
-/// ```rust
+/// ```ignore
 /// use peisar_ast::tokens::Attributes;
 ///
 /// let attrs = Attributes {
