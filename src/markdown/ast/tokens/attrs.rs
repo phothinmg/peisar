@@ -11,21 +11,7 @@ use serde::Serialize;
 
 /// Parsed Kramdown block attributes (`{:#id .class key="val"}`).
 ///
-/// # Example
-///
-/// ```ignore
-/// use peisar_ast::tokens::Attributes;
-///
-/// let attrs = Attributes {
-///     id: Some("intro".into()),
-///     classes: Some(vec!["banner".into(), "wide".into()]),
-///     attributes: Some(vec![("data-index".into(), "42".into())]),
-/// };
-/// assert_eq!(
-///     attrs.to_html_attr_string(),
-///     "id=\"intro\" class=\"banner wide\" data-index=\"42\""
-/// );
-/// ```
+
 #[napi(object)]
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
 pub struct Attributes {

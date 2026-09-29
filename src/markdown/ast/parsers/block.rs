@@ -32,14 +32,6 @@ use crate::markdown::ast::tokens::{
 /// Line 0 always starts at offset 0.  For each `\n` in `input`, a new
 /// entry is added pointing to the byte immediately after the newline.
 ///
-/// # Example
-///
-/// ```ignore
-/// use peisar_ast::parsers::block::compute_line_starts;
-///
-/// let starts = compute_line_starts("a\nbb\nccc");
-/// assert_eq!(starts, vec![0, 2, 5]);
-/// ```
 pub fn compute_line_starts(input: &str) -> Vec<usize> {
     let mut starts = vec![0usize];
     for (i, b) in input.bytes().enumerate() {

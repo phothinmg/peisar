@@ -1,12 +1,6 @@
 /target
 node_modules
-aa.html
-aa.json
-test.md
-aa.js
-peisar.linux-x64-gnu.node
-index.js
-index.d.ts
 npm
 contents
 .peisar_cache
+test.md

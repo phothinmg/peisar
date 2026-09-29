@@ -11,23 +11,6 @@
 //! method receives a `&mut` reference to the node and returns a control
 //! struct that can request insertion, replacement, or removal.
 //!
-//! ## Example
-//!
-//! ```ignore
-//! use peisar_ast::AstVisitor;
-//! use peisar_ast::token::{Block, Inline};
-//! use peisar_ast::parsers::visitor::{VisitControl, InlineVisitControl};
-//!
-//! struct LinkCounter { count: usize }
-//! impl AstVisitor for LinkCounter {
-//!     fn visit_inline(&mut self, inline: &mut Inline) -> InlineVisitControl {
-//!         if matches!(inline, Inline::Link { .. } | Inline::LinkReference { .. }) {
-//!             self.count += 1;
-//!         }
-//!         InlineVisitControl::default()
-//!     }
-//! }
-//! ```
 
 use crate::markdown::ast::tokens::token::{Block, Inline};
 

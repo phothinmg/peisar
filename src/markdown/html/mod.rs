@@ -100,16 +100,6 @@ impl AstToHtml {
     /// This is a convenience wrapper around [`render_document`](Self::render_document)
     /// + [`finish`](Self::finish).
     ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// use peisar_ast::{Document, AstOptions};
-    /// use peisar_html::AstToHtml;
-    ///
-    /// let doc = Document::parse("Hi.\n", &AstOptions::default(), None);
-    /// let html = AstToHtml::default().render_document_owned(&doc);
-    /// assert_eq!(html, "<p>Hi.</p>\n");
-    /// ```
     #[allow(unused)]
     pub fn render_document_owned(mut self, doc: &Document) -> String {
         self.render_document(doc);

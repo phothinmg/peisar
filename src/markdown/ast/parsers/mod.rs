@@ -37,16 +37,7 @@ use serde::Serialize;
 /// Contains the top-level block children and all link reference definitions
 /// collected from the source text.
 ///
-/// # Example
-///
-/// ```ignore
-/// use peisar_ast::Document;
-/// use peisar_ast::AstOptions;
-///
-/// let doc = Document::parse("# Hello\n", &AstOptions::default(), None);
-/// assert_eq!(doc.node_type, "root");
-/// assert_eq!(doc.children.len(), 1);
-/// ```
+
 #[napi(object)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Document {
@@ -81,15 +72,6 @@ impl Document {
     ///
     /// This is a convenience wrapper around the module's `md_to_ast` parser.
     ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// use peisar_ast::Document;
-    /// use peisar_ast::AstOptions;
-    ///
-    /// let doc = Document::parse("# Hello\n", &AstOptions::default(), None);
-    /// assert_eq!(doc.children.len(), 1);
-    /// ```
     pub fn parse(input: &str, opts: &AstOptions, file_name: Option<String>) -> Self {
         md_to_ast(input, opts, file_name)
     }
@@ -107,15 +89,6 @@ impl Document {
 /// - `opts` — parser options (GFM, Kramdown, etc.).
 /// - `file_name` — optional file name to attach to the resulting [`Document`].
 ///
-/// # Example
-///
-/// ```ignore
-/// use peisar_ast::Document;
-/// use peisar_ast::AstOptions;
-///
-/// let doc = Document::parse("# Title\n\nParagraph.\n", &AstOptions::default(), None);
-/// assert_eq!(doc.children.len(), 2);
-/// ```
 pub fn md_to_ast(input: &str, opts: &AstOptions, file_name: Option<String>) -> Document {
     md_to_ast_with_hooks(input, opts, file_name, &ParseHooks::empty())
 }

@@ -13,15 +13,7 @@ use serde::{Deserialize, Serialize};
 /// Both GFM and Kramdown extensions are enabled by default.  To parse
 /// strict CommonMark only:
 ///
-/// ```ignore
-/// use peisar_ast::AstOptions;
-///
-/// let opts = AstOptions {
-///     gfm: false,
-///     kramdown: false,
-///     file_name: None,
-/// };
-/// ```
+
 #[napi(object)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AstOptions {

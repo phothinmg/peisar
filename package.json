@@ -5,7 +5,7 @@
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "build:local": "napi build --platform --config-path napi.config.json",
+    "build:local": "napi build --platform --config-path napi.config.json --output-dir local_build",
     "test": "node --test",
     "hooks:install": "bash scripts/install-hooks.sh",
     "commit": "bash scripts/commit.sh"

@@ -241,7 +241,7 @@ impl std::error::Error for PeisarConfigError {
 /// # Example
 ///
 /// ```
-/// use peisar_utils::parse_config;
+/// use peisar::ssg::ssg_config::parse_config;
 ///
 /// let config = parse_config(r#"
 /// [site]
@@ -326,7 +326,7 @@ fn read_toml_config_from(dir: &Path) -> Result<String, PeisarConfigError> {
 /// # Example
 ///
 /// ```no_run
-/// use peisar_utils::load_config;
+/// use peisar::ssg::ssg_config::load_config;
 ///
 /// match load_config() {
 ///     Ok(config) => println!("serving \"{}\"", config.site.title),

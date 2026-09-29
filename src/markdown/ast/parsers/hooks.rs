@@ -25,30 +25,6 @@
 //! The returned node's `pos` span is computed automatically by the engine
 //! from the hook's `consumed` value — hooks may pass a placeholder span.
 //!
-//! ## Example (Rust)
-//!
-//! ```ignore
-//! use peisar_ast::{AstParser, BlockParseContext, ParseHooks};
-//! use peisar_ast::tokens::token::Block;
-//!
-//! struct Directive;
-//! impl AstParser for Directive {
-//!     fn try_parse_block(&self, ctx: &BlockParseContext) -> Option<(Block, usize)> {
-//!         let name = ctx.line.trim().strip_prefix(":::")?;
-//!         if name.is_empty() {
-//!             Some((Block::HtmlBlock { html: "<hr>".into(), pos: Default::default() }, 1))
-//!         } else {
-//!             None
-//!         }
-//!     }
-//! }
-//!
-//! let hook = Directive;
-//! let mut hooks = ParseHooks::empty();
-//! hooks.push(&hook);
-//! let doc = md_to_ast_with_hooks(":::\n", &AstOptions::default(), None, &hooks);
-//! ```
-
 use crate::markdown::ast::tokens::{
     Attributes,
     span::Span,
