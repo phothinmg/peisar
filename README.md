@@ -117,6 +117,9 @@ document.useVisitor({
 console.log(document.html) // <h1 class="title">Hello</h1>
 ```
 
+You can find ready-made `AstVisitor` implementations and usage examples at
+[Peisar-Visitors](https://github.com/suseejs/peisar-visitors).
+
 ## Custom parser hooks
 
 Visitors transform the AST *after* parsing; parser hooks let extensions
@@ -513,10 +516,11 @@ Available skills:
 src/
 ├── ast/            AST definitions, parsers, visitors, and tests
 ├── config/         JavaScript option conversion
-├── frontmatter.rs  YAML front-matter extraction
-├── html.rs         HTML renderer
+├── frontmatter/    YAML front-matter extraction
+├── html/           HTML renderer
 └── lib.rs          Public Rust API + Node.js N-API bindings
 ```
 
 The generated TypeScript API is available in [index.d.ts](index.d.ts);
 the Rust API is documented in the source and via `cargo doc`.
+

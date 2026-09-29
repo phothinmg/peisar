@@ -20,8 +20,10 @@ Guidance for working on the Peisar codebase — a Markdown parser and HTML rende
 ```
 src/
 ├── lib.rs              # napi class `Peisar` — the JS entry point
-├── html.rs             # AST → HTML renderer (`AstToHtml`, `RenderOptions`)
-├── frontmatter.rs      # YAML front matter extraction
+├── html
+|   └── mod.rs          # AST → HTML renderer (`AstToHtml`, `RenderOptions`)
+├── frontmatter
+|   └── mod.rs          # YAML front matter extraction
 ├── config/
 │   └── mod.rs          # `PeisarOptions` (JS-facing), option resolution
 └── ast/
