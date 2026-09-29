@@ -44,7 +44,7 @@ author = "Ada"
 rootDir = "/srv/site"
 contentsDir = "docs"
 publicDir = "static"
-themeDir = "skins"
+dataDir = "skins"
 outDir = "build"
 
 [devServer]
@@ -73,7 +73,7 @@ fn defaults_match_the_documented_values() {
     assert_eq!(dirs.root_dir, ".");
     assert_eq!(dirs.contents_dir, "contents");
     assert_eq!(dirs.public_dir, "public");
-    assert_eq!(dirs.theme_dir, "themes");
+    assert_eq!(dirs.data_dir, "data");
     assert_eq!(dirs.out_dir, ".peisar");
 
     let server = PeisarSSGDevServer::default();
@@ -92,7 +92,7 @@ fn parses_every_field_from_a_full_config() {
     assert_eq!(config.directories.root_dir, "/srv/site");
     assert_eq!(config.directories.contents_dir, "docs");
     assert_eq!(config.directories.public_dir, "static");
-    assert_eq!(config.directories.theme_dir, "skins");
+    assert_eq!(config.directories.data_dir, "skins");
     assert_eq!(config.directories.out_dir, "build");
 
     assert_eq!(config.dev_server.port, 8080);
@@ -146,7 +146,7 @@ rootDir = "site-root"
     assert_eq!(dirs.root_dir, "site-root");
     assert_eq!(dirs.contents_dir, "contents");
     assert_eq!(dirs.public_dir, "public");
-    assert_eq!(dirs.theme_dir, "themes");
+    assert_eq!(dirs.data_dir, "data");
     assert_eq!(dirs.out_dir, ".peisar");
 }
 

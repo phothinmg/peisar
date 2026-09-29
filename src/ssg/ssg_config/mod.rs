@@ -18,7 +18,7 @@
 //! rootDir = "."               # default
 //! contentsDir = "contents"    # default
 //! publicDir = "public"        # default
-//! themeDir = "themes"         # default
+//! dataDir = "data"            # default
 //! outDir = ".peisar"          # default
 //!
 //! [devServer]                 # optional table; every key is optional
@@ -77,8 +77,8 @@ struct PeisarDirectories {
     pub contents_dir: Option<String>,
     /// Directory with static assets copied verbatim to the output.
     pub public_dir: Option<String>,
-    /// Directory containing the theme.
-    pub theme_dir: Option<String>,
+    /// Directory containing the data.
+    pub data_dir: Option<String>,
     /// Build output directory.
     pub out_dir: Option<String>,
 }
@@ -134,8 +134,8 @@ pub struct PeisarSSGDirectories {
     /// Directory with static assets copied verbatim to the output.
     /// Default: `"public"`.
     pub public_dir: String,
-    /// Directory containing the theme. Default: `"themes"`.
-    pub theme_dir: String,
+    /// Directory containing the theme. Default: `"data"`.
+    pub data_dir: String,
     /// Build output directory. Default: `".peisar"`.
     pub out_dir: String,
 }
@@ -146,7 +146,7 @@ impl Default for PeisarSSGDirectories {
             root_dir: ".".to_string(),
             contents_dir: "contents".to_string(),
             public_dir: "public".to_string(),
-            theme_dir: "themes".to_string(),
+            data_dir: "data".to_string(),
             out_dir: ".peisar".to_string(),
         }
     }
@@ -278,7 +278,7 @@ pub fn parse_config(input: &str) -> Result<PeisarSSGConfig, PeisarConfigError> {
             root_dir: dirs.root_dir.unwrap_or(directory_defaults.root_dir),
             contents_dir: dirs.contents_dir.unwrap_or(directory_defaults.contents_dir),
             public_dir: dirs.public_dir.unwrap_or(directory_defaults.public_dir),
-            theme_dir: dirs.theme_dir.unwrap_or(directory_defaults.theme_dir),
+            data_dir: dirs.data_dir.unwrap_or(directory_defaults.data_dir),
             out_dir: dirs.out_dir.unwrap_or(directory_defaults.out_dir),
         },
     };

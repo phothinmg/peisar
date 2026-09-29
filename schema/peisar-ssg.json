@@ -3,6 +3,7 @@
   "$id": "https://susee.phothin.dev/peisar.schema.json",
   "title": "Peisar SSG",
   "type": "object",
+  "description": "Configuration schema for Peisar.toml, the configuration file used by the Peisar static site generator to define site metadata, directory paths, and the development server.",
   "properties": {
     "site": {
       "type": "object",
@@ -58,10 +59,10 @@
           "description": "The directory containing asset files (images, JavaScript, CSS), relative to the project root. Defaults to \"public\".",
           "default": "public"
         },
-        "theme_dir": {
+        "data_dir": {
           "type": "string",
-          "description": "The directory containing theme files, relative to the project root. Defaults to \"theme\".",
-          "default": "theme"
+          "description": "The directory containing data files, relative to the project root. Defaults to \"data\".",
+          "default": "data"
         },
         "out_dir": {
           "type": "string",
