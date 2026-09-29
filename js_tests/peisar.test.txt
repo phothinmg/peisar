@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { Peisar } = require("../index.js");
+const { Peisar } = require("./index.js");
 
 test("parses Markdown into an AST and renders a fragment", () => {
   const document = new Peisar("# Hello **world**", { fragment: true });
