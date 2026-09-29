@@ -1,8 +1,8 @@
 use super::hooks::ParseHooks;
 use super::inline;
-use crate::ast::options::AstOptions;
-use crate::ast::tokens::span::Span;
-use crate::ast::tokens::token::{Block, Table, TableCell, TableCellAlignment, TableRow};
+use crate::markdown::ast::options::AstOptions;
+use crate::markdown::ast::tokens::span::Span;
+use crate::markdown::ast::tokens::token::{Block, Table, TableCell, TableCellAlignment, TableRow};
 /// A table delimiter row looks like `| :--- | :--: | ---: |` —
 /// cells containing only `-`, `:`, and whitespace, with at least one `-`.
 pub fn is_table_delimiter(line: &str) -> bool {

@@ -1,4 +1,4 @@
-use crate::ast::{
+use crate::markdown::ast::{
     Document,
     tokens::{
         Attributes,
@@ -511,7 +511,7 @@ impl AstToHtml {
 #[cfg(test)]
 mod tests {
     use super::{RenderOptions, render_document_html};
-    use crate::ast::{AstOptions, Document};
+    use crate::markdown::ast::{AstOptions, Document};
 
     #[test]
     fn body_class_is_not_written_to_html_element() {

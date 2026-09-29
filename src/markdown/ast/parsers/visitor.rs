@@ -29,7 +29,7 @@
 //! }
 //! ```
 
-use crate::ast::tokens::token::{Block, Inline};
+use crate::markdown::ast::tokens::token::{Block, Inline};
 
 /// Visitor trait for AST nodes. Implement this trait to receive callbacks
 /// for every block- and inline-level node. The visitor methods receive a
@@ -233,7 +233,7 @@ fn visit_blocks_vec<V: AstVisitor + ?Sized>(children: &mut Vec<Block>, visitor: 
 }
 
 fn visit_table<V: AstVisitor + ?Sized>(
-    table: &mut crate::ast::tokens::token::Table,
+    table: &mut crate::markdown::ast::tokens::token::Table,
     visitor: &mut V,
 ) {
     for cell in table.header.cells.iter_mut() {

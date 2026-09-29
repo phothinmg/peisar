@@ -22,8 +22,8 @@
 //! when you do not need reference resolution.
 
 use super::hooks::{InlineParseContext, ParseHooks, finalize_hook_inline};
-use crate::ast::options::AstOptions;
-use crate::ast::tokens::{
+use crate::markdown::ast::options::AstOptions;
+use crate::markdown::ast::tokens::{
     span::{Position, Span},
     token::{EmphasisLevel, Inline},
 };

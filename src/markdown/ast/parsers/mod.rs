@@ -21,9 +21,9 @@ pub mod inline;
 mod table;
 pub mod visitor;
 
-use crate::ast::options::AstOptions;
-use crate::ast::parsers::hooks::ParseHooks;
-use crate::ast::tokens::{span::Span, token::Block};
+use crate::markdown::ast::options::AstOptions;
+use crate::markdown::ast::parsers::hooks::ParseHooks;
+use crate::markdown::ast::tokens::{span::Span, token::Block};
 use inline::LinkRefMap;
 use napi_derive::napi;
 use serde::Serialize;
@@ -61,7 +61,7 @@ pub struct Document {
     pub children: Vec<Block>,
     /// All link reference definitions collected from the document.
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub link_references: Vec<crate::ast::tokens::token::LinkReferenceDefinition>,
+    pub link_references: Vec<crate::markdown::ast::tokens::token::LinkReferenceDefinition>,
 }
 
 impl Default for Document {
@@ -137,7 +137,8 @@ pub fn md_to_ast_with_hooks(
     // Pre-pass: collect all link reference definitions into a map so that
     // reference-style links can be resolved during inline parsing.
     let mut ref_map: LinkRefMap = LinkRefMap::new();
-    let mut ref_defs: Vec<crate::ast::tokens::token::LinkReferenceDefinition> = Vec::new();
+    let mut ref_defs: Vec<crate::markdown::ast::tokens::token::LinkReferenceDefinition> =
+        Vec::new();
     for (line_idx, line) in lines.iter().enumerate() {
         if block::is_link_ref_def(line) {
             if let Some(def) = block::parse_link_ref_def_line(line, line_idx, &line_starts, input) {

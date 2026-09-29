@@ -1,4 +1,4 @@
-use crate::ast::tokens::Attributes;
+use crate::markdown::ast::tokens::Attributes;
 
 /// Parse a Kramdown attribute block starting at the opening `{`.
 /// Returns `(attrs, chars_consumed)` or `None` if not a valid block.

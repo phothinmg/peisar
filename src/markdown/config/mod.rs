@@ -1,5 +1,5 @@
-use crate::ast::AstOptions;
-use crate::html::RenderOptions;
+use crate::markdown::ast::AstOptions;
+use crate::markdown::html::RenderOptions;
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 

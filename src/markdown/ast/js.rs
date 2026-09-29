@@ -39,9 +39,9 @@
 //! console.log(ast.frontmatter); // real JS object (or null)
 //! ```
 
-use crate::ast::parsers::hooks::{AstParser, BlockParseContext, InlineParseContext};
-use crate::ast::parsers::visitor::{AstVisitor, InlineVisitControl, VisitControl};
-use crate::ast::tokens::token::{Block, Inline};
+use crate::markdown::ast::parsers::hooks::{AstParser, BlockParseContext, InlineParseContext};
+use crate::markdown::ast::parsers::visitor::{AstVisitor, InlineVisitControl, VisitControl};
+use crate::markdown::ast::tokens::token::{Block, Inline};
 use napi::bindgen_prelude::{Env, Function, FunctionRef};
 use napi_derive::napi;
 

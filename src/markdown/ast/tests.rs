@@ -23,7 +23,7 @@ use super::{AstOptions, AstVisitor};
 // Helper: count block variants in a document
 // ---------------------------------------------------------------------------
 
-fn count_blocks(doc: &crate::ast::Document) -> usize {
+fn count_blocks(doc: &crate::markdown::ast::Document) -> usize {
     doc.children.len()
 }
 

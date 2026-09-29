@@ -21,8 +21,8 @@ use super::atters::parse_attrs;
 use super::hooks::{BlockParseContext, ParseHooks, finalize_hook_block};
 use super::inline::{LinkRefMap, parse_inline_with_hooks};
 use super::table::{build_table, is_table_start, parse_delimiter_alignments};
-use crate::ast::options::AstOptions;
-use crate::ast::tokens::{
+use crate::markdown::ast::options::AstOptions;
+use crate::markdown::ast::tokens::{
     Attributes,
     span::{Position, Span},
     token::{Block, LinkReferenceDefinition, ListItem, TaskState},

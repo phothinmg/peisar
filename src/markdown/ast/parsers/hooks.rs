@@ -49,7 +49,7 @@
 //! let doc = md_to_ast_with_hooks(":::\n", &AstOptions::default(), None, &hooks);
 //! ```
 
-use crate::ast::tokens::{
+use crate::markdown::ast::tokens::{
     Attributes,
     span::Span,
     token::{Block, Inline},

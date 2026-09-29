@@ -4,7 +4,7 @@
 //! optional [`PeisarOptions`], then read its `ast`, `html`, `frontmatter`, or
 //! `astJson` properties.
 
-use crate::{
+use crate::markdown::{
     ast::{Document, Parser, PeisarAst, Visitor},
     config::{PeisarOptions, get_options},
     html::{RenderOptions, render_document_html},
