@@ -1,156 +1,99 @@
 ---
 name: peisar-parse-markdown
-description: Parse Markdown and render HTML with the peisar npm package or Rust crate (CommonMark + GFM + Kramdown + YAML front matter). Use when writing code that consumes peisar, rendering Markdown to HTML, reading the AST, or extracting front matter.
+description: Parse Markdown and render HTML with Peisar's native Node.js addon or Rust library. Use for HTML rendering, AST access, YAML front matter, parser options, cache, or SSG configuration.
 ---
 
 # Parse Markdown with Peisar
 
-Peisar parses CommonMark Markdown with GitHub Flavored Markdown (GFM), Kramdown-style block attributes, and YAML front matter. It ships as a native Node.js addon and as a plain Rust crate.
-
-## When to Use
-
-- Rendering Markdown to HTML in a Node.js or Rust project
-- Reading a typed Markdown AST (with source spans) instead of regex-scraping
-- Extracting YAML front matter from Markdown files
-- Deciding which options to pass (`gfm`, `kramdown`, `fragment`, document wrappers)
+Peisar supports CommonMark, GFM, Kramdown block attributes, YAML front
+matter, source spans, and HTML rendering. Its Node.js API is a native N-API
+addon; Rust consumers use the public module paths under `peisar::markdown`.
 
 ## Node.js
-
-```sh
-npm install peisar
-```
 
 ```js
 const { Peisar } = require("peisar");
 
-const document = new Peisar("# Hello **world**");
-
-console.log(document.html); // full HTML document by default
-console.log(document.ast); // AST object (visitors applied)
-console.log(document.astJson); // AST serialized as JSON
-console.log(document.frontmatter); // deserialized YAML, or null
+const document = new Peisar("# Hello **world**", { fragment: true });
+console.log(document.html); // <h1>Hello <strong>world</strong></h1>\n
+console.log(document.ast);
+console.log(document.astJson);
+console.log(document.frontmatter); // object or null
 ```
 
-### Options
+`Peisar` accepts optional `gfm`, `kramdown`, `fileName`, `fragment`,
+`charset`, `viewport`, `title`, `bodyClass`, and `style` properties. GFM and
+Kramdown default to `true`; `fragment` defaults to `false`. Full-document
+settings (`charset`, `viewport`, `title`, `bodyClass`, and `style`) have no
+effect in fragment mode.
 
-Only pass what you need; omitted options keep defaults (`gfm: true`, `kramdown: true`, `fragment: false`):
-
-```js
-const document = new Peisar("# Title", {
-  gfm: false, // disable tables, strikethrough, task lists, autolinks
-  kramdown: false, // disable `{:#id .class key="value"}` block attributes
-  fileName: "doc.md", // attached to the AST
-  fragment: true, // render only body content (no <html> wrapper)
-  charset: true, // <meta charset> (full-document mode only)
-  viewport: true, // <meta viewport> (full-document mode only)
-  title: "My Page", // <title> (full-document mode only)
-  bodyClass: "docs", // extra classes on <body>
-  style: "h1{color:red}", // inline <style> in head
-});
-```
-
-`fragment: true` is what you want for embedding output into your own page:
-
-```js
-new Peisar("# Title", { fragment: true }).html; // "<h1>Title</h1>\n"
-```
-
-### Front matter
+Leading YAML front matter is removed before parsing:
 
 ```js
 const document = new Peisar(`---
-title: Hello
-tags:
-  - one
+title: Guide
 ---
 
-# Hello`);
+# Guide`, { fragment: true });
 
-document.frontmatter; // { title: 'Hello', tags: ['one'] }
-document.html; // front matter stripped; "<h1>Hello</h1>\n" with fragment
+console.log(document.frontmatter); // { title: "Guide" }
 ```
 
-### AST shape
+AST nodes use PascalCase `type` values in Node.js (`Heading`, `Paragraph`,
+`Link`, and so on). Every node has a half-open `pos` span with zero-based
+`line`, `column`, and byte `offset`. The root uses `nodeType: "root"`.
 
-`document.ast` is `{ type: 'root', children: [...], linkReferences: [] }` (plus `fileName`/`pos`). Block nodes: `Heading` (`level`, `children`), `Paragraph`, `CodeBlock` (`lang`, `code`), `BlockQuote`, `List` (`ordered`, `items`), `Table`, `ThematicBreak`, `HtmlBlock`, `LinkReferenceDefinition`, `Comment`. Inline nodes: `Text`, `Emphasis` (`level: 1|2`), `Code`, `HtmlInline`, `Strikethrough`, `HardBreak`, `SoftBreak`, `Image` (`alt`, `url`, `title`), `Link` (`text`, `url`, `title`, `autolink`), `LinkReference`.
+For syntax extensions, use `document.useParser(...)`; for post-parse changes,
+use `document.useVisitor(...)`. Register both before relying on a document
+read: parser registration reparses the original source, and visitors run when
+`ast`, `astJson`, `html`, or `frontmatter` is read.
 
-Every node carries `pos: { start, end }` with zero-based `{ line, column, offset }` source positions. Optional `attrs` on blocks holds parsed Kramdown attributes (`id`, `classes`, `attributes`).
-
-### Register before reading
-
-The document is parsed at construction; `useVisitor` and `useParser` must be called **before** first access to `ast`, `html`, `frontmatter`, or `astJson` (parser hooks trigger a re-parse, but reading first means the AST you saw is stale).
+`PeisarCache` provides `getText`, `getBinary`, `markdownFiles`, `assetFiles`,
+`startWatchingJs`, and `dispose`. `peisarSsgConfig()` loads `Peisar.toml` from
+the current directory and terminates the host process if the configuration is
+invalid or missing.
 
 ## Rust
 
-```toml
-[dependencies]
-peisar = "0.1.2"
-```
+The Rust API is module-based; do not use old root imports such as
+`peisar::{Document, Peisar}`.
 
 ```rust
-use peisar::{AstOptions, Document};
+use peisar::markdown::ast::{AstOptions, Document};
+use peisar::markdown::html::{RenderOptions, render_document_html};
 
-let doc = Document::parse("# Hello **world**\n", &AstOptions::default(), None);
-assert_eq!(doc.node_type, "root");
-```
-
-Strict CommonMark with a file name:
-
-```rust
-let opts = AstOptions {
-    gfm: false,
-    kramdown: false,
-    file_name: Some("doc.md".into()),
-};
-let doc = Document::parse("# Title\n", &opts, opts.file_name.clone());
-```
-
-### Parse + render (`Peisar` mirrors the JS class)
-
-```rust
-use peisar::{Peisar, PeisarOptions};
-
-let mut fragment = Peisar::new(
-    "# Hello **world**".into(),
-    Some(PeisarOptions { fragment: Some(true), ..Default::default() }),
+let document = Document::parse("# Hello\n", &AstOptions::default(), None);
+let html = render_document_html(
+    &document,
+    Some(RenderOptions {
+        fragment: true,
+        ..Default::default()
+    }),
 );
-println!("{}", fragment.html()); // <h1>Hello <strong>world</strong></h1>
+assert_eq!(html, "<h1>Hello</h1>\n");
 ```
 
-### Front matter standalone
+Use these paths:
 
-```rust
-use peisar::frontmatter::parse_markdown_frontmatter;
+- `peisar::markdown::ast::{AstOptions, Document, PeisarAst, AstVisitor}`
+- `peisar::markdown::ast::{parse_inline, parse_inline_with_refs, LinkRefMap}`
+- `peisar::markdown::ast::tokens::token::{Block, Inline}`
+- `peisar::markdown::ast::tokens::span::{Span, Position}`
+- `peisar::markdown::ast::visitor::{visit_document_mut, VisitControl, InlineVisitControl}`
+- `peisar::markdown::html::{render_document_html, RenderOptions}`
+- `peisar::markdown::peisar::Peisar`
+- `peisar::markdown::config::PeisarOptions`
+- `peisar::frontmatter::parse_markdown_frontmatter`
 
-let parsed = parse_markdown_frontmatter("---\ntitle: Hello\n---\n\n# Hello")?;
-let md: &str = parsed.pure_markdown_content(); // "# Hello"
-let yaml = parsed.yaml_data().unwrap();         // {"title": "Hello"}
-let (md, yaml) = parsed.into_parts();           // or take both by value
-```
+`parse_markdown_frontmatter` returns a `ParseResult`. Use
+`pure_markdown_content()`, `yaml_data()`, or `into_parts()` to access it.
+For SSG projects use `peisar::ssg::ssg_config::{parse_config, load_config}`;
+the cache type is `peisar::ssg::cache::PeisarCache`.
 
-### Inline-only parsing
+## Output details
 
-`parse_inline` parses inline content in isolation (headings, table cells, plain text). `parse_inline_with_refs` additionally resolves reference-style links against a `LinkRefMap`:
-
-```rust
-use peisar::{LinkRefMap, parse_inline_with_refs};
-
-let mut refs = LinkRefMap::new();
-refs.insert("example".into(), ("https://example.com".into(), None));
-
-let inlines = parse_inline_with_refs("see [example][]", None, Some(&refs));
-```
-
-## Rendering Defaults
-
-- Fragment mode output ends with a trailing newline (e.g. `"<h1>Hi</h1>\n"`)
-- Full-document mode wraps body content in `<!DOCTYPE html>`, `<html>`, `<head>` (charset, viewport, optional title/style), and `<body>`
-- GFM task lists render as `disabled` checkboxes with `data-checked="true|false"` and class `task-list-item-checkbox`
-- Kramdown `{:#id .class key="value"}` lines following a block become `id`/`class`/arbitrary HTML attributes
-
-## Common Mistakes
-
-- **Reading `html` before registering hooks/visitors** — parse happens eagerly at construction; visitors run at property access, hooks re-parse.
-- **Expecting `frontmatter` to appear in `html`** — it is stripped from rendering and exposed separately.
-- **Assuming `fragment` defaults to `true`** — it defaults to `false` (full document) in the JS API.
-- **Comparing HTML without the trailing `\n`** — rendered fragments include it.
+- Fragment HTML ends in `\n`.
+- `Document::parse` accepts Markdown without front matter; strip it first with
+  `parse_markdown_frontmatter` when needed.
+- `render_document_html(doc, None)` uses `RenderOptions::default()`, which is
+  fragment mode. The `Peisar` wrapper instead defaults to a complete document.

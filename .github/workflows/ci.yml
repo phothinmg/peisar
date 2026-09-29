@@ -171,8 +171,11 @@ jobs:
           "
 
       # 4. Sync package versions across root and /npm platform packages
+      #    --gh-release-id targets the release that triggered this workflow,
+      #    so napi uploads the .node binaries to *your* release instead of
+      #    creating a second v-prefixed release/tag.
       - name: Prepare publish
-        run: npx napi prepublish --config-path napi.config.json -t npm
+        run: npx napi prepublish --config-path napi.config.json -t npm --gh-release-id ${{ github.event.release.id }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
