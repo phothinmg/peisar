@@ -53,3 +53,59 @@ fn escape_attr(s: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Attributes;
+
+    #[test]
+    fn default_is_empty_string() {
+        assert_eq!(Attributes::default().to_html_attr_string(), "");
+    }
+
+    #[test]
+    fn id_renders_first() {
+        let attrs = Attributes {
+            id: Some("intro".into()),
+            classes: None,
+            attributes: None,
+        };
+        assert_eq!(attrs.to_html_attr_string(), "id=\"intro\"");
+    }
+
+    #[test]
+    fn classes_join_with_spaces() {
+        let attrs = Attributes {
+            id: None,
+            classes: Some(vec!["a".into(), "b".into()]),
+            attributes: None,
+        };
+        assert_eq!(attrs.to_html_attr_string(), "class=\"a b\"");
+    }
+
+    #[test]
+    fn key_value_pairs_render_after_id_and_class() {
+        let attrs = Attributes {
+            id: Some("x".into()),
+            classes: Some(vec!["y".into()]),
+            attributes: Some(vec![("data-role".into(), "note".into())]),
+        };
+        assert_eq!(
+            attrs.to_html_attr_string(),
+            "id=\"x\" class=\"y\" data-role=\"note\""
+        );
+    }
+
+    #[test]
+    fn special_characters_are_escaped() {
+        let attrs = Attributes {
+            id: Some("a<b".into()),
+            classes: Some(vec!["c&d".into()]),
+            attributes: Some(vec![("k".into(), "v\"1".into())]),
+        };
+        assert_eq!(
+            attrs.to_html_attr_string(),
+            "id=\"a&lt;b\" class=\"c&amp;d\" k=\"v&quot;1\""
+        );
+    }
+}

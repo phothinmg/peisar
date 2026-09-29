@@ -1,3 +1,26 @@
+//! In-memory + on-disk cache of Markdown and asset files for the SSG.
+//!
+//! [`PeisarCache`] loads every markdown file under an entry directory
+//! (plus optional assets) into memory, mirrors them to a `.peisar_cache`
+//! directory on disk, and — once [`PeisarCache::start_watching`] is called —
+//! keeps both in sync with recursive file-watching.
+//!
+//! ## Disk format
+//!
+//! - Text (markdown) entries are stored as `.json` (default) or `.bin`
+//!   (when `PEISAR_CACHE_FORMAT=bincode`) files that embed the raw content
+//!   and the parsed front matter.
+//! - Binary assets are mirrored verbatim under their original names.
+//! - Writes are atomic (temp file + rename) and content-hashed so
+//!   unchanged entries are not rewritten.
+//! - A `.peisar_cache` entry is appended to `.gitignore` automatically.
+//!
+//! ## JavaScript surface
+//!
+//! `new PeisarCache(entryDir, assetsDir?)`, `withConfig`, `startWatching`,
+//! `getText`, `getBinary`, `listFiles`, `markdownFiles`, `assetFiles`,
+//! `onChange(cb) → id`, `offChange(id)`, `dispose`.
+
 use super::files::{
     ASSET_BINARY_EXTENSIONS, ASSET_EXTENSIONS, MARKDOWN_EXTENSIONS, collect_asset_files,
     collect_markdown_files,
@@ -37,10 +60,15 @@ struct CacheEntry {
     #[serde(default)]
     is_binary: bool,
 }
+/// An entry stored in the cache: raw UTF-8 text (markdown) or raw bytes
+/// (binary assets).  Exposed to JavaScript so JS consumers can branch on
+/// the variant.
 #[napi]
 #[derive(Debug, Clone)]
 pub enum CachedContent {
+    /// UTF-8 text content (markdown files and textual assets).
     Text(String),
+    /// Raw bytes (binary assets like images or fonts).
     Binary(Vec<u8>),
 }
 
@@ -85,11 +113,33 @@ enum PersistCommand {
     SyncAll(HashMap<PathBuf, CachedContent>),
 }
 
+/// Compute the on-disk cache target path for a source file.
+///
+/// Returns `(target_path, rel_path)`:
+/// - Binary assets keep their original file name under `.peisar_cache`.
+/// - Text entries get a `.json` (default) or `.bin`
+///   (`PEISAR_CACHE_FORMAT=bincode`) suffix appended to the original name.
+///
+/// Paths outside `cwd` keep their full structure appended to
+/// `.peisar_cache`.
 fn compute_target_for_source(src: &Path, cwd: &Path, is_binary: bool) -> (PathBuf, PathBuf) {
     // returns (target_path, rel_path)
+    //
+    // Paths outside `cwd` are mirrored by their normal path components
+    // (e.g. `/elsewhere/b.png` → `elsewhere/b.png`).  Keeping the relative
+    // path free of a leading root is important: `PathBuf::join` with an
+    // absolute path *replaces* the buffer, which would otherwise make the
+    // cache write its entry over the original source file.
     let rel_path = match src.strip_prefix(cwd) {
         Ok(rel) => rel.to_path_buf(),
-        Err(_) => src.to_path_buf(),
+        Err(_) => {
+            let mut rel = PathBuf::new();
+            rel.extend(src.components().filter_map(|c| match c {
+                std::path::Component::Normal(p) => Some(p),
+                _ => None,
+            }));
+            rel
+        }
     };
     let parent = rel_path.parent().map(|p| p.to_path_buf());
     let fname = rel_path
@@ -968,9 +1018,9 @@ impl PeisarCache {
 
     /// Get a cached content entry by path, if present.
     ///
-    /// Returns Some(CachedContent) for both textual and binary entries. This is
-    /// a backwards-incompatible change from the previous API that returned an
-    /// Option<String> for textual entries only.
+    /// Returns `Some(CachedContent)` for both textual and binary entries.
+    /// This is a backwards-incompatible change from the previous API that
+    /// returned an `Option<String>` for textual entries only.
     pub fn get(&self, path: &Path) -> Option<CachedContent> {
         match self.cache.read() {
             Ok(r) => r.get(path).cloned(),
@@ -1132,6 +1182,155 @@ mod tests {
     use std::sync::Mutex;
 
     static TEST_CWD_LOCK: Mutex<()> = Mutex::new(());
+
+    // -----------------------------------------------------------------------
+    // Pure helper: compute_target_for_source
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn compute_target_mirrors_relative_paths() {
+        let cwd = Path::new("/project");
+        let src = Path::new("/project/docs/a.md");
+
+        let (target_text, rel) = compute_target_for_source(src, cwd, false);
+        assert_eq!(rel, PathBuf::from("docs/a.md"));
+        assert_eq!(
+            target_text,
+            PathBuf::from("/project/.peisar_cache/docs/a.md.json")
+        );
+
+        let (target_bin, _) = compute_target_for_source(src, cwd, true);
+        // Binary assets keep their original file name.
+        assert_eq!(
+            target_bin,
+            PathBuf::from("/project/.peisar_cache/docs/a.md")
+        );
+    }
+
+    #[test]
+    fn compute_target_handles_paths_outside_cwd() {
+        let cwd = Path::new("/project");
+        let src = Path::new("/elsewhere/b.png");
+
+        let (target, rel) = compute_target_for_source(src, cwd, true);
+        // strip_prefix fails, so the path components (without the root)
+        // are mirrored under the cache root.
+        assert_eq!(rel, PathBuf::from("elsewhere/b.png"));
+        assert_eq!(
+            target,
+            PathBuf::from("/project/.peisar_cache/elsewhere/b.png")
+        );
+    }
+
+    #[test]
+    fn compute_target_appends_json_by_default() {
+        let cwd = Path::new("/p");
+        let (target, _) = compute_target_for_source(Path::new("/p/x.md"), cwd, false);
+        assert!(target.to_string_lossy().ends_with("x.md.json"));
+    }
+
+    // -----------------------------------------------------------------------
+    // JS surface: getters and file filtering (no watcher needed)
+    // -----------------------------------------------------------------------
+
+    /// A temp cwd that is removed when dropped (used by the JS-surface tests
+    /// because the cache persists relative to the process working dir).
+    /// The original cwd is restored on drop so a failing assertion does not
+    /// poison other tests.
+    struct TempCwd {
+        dir: PathBuf,
+        orig: PathBuf,
+    }
+
+    impl TempCwd {
+        fn new(tag: &str) -> Self {
+            let dir =
+                std::env::temp_dir().join(format!("peisar_cache_js-{}-{tag}", std::process::id()));
+            let _ = fs::remove_dir_all(&dir);
+            fs::create_dir_all(&dir).unwrap();
+            let orig = env::current_dir().unwrap();
+            env::set_current_dir(&dir).unwrap();
+            Self { dir, orig }
+        }
+
+        fn path(&self) -> &Path {
+            &self.dir
+        }
+    }
+
+    impl Drop for TempCwd {
+        fn drop(&mut self) {
+            let _ = env::set_current_dir(&self.orig);
+            let _ = fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    /// Creates a scratch cwd containing two markdown files and one binary
+    /// asset, chdir'd into it, with a cache over `docs` + `public`.
+    fn with_cache_dir(tag: &str) -> (TempCwd, PeisarCache) {
+        let tmp = TempCwd::new(tag);
+        fs::create_dir_all(tmp.path().join("docs")).unwrap();
+        fs::create_dir_all(tmp.path().join("public/img")).unwrap();
+        fs::write(tmp.path().join("docs/a.md"), "# A\n").unwrap();
+        fs::write(tmp.path().join("docs/b.md"), "# B\n").unwrap();
+        fs::write(tmp.path().join("public/img/logo.png"), [0u8, 1, 2, 3]).unwrap();
+
+        let cache = PeisarCache::with_config("docs", Some("public")).unwrap();
+        (tmp, cache)
+    }
+
+    #[test]
+    fn js_surface_splits_text_and_binary_entries() {
+        let _guard = TEST_CWD_LOCK.lock().unwrap();
+        let (tmp, cache) = with_cache_dir("js-surface");
+
+        // getText finds markdown text.
+        let a_abs = tmp.path().join("docs/a.md");
+        assert_eq!(
+            cache.get_text(a_abs.to_string_lossy().to_string()),
+            Some("# A\n".to_string())
+        );
+
+        // getBinary finds the binary asset bytes.
+        let png_abs = tmp.path().join("public/img/logo.png");
+        assert_eq!(
+            cache.get_binary(png_abs.to_string_lossy().to_string()),
+            Some(vec![0u8, 1, 2, 3])
+        );
+        // getText on a binary entry is None (and vice versa).
+        assert_eq!(cache.get_text(png_abs.to_string_lossy().to_string()), None);
+        assert_eq!(cache.get_binary(a_abs.to_string_lossy().to_string()), None);
+        // Unknown paths are None.
+        assert_eq!(cache.get_text("/nonexistent.md".into()), None);
+
+        // listFiles returns everything.
+        let all = cache.list_files();
+        assert_eq!(all.len(), 3);
+        // markdownFiles / assetFiles partition the set.
+        let md = cache.markdown_files();
+        let assets = cache.asset_files();
+        assert_eq!(md.len(), 2);
+        assert_eq!(assets.len(), 1);
+        assert!(assets.iter().all(|p| p.ends_with("logo.png")));
+    }
+
+    #[test]
+    fn js_surface_filtering_uses_extensions_not_paths() {
+        let _guard = TEST_CWD_LOCK.lock().unwrap();
+        let (_tmp, cache) = with_cache_dir("filters");
+
+        // Every markdownFiles() entry has a markdown extension regardless
+        // of the directory it lives in.
+        let md = cache.markdown_files();
+        assert!(!md.is_empty());
+        assert!(md.iter().all(|p| {
+            Path::new(p)
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| MARKDOWN_EXTENSIONS.contains(&e))
+                .unwrap_or(false)
+        }));
+    }
 
     #[test]
     fn test_persist_cache_and_gitignore_created() -> io::Result<()> {

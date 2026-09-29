@@ -1,8 +1,8 @@
 //! Parser configuration options.
 //!
 //! The [`AstOptions`] struct controls which Markdown extensions are enabled
-//! when parsing.  It is passed to [`PeisarAst::new`](crate::PeisarAst::new)
-//! or [`md_to_ast`](crate::parsers::md_to_ast).
+//! when parsing.  It is passed to [`Document::parse`](crate::markdown::ast::Document::parse)
+//! or [`md_to_ast`](crate::markdown::ast::parsers::md_to_ast).
 
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
@@ -23,7 +23,8 @@ pub struct AstOptions {
     /// Enable Kramdown-style block attributes (`{:#id .class key="val"}`).
     /// Default: `true`.
     pub kramdown: bool,
-    /// Optional file name to attach to the parsed [`Document`](crate::Document).
+    /// Optional file name to attach to the parsed
+    /// [`Document`](crate::markdown::ast::Document).
     pub file_name: Option<String>,
 }
 

@@ -32,7 +32,9 @@ document.useParser({
     return {
       inline: {
         type: "Link",
-        text: [{ type: "Text", value: target, pos: { start: zero, end: zero } }],
+        text: [
+          { type: "Text", value: target, pos: { start: zero, end: zero } },
+        ],
         url: `/wiki/${target.replaceAll(" ", "_")}`,
         autolink: false,
         pos: { start: zero, end: zero },
@@ -41,19 +43,29 @@ document.useParser({
     };
   },
 });
+
+console.log(document.html); // <p>See <a href="/wiki/Some_Page">Some Page</a>.</p>\n
 ```
+
+Count `consumed` from the start of `rest`, including any opening delimiter:
+here `close` is the index of `]]` within `rest` _after_ `[[` was consumed by
+`slice(2)`, so `close + 2` counts the target plus `]]`. Over-consuming eats
+the text after the construct (e.g. a trailing period).
 
 - `parseBlock([{ line, lineIndex, lines }])` returns `{ block, consumed }`.
 - `parseInline([{ rest, index }])` returns `{ inline, consumed }`.
 - A block hook consumes at least one line; `consumed: 0` is treated as one.
-- An inline result with zero or missing `consumed` is ignored.
+- An inline result with zero or missing `consumed` is ignored; `consumed`
+  counts characters from the start of `rest`.
 - Returned nodes require a complete `pos` object. Use a zero placeholder:
   Peisar replaces the span with the accurate span calculated from `consumed`.
 - A Kramdown attribute line after a hook-produced block is applied
   automatically.
 
 Hook registration reparses the original source immediately. Register all
-hooks before depending on `ast`, `html`, `frontmatter`, or `astJson`.
+hooks before depending on `ast`, `html`, `frontmatter`, or `astJson`. Nodes
+produced by an inline hook are re-scanned from their end position, so a hook
+can chain constructs back to back.
 
 ## Rust status
 

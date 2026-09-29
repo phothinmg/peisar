@@ -21,6 +21,12 @@ console.log(document.astJson);
 console.log(document.frontmatter); // object or null
 ```
 
+`ast` (the real JavaScript object) uses PascalCase `type` values
+(`Heading`, `Paragraph`, `Link`) and a `nodeType: "root"` root.
+`astJson` serializes the Rust AST, so its types are snake_case
+(`heading`, `paragraph`, `link`) and the root uses `type: "root"`.
+GFM task state is `0` (unchecked) / `1` (checked) in both shapes.
+
 `Peisar` accepts optional `gfm`, `kramdown`, `fileName`, `fragment`,
 `charset`, `viewport`, `title`, `bodyClass`, and `style` properties. GFM and
 Kramdown default to `true`; `fragment` defaults to `false`. Full-document
@@ -30,11 +36,14 @@ effect in fragment mode.
 Leading YAML front matter is removed before parsing:
 
 ```js
-const document = new Peisar(`---
+const document = new Peisar(
+  `---
 title: Guide
 ---
 
-# Guide`, { fragment: true });
+# Guide`,
+  { fragment: true },
+);
 
 console.log(document.frontmatter); // { title: "Guide" }
 ```
@@ -48,10 +57,15 @@ use `document.useVisitor(...)`. Register both before relying on a document
 read: parser registration reparses the original source, and visitors run when
 `ast`, `astJson`, `html`, or `frontmatter` is read.
 
-`PeisarCache` provides `getText`, `getBinary`, `markdownFiles`, `assetFiles`,
-`startWatchingJs`, and `dispose`. `peisarSsgConfig()` loads `Peisar.toml` from
-the current directory and terminates the host process if the configuration is
-invalid or missing.
+`PeisarCache` provides `new PeisarCache(entryDir, assetsDir?)`, the
+`PeisarCache.withConfigJs(entryDir, assetsDir?)` factory, `getText`,
+`getBinary`, `listFiles`, `markdownFiles`, `assetFiles`, `onChange(cb) → id`,
+`offChange(id)`, `startWatchingJs`, and `dispose`. Everything is keyed by
+absolute path. A missing second argument falls back to a `public` directory
+at the project root when one exists. The constructor and each method accept
+plain strings. `peisarSsgConfig()` loads `Peisar.toml` from the current
+directory and terminates the host process if the configuration is invalid or
+missing.
 
 ## Rust
 

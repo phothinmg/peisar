@@ -498,6 +498,12 @@ impl AstToHtml {
     }
 }
 
+impl Default for AstToHtml {
+    fn default() -> Self {
+        Self::new(None)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{RenderOptions, render_document_html};
@@ -519,9 +525,194 @@ mod tests {
         assert!(html.contains("<body class=\"markdown-body\">"));
         assert!(!html.contains("<html class="));
     }
-}
-impl Default for AstToHtml {
-    fn default() -> Self {
-        Self::new(None)
+
+    /// Renders a document as a fragment and strips the trailing newline so
+    /// assertions read cleanly.
+    fn frag(md: &str) -> String {
+        let doc = Document::parse(md, &AstOptions::default(), None);
+        render_document_html(&doc, Some(RenderOptions::default()))
+    }
+
+    #[test]
+    fn default_options_render_a_fragment() {
+        // RenderOptions::default() has fragment = true.
+        let html = frag("# Hi\n");
+        assert_eq!(html, "<h1>Hi</h1>\n");
+    }
+
+    #[test]
+    fn full_document_wrapper() {
+        let doc = Document::parse("Hi\n", &AstOptions::default(), None);
+        let html = render_document_html(
+            &doc,
+            Some(RenderOptions {
+                fragment: false,
+                title: Some("Page".to_string()),
+                style: Some("p{margin:0}".to_string()),
+                ..RenderOptions::default()
+            }),
+        );
+        assert!(html.starts_with("<!DOCTYPE html>\n<html>\n<head>"));
+        assert!(html.contains("<meta charset=\"utf-8\">"));
+        assert!(html.contains("<meta name=\"viewport\""));
+        assert!(html.contains("<title>Page</title>"));
+        assert!(html.contains("<style>\np{margin:0}\n</style>"));
+        assert!(html.ends_with("</body>\n</html>\n"));
+    }
+
+    #[test]
+    fn full_document_without_charset_and_viewport() {
+        let doc = Document::parse("Hi\n", &AstOptions::default(), None);
+        let html = render_document_html(
+            &doc,
+            Some(RenderOptions {
+                fragment: false,
+                charset: false,
+                viewport: false,
+                ..RenderOptions::default()
+            }),
+        );
+        assert!(!html.contains("meta charset"));
+        assert!(!html.contains("viewport"));
+    }
+
+    #[test]
+    fn title_is_escaped() {
+        let doc = Document::parse("Hi\n", &AstOptions::default(), None);
+        let html = render_document_html(
+            &doc,
+            Some(RenderOptions {
+                fragment: false,
+                title: Some("<script>".to_string()),
+                ..RenderOptions::default()
+            }),
+        );
+        assert!(html.contains("<title>&lt;script&gt;</title>"));
+    }
+
+    #[test]
+    fn blocks_render_to_expected_html() {
+        assert_eq!(frag("# Title\n"), "<h1>Title</h1>\n");
+        assert_eq!(frag("## Sub\n"), "<h2>Sub</h2>\n");
+        assert_eq!(frag("Para\n"), "<p>Para</p>\n");
+        assert_eq!(
+            frag("```rust\nfn f()\n```\n"),
+            "<pre><code class=\"language-rust\">fn f()</code></pre>\n"
+        );
+        assert_eq!(
+            frag("> quote\n"),
+            "<blockquote>\n<p>quote</p>\n</blockquote>\n"
+        );
+        assert_eq!(frag("---\n"), "<hr>\n");
+        assert_eq!(frag("- a\n- b\n"), "<ul>\n<li>a</li>\n<li>b</li>\n</ul>\n");
+        assert_eq!(frag("1. a\n"), "<ol>\n<li>a</li>\n</ol>\n");
+        assert_eq!(frag("<!-- hi -->\n"), "<!-- hi -->\n");
+    }
+
+    #[test]
+    fn kramdown_attributes_are_emitted() {
+        let html = frag("# Title\n{: #hero .card}\n");
+        assert_eq!(html, "<h1 id=\"hero\" class=\"card\">Title</h1>\n");
+    }
+
+    #[test]
+    fn code_block_content_is_escaped() {
+        let html = frag("```\nif a < b && c > d\n```\n");
+        assert!(html.contains("if a &lt; b &amp;&amp; c &gt; d"));
+    }
+
+    #[test]
+    fn tight_list_items_skip_paragraph_tags() {
+        // A single-paragraph item renders inline inside <li> (tight list).
+        let html = frag("- one\n- two\n");
+        assert_eq!(html, "<ul>\n<li>one</li>\n<li>two</li>\n</ul>\n");
+        // Multi-block items keep <p> wrappers.
+        let html = frag("- a\n\n  b\n");
+        assert!(html.contains("<li>\n<p>a</p>\n"));
+    }
+
+    #[test]
+    fn task_lists_render_checkboxes() {
+        let html = frag("- [ ] todo\n- [x] done\n");
+        assert!(html.contains("class=\"task-list-item\""));
+        assert!(html.contains("data-checked=\"true\""));
+        assert!(html.contains("<input type=\"checkbox\""));
+        // The marker itself must be stripped — only the label text renders.
+        assert!(!html.contains("[ ]"));
+        assert!(!html.contains("[x]"));
+        assert!(html.contains("disabled> todo</li>"));
+        assert!(html.contains("checked disabled> done</li>"));
+        // Only the checked item carries the `checked` attribute.
+        assert!(html.contains("checked disabled"));
+    }
+
+    #[test]
+    fn tables_render_alignments() {
+        let html = frag("| a | b | c |\n| :- | :-: | -: |\n| 1 | 2 | 3 |\n");
+        assert!(html.contains("<th>"));
+        assert!(html.contains("<td style=\"text-align: center\">2"));
+        assert!(html.contains("<td style=\"text-align: right\">3"));
+    }
+
+    #[test]
+    fn link_reference_definitions_render_nothing() {
+        let html = frag("[ref]: https://example.com\n");
+        assert_eq!(html, "");
+    }
+
+    #[test]
+    fn inlines_render_to_expected_html() {
+        assert_eq!(frag("*em*\n"), "<p><em>em</em></p>\n");
+        assert_eq!(frag("**bold**\n"), "<p><strong>bold</strong></p>\n");
+        assert_eq!(frag("`x`\n"), "<p><code>x</code></p>\n");
+        assert_eq!(frag("~~gone~~\n"), "<p><del>gone</del></p>\n");
+        assert_eq!(
+            frag("[t](https://e.com)\n"),
+            "<p><a href=\"https://e.com\">t</a></p>\n"
+        );
+        assert_eq!(
+            frag("![alt](https://e.com/i.png)\n"),
+            "<p><img src=\"https://e.com/i.png\" alt=\"alt\"></p>\n"
+        );
+        // Soft break → newline, hard break → <br>.
+        assert_eq!(frag("a\nb\n"), "<p>a\nb</p>\n");
+        assert_eq!(frag("a  \nb\n"), "<p>a<br>\nb</p>\n");
+    }
+
+    #[test]
+    fn urls_are_escaped_in_attributes() {
+        // `&` in a URL must become &amp; inside the href attribute.
+        let html = frag("[t](https://e.com/?a=1&b=2)\n");
+        assert!(html.contains("href=\"https://e.com/?a=1&amp;b=2\""));
+    }
+
+    #[test]
+    fn html_blocks_pass_through_unescaped() {
+        let html = frag("<div class=\"x\">raw</div>\n");
+        assert!(html.contains("<div class=\"x\">raw</div>\n"));
+    }
+
+    #[test]
+    fn inline_html_passes_through_unescaped() {
+        let html = frag("a <span>b</span>\n");
+        assert_eq!(html, "<p>a <span>b</span></p>\n");
+    }
+
+    #[test]
+    fn text_is_escaped() {
+        // `<Chips>` would be parsed as inline HTML, so escape-test with
+        // characters that stay inside a Text node.
+        let html = frag("Fish & Chips > \"q\"\n");
+        assert!(html.contains("Fish &amp; Chips &gt; &quot;q&quot;"));
+        // `&` and quotes are also escaped inside code spans.
+        let html = frag("`a & b`\n");
+        assert!(html.contains("<code>a &amp; b</code>"));
+    }
+
+    #[test]
+    fn render_document_owned_is_a_convenience_wrapper() {
+        let doc = Document::parse("Hi\n", &AstOptions::default(), None);
+        let html = super::AstToHtml::new(None).render_document_owned(&doc);
+        assert_eq!(html, "<p>Hi</p>\n");
     }
 }

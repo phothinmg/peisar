@@ -1,15 +1,55 @@
 //! AST visitor trait and traversal engine.
 //!
 //! The [`AstVisitor`] trait provides a pre-order callback API for visiting
-//! and mutating every block- and inline-level node in a [`Document`](super::Document).
+//! and mutating every block- and inline-level node in a
+//! [`Document`](super::Document).
 //!
 //! ## Usage
 //!
-//! Implement [`AstVisitor`] for a struct, register it with
-//! [`PeisarAst::add_visitor`](crate::PeisarAst::add_visitor), then call
-//! [`PeisarAst::visit_all`](crate::PeisarAst::visit_all).  Each visitor
-//! method receives a `&mut` reference to the node and returns a control
-//! struct that can request insertion, replacement, or removal.
+//! Implement [`AstVisitor`] for a struct, then drive it over a document with
+//! [`visit_document_mut`].  Each visitor method receives a `&mut` reference
+//! to the node and returns a control struct that can request insertion,
+//! replacement, or removal:
+//!
+//! ```
+//! use peisar::markdown::ast::visitor::{AstVisitor, InlineVisitControl, VisitControl, visit_document_mut};
+//! use peisar::markdown::ast::{AstOptions, Document};
+//! use peisar::markdown::ast::tokens::token::{Block, Inline};
+//!
+//! struct AddTitleClass;
+//!
+//! impl AstVisitor for AddTitleClass {
+//!     fn visit_block(&mut self, block: &mut Block) -> VisitControl {
+//!         if let Block::Heading { attrs, .. } = block {
+//!             let mut a = attrs.take().unwrap_or_default();
+//!             let mut classes = a.classes.take().unwrap_or_default();
+//!             classes.push("title".into());
+//!             a.classes = Some(classes);
+//!             *attrs = Some(a);
+//!             VisitControl::keep_and_recurse()
+//!         } else {
+//!             VisitControl::default()
+//!         }
+//!     }
+//!
+//!     fn visit_inline(&mut self, _inline: &mut Inline) -> InlineVisitControl {
+//!         InlineVisitControl::default()
+//!     }
+//! }
+//!
+//! let mut doc = Document::parse("# Hello\n", &AstOptions::default(), None);
+//! visit_document_mut(&mut doc, &mut AddTitleClass);
+//! assert!(matches!(&doc.children[0],
+//!     Block::Heading { attrs: Some(a), .. } if a.classes == Some(vec!["title".to_string()])));
+//! ```
+//!
+//! ## Recursion semantics
+//!
+//! `recurse` defaults to `false` — children are only visited when the
+//! visitor explicitly opts in (e.g. with
+//! [`VisitControl::keep_and_recurse`] or
+//! [`InlineVisitControl::keep_and_recurse`]).  Nodes inserted or used as
+//! replacements are **not** re-visited.
 //!
 
 use crate::markdown::ast::tokens::token::{Block, Inline};
@@ -35,6 +75,10 @@ pub trait AstVisitor {
 }
 
 /// Control returned from `visit_block` describing edits to perform.
+///
+/// Returned by [`AstVisitor::visit_block`].  Mutually exclusive fields are
+/// resolved in the order: `remove` → `replace_with` → keep.  `insert_before`
+/// and `insert_after` apply regardless.
 #[derive(Debug, Default)]
 pub struct VisitControl {
     /// Nodes to insert before the current node's position.
@@ -68,6 +112,8 @@ impl VisitControl {
     }
 
     /// Convenience: replace current node with given nodes.
+    ///
+    /// The replacements are not themselves visited.
     pub fn replace_with(nodes: Vec<Block>) -> Self {
         VisitControl {
             replace_with: Some(nodes),

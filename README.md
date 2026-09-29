@@ -49,6 +49,12 @@ console.log(document.astJson); // JSON string
 console.log(document.frontmatter); // object, or null
 ```
 
+`ast` and `astJson` serialize the same tree differently: `ast` (the real
+JavaScript object) uses PascalCase `type` values (`Heading`, `Paragraph`,
+`Link`) and a `nodeType: "root"` root, while `astJson` mirrors the Rust
+serialization with snake_case types (`heading`, `paragraph`, `link`) and a
+`type: "root"` root.
+
 ### Options
 
 All options are optional. GFM and Kramdown are enabled by default; `html`
@@ -94,6 +100,7 @@ console.log(document.html); // <h1>Hello</h1>\n
 Register visitors with `useVisitor`. Each callback receives a one-item tuple,
 may mutate the supplied node, and can return a control object. Return
 `{ recurse: true }` to visit children; replacements are not visited again.
+An omitted return value keeps the node without recursing.
 
 ```js
 const document = new Peisar("# Hello", { fragment: true });
@@ -153,19 +160,40 @@ placeholder `pos` is sufficient.
 
 ### Cache and SSG configuration
 
-`PeisarCache` loads Markdown and asset files from an entry directory, exposes
-their absolute paths and contents, and can watch for changes. Call `dispose()`
-when a watcher is no longer needed.
+`PeisarCache` loads Markdown and asset files from an entry directory (plus an
+optional assets directory), exposes their absolute paths and contents, mirrors
+everything to a `.peisar_cache` directory on disk, and — once watching starts —
+keeps both in sync. Call `dispose()` when a watcher is no longer needed; it is
+safe to call more than once.
 
 ```js
 const { PeisarCache } = require("peisar");
 
 const cache = new PeisarCache("contents", "public");
-console.log(cache.markdownFiles());
-console.log(cache.getText("/absolute/path/to/contents/index.md"));
-cache.startWatchingJs();
+// or: const cache = PeisarCache.withConfigJs("contents", "public");
+
+console.log(cache.markdownFiles()); // absolute paths of cached .md files
+console.log(cache.assetFiles());    // absolute paths of cached assets
+console.log(cache.getText("/absolute/path/to/contents/index.md")); // cached text, or null
+console.log(cache.getBinary("/absolute/path/to/public/img/logo.png")); // byte array, or null
+console.log(cache.listFiles());       // everything in the cache
+
+cache.startWatchingJs();              // begin recursive file watching
+
+const id = cache.onChange((event) => {
+  // event: { path, kind: "create" | "modify" | "remove" | "other",
+  //          isMarkdown }
+  console.log(event.kind, event.path);
+});
+cache.offChange(id); // unsubscribe again
 cache.dispose();
 ```
+
+The constructor accepts a relative or absolute entry directory and an
+optional second directory for assets. Without a second argument the cache
+falls back to a `public` directory at the project root when one exists.
+Change callbacks fire on the watcher thread's events after `startWatchingJs()`,
+and the cache keys everything by absolute path.
 
 `peisarSsgConfig()` reads `Peisar.toml` from the current working directory.
 It returns resolved defaults, but reports an invalid or missing configuration
@@ -249,7 +277,13 @@ use peisar::frontmatter::parse_markdown_frontmatter;
 
 let parsed = parse_markdown_frontmatter("---\ntitle: Hello\n---\n\n# Hello")?;
 assert_eq!(parsed.yaml_data().unwrap()["title"], "Hello");
+assert_eq!(parsed.pure_markdown_content(), "# Hello");
 ```
+
+`parse_markdown_frontmatter` returns a `ParseResult` with `yaml_data()`,
+`pure_markdown_content()`, and `into_parts()`. A front-matter block must open
+with `---` on the first non-whitespace line and close with a line starting
+`---`; an unterminated block is treated as ordinary Markdown body.
 
 For post-parse traversal, implement
 `peisar::markdown::ast::AstVisitor` and call
@@ -304,6 +338,7 @@ src/
 │   └── peisar/              high-level N-API `Peisar` class
 ├── ssg/
 │   ├── cache/               file cache and watcher
+│   ├── files/               markdown and asset file discovery
 │   └── ssg_config/          `Peisar.toml` parser and loader
 └── lib.rs                   public module declarations
 ```

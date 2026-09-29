@@ -5,18 +5,22 @@
 //! - HTML comments
 //! - Reference-style inline links
 //! - Existing parsers (headings, paragraphs, lists, code, emphasis, links)
+//! - GFM extensions (tables, task lists, strikethrough, autolinks)
+//! - Kramdown block attributes
+//! - Hard/soft line breaks and inline HTML
 //! - Helper functions (`normalize_label`, `parse_link_url`, `parse_link_title`,
-//!   `compute_line_starts`, `is_link_ref_def`, `is_thematic_break`)
+//!   `compute_line_starts`, `is_link_ref_def`, `is_thematic_break`,
+//!   `parse_task_marker`)
 
 use super::parsers::block::{
     compute_line_starts, is_link_ref_def, is_list_marker, is_thematic_break, normalize_label,
-    parse_link_ref_def_line, parse_link_title, parse_link_url,
+    parse_link_ref_def_line, parse_link_title, parse_link_url, parse_task_marker,
 };
 use super::parsers::hooks::{AstParser, BlockParseContext, InlineParseContext, ParseHooks};
 use super::parsers::inline::{LinkRefMap, parse_inline, parse_inline_with_refs};
 use super::parsers::md_to_ast;
-use super::parsers::visitor::{VisitControl, visit_document_mut};
-use super::tokens::token::{Block, Inline};
+use super::parsers::visitor::{InlineVisitControl, VisitControl, visit_document_mut};
+use super::tokens::token::{Block, Inline, TaskState};
 use super::{AstOptions, AstVisitor};
 
 // ---------------------------------------------------------------------------
@@ -25,6 +29,420 @@ use super::{AstOptions, AstVisitor};
 
 fn count_blocks(doc: &crate::markdown::ast::Document) -> usize {
     doc.children.len()
+}
+
+// ---------------------------------------------------------------------------
+// GFM task-list markers — parse_task_marker
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_parse_task_marker_states() {
+    // Unchecked.  Offset points just past the closing `]` (content start).
+    let (state, off) = parse_task_marker("- [ ] todo").unwrap();
+    assert_eq!(state, TaskState::Unchecked);
+    assert_eq!(off, 5);
+    // Checked, lower and upper case.
+    let (state, _) = parse_task_marker("* [x] done").unwrap();
+    assert_eq!(state, TaskState::Checked);
+    let (state, _) = parse_task_marker("+ [X] done").unwrap();
+    assert_eq!(state, TaskState::Checked);
+    // Ordered marker.
+    let (state, _) = parse_task_marker("1. [ ] step").unwrap();
+    assert_eq!(state, TaskState::Unchecked);
+}
+
+#[test]
+fn test_parse_task_marker_rejects_non_tasks() {
+    // No bracket marker at all.
+    assert!(parse_task_marker("- plain").is_none());
+    // Unknown state letter.
+    assert!(parse_task_marker("- [y] maybe").is_none());
+    // Marker must follow a list marker.
+    assert!(parse_task_marker("[ ] no list").is_none());
+}
+
+#[test]
+fn test_gfm_task_list_items() {
+    let md = "- [ ] todo\n- [x] done\n";
+    let doc = md_to_ast(md, &AstOptions::default(), None);
+    match doc.children.first() {
+        Some(Block::List {
+            ordered: false,
+            items,
+            ..
+        }) => {
+            assert_eq!(items.len(), 2);
+            assert_eq!(items[0].task, Some(TaskState::Unchecked));
+            assert_eq!(items[1].task, Some(TaskState::Checked));
+        }
+        other => panic!("expected List, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_task_list_disabled_without_gfm() {
+    let opts = AstOptions {
+        gfm: false,
+        kramdown: true,
+        file_name: None,
+    };
+    let doc = md_to_ast("- [ ] todo\n", &opts, None);
+    match doc.children.first() {
+        Some(Block::List { items, .. }) => assert_eq!(items[0].task, None),
+        other => panic!("expected List, got {:?}", other),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// GFM tables — document-level
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_gfm_table_block() {
+    let md = "| a | b |\n| --- | ---: |\n| 1 | 2 |\n";
+    let doc = md_to_ast(md, &AstOptions::default(), None);
+    match doc.children.first() {
+        Some(Block::Table { table, .. }) => {
+            assert_eq!(table.header.cells.len(), 2);
+            assert_eq!(table.rows.len(), 1);
+            assert_eq!(table.rows[0].cells.len(), 2);
+        }
+        other => panic!("expected Table, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_gfm_table_disabled_without_gfm() {
+    let opts = AstOptions {
+        gfm: false,
+        kramdown: true,
+        file_name: None,
+    };
+    // Without GFM the pipe lines are ordinary paragraphs.
+    let doc = md_to_ast("| a | b |\n| --- | --- |\n", &opts, None);
+    assert!(
+        doc.children
+            .iter()
+            .all(|b| matches!(b, Block::Paragraph { .. }))
+    );
+}
+
+// ---------------------------------------------------------------------------
+// GFM strikethrough + autolinks — inline
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_inline_strikethrough() {
+    let tokens = parse_inline("~~gone~~", None);
+    assert!(tokens.iter().any(|t| matches!(
+        t,
+        Inline::Strikethrough { children, .. }
+            if matches!(children.as_slice(), [Inline::Text { value, .. }] if value == "gone")
+    )));
+}
+
+#[test]
+fn test_inline_strikethrough_disabled_without_gfm() {
+    let opts = AstOptions {
+        gfm: false,
+        kramdown: true,
+        file_name: None,
+    };
+    let tokens = parse_inline("~~gone~~", Some(&opts));
+    assert!(tokens.iter().all(|t| matches!(t, Inline::Text { .. })));
+}
+
+#[test]
+fn test_autolink_https() {
+    let tokens = parse_inline("visit https://example.com now", None);
+    assert!(tokens.iter().any(|t| matches!(
+        t,
+        Inline::Link { url, autolink: true, .. } if url == "https://example.com"
+    )));
+}
+
+#[test]
+fn test_autolink_www_prepends_https() {
+    let tokens = parse_inline("see www.example.com", None);
+    assert!(tokens.iter().any(|t| matches!(
+        t,
+        Inline::Link { url, autolink: true, .. } if url == "https://www.example.com"
+    )));
+}
+
+#[test]
+fn test_autolink_trailing_punctuation_is_excluded() {
+    let tokens = parse_inline("go to https://example.com.", None);
+    assert!(tokens.iter().any(|t| matches!(
+        t,
+        Inline::Link { url, autolink: true, .. } if url == "https://example.com"
+    )));
+}
+
+#[test]
+fn test_autolink_disabled_without_gfm() {
+    let opts = AstOptions {
+        gfm: false,
+        kramdown: true,
+        file_name: None,
+    };
+    let tokens = parse_inline("visit https://example.com", Some(&opts));
+    assert!(tokens.iter().all(|t| matches!(t, Inline::Text { .. })));
+}
+
+// ---------------------------------------------------------------------------
+// Kramdown block attributes
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_kramdown_attrs_on_heading() {
+    let md = "# Title\n{: #hero .card}\n";
+    let doc = md_to_ast(md, &AstOptions::default(), None);
+    match doc.children.first() {
+        Some(Block::Heading { attrs, .. }) => {
+            let attrs = attrs.as_ref().expect("attrs should be parsed");
+            assert_eq!(attrs.id.as_deref(), Some("hero"));
+            assert_eq!(attrs.classes, Some(vec!["card".to_string()]));
+        }
+        other => panic!("expected Heading, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_kramdown_attrs_disabled_without_kramdown() {
+    let opts = AstOptions {
+        gfm: true,
+        kramdown: false,
+        file_name: None,
+    };
+    let doc = md_to_ast("# Title\n{: #hero}\n", &opts, None);
+    match doc.children.first() {
+        Some(Block::Heading { attrs, .. }) => assert!(attrs.is_none()),
+        other => panic!("expected Heading, got {:?}", other),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Line breaks + inline HTML
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_hard_break_two_spaces() {
+    let tokens = parse_inline("line1  \nline2", None);
+    assert!(tokens.iter().any(|t| matches!(t, Inline::HardBreak { .. })));
+}
+
+#[test]
+fn test_hard_break_backslash() {
+    let tokens = parse_inline("line1\\\nline2", None);
+    assert!(tokens.iter().any(|t| matches!(t, Inline::HardBreak { .. })));
+}
+
+#[test]
+fn test_soft_break() {
+    let tokens = parse_inline("line1\nline2", None);
+    assert!(tokens.iter().any(|t| matches!(t, Inline::SoftBreak { .. })));
+    assert!(!tokens.iter().any(|t| matches!(t, Inline::HardBreak { .. })));
+}
+
+#[test]
+fn test_inline_html_tag() {
+    let tokens = parse_inline("a <span class=\"x\">b</span> c", None);
+    assert!(tokens.iter().any(|t| matches!(
+        t,
+        Inline::HtmlInline { html, .. } if html == "<span class=\"x\">"
+    )));
+}
+
+// ---------------------------------------------------------------------------
+// Emphasis variants
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_inline_emphasis_underscore() {
+    let tokens = parse_inline("__bold__ and _italic_", None);
+    assert!(tokens.iter().any(|t| matches!(
+        t,
+        Inline::Emphasis { level, .. } if matches!(level, super::tokens::token::EmphasisLevel::Bold)
+    )));
+    assert!(tokens.iter().any(|t| matches!(
+        t,
+        Inline::Emphasis { level, .. } if matches!(level, super::tokens::token::EmphasisLevel::Italic)
+    )));
+}
+
+#[test]
+fn test_nested_emphasis() {
+    let tokens = parse_inline("**bold *nested* end**", None);
+    let found = tokens.iter().any(|t| matches!(
+        t,
+        Inline::Emphasis { children, .. } if children.iter().any(|c| matches!(
+            c,
+            Inline::Emphasis { level, .. } if matches!(level, super::tokens::token::EmphasisLevel::Italic)
+        ))
+    ));
+    assert!(found, "expected nested emphasis inside bold");
+}
+
+// ---------------------------------------------------------------------------
+// Visitor controls — insert/remove/recursion
+// ---------------------------------------------------------------------------
+
+/// Removes every CodeBlock it visits.
+struct RemoveCodeBlocks;
+
+impl AstVisitor for RemoveCodeBlocks {
+    fn visit_block(&mut self, block: &mut Block) -> VisitControl {
+        if matches!(block, Block::CodeBlock { .. }) {
+            VisitControl::remove()
+        } else {
+            VisitControl::default()
+        }
+    }
+}
+
+#[test]
+fn visitor_can_remove_nodes() {
+    let mut doc = md_to_ast(
+        "# T\n\n```\ncode\n```\n\ntail\n",
+        &AstOptions::default(),
+        None,
+    );
+    visit_document_mut(&mut doc, &mut RemoveCodeBlocks);
+    assert!(
+        doc.children
+            .iter()
+            .all(|b| !matches!(b, Block::CodeBlock { .. }))
+    );
+    assert_eq!(doc.children.len(), 2);
+}
+
+/// Inserts a ThematicBreak before each Heading.
+struct InsertBeforeHeadings;
+
+impl AstVisitor for InsertBeforeHeadings {
+    fn visit_block(&mut self, block: &mut Block) -> VisitControl {
+        if matches!(block, Block::Heading { .. }) {
+            VisitControl {
+                insert_before: vec![Block::ThematicBreak {
+                    pos: Default::default(),
+                }],
+                ..Default::default()
+            }
+        } else {
+            VisitControl::default()
+        }
+    }
+}
+
+#[test]
+fn visitor_can_insert_before_nodes() {
+    let mut doc = md_to_ast("# T\n", &AstOptions::default(), None);
+    visit_document_mut(&mut doc, &mut InsertBeforeHeadings);
+    assert!(matches!(
+        doc.children.as_slice(),
+        [Block::ThematicBreak { .. }, Block::Heading { .. }]
+    ));
+}
+
+/// Recurses into blocks (so inline children are visited) and uppercases
+/// every Text node.
+struct UppercaseText;
+
+impl AstVisitor for UppercaseText {
+    fn visit_block(&mut self, _block: &mut Block) -> VisitControl {
+        VisitControl::keep_and_recurse()
+    }
+
+    fn visit_inline(&mut self, inline: &mut Inline) -> InlineVisitControl {
+        if let Inline::Text { value, .. } = inline {
+            *value = value.to_uppercase();
+        }
+        InlineVisitControl::default()
+    }
+}
+
+#[test]
+fn visitor_recurse_visits_inline_children() {
+    let mut doc = md_to_ast("# hello world\n", &AstOptions::default(), None);
+    // Heading children are inlines — the visitor mutates them in place.
+    let mut visitor = UppercaseText;
+    visit_document_mut(&mut doc, &mut visitor);
+    match &doc.children[0] {
+        Block::Heading { children, .. } => {
+            assert!(matches!(
+                children.as_slice(),
+                [Inline::Text { value, .. }] if value == "HELLO WORLD"
+            ));
+        }
+        other => panic!("expected Heading, got {:?}", other),
+    }
+}
+
+#[test]
+fn visitor_without_recurse_skips_inline_children() {
+    struct NoRecurse;
+    impl AstVisitor for NoRecurse {
+        fn visit_inline(&mut self, inline: &mut Inline) -> InlineVisitControl {
+            if let Inline::Text { value, .. } = inline {
+                *value = value.to_uppercase();
+            }
+            InlineVisitControl::default()
+        }
+    }
+    let mut doc = md_to_ast("# hello world\n", &AstOptions::default(), None);
+    visit_document_mut(&mut doc, &mut NoRecurse);
+    // visit_block returns the default (recurse = false) so visit_inline
+    // never fires and the text stays lowercase.
+    match &doc.children[0] {
+        Block::Heading { children, .. } => {
+            assert!(matches!(
+                children.as_slice(),
+                [Inline::Text { value, .. }] if value == "hello world"
+            ));
+        }
+        other => panic!("expected Heading, got {:?}", other),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Code blocks — indented + fence variants
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_code_block_indented() {
+    let md = "    indented code\n";
+    let doc = md_to_ast(md, &AstOptions::default(), None);
+    assert!(doc.children.iter().any(|b| matches!(
+        b,
+        Block::CodeBlock { lang: None, code, .. } if code == "indented code"
+    )));
+}
+
+#[test]
+fn test_code_block_tilde_fence() {
+    let md = "~~~js\nlet x = 1;\n~~~\n";
+    let doc = md_to_ast(md, &AstOptions::default(), None);
+    assert!(doc.children.iter().any(|b| matches!(
+        b,
+        Block::CodeBlock { lang, code, .. }
+            if lang.as_deref() == Some("js") && code == "let x = 1;"
+    )));
+}
+
+#[test]
+fn test_nested_block_quote() {
+    let md = "> outer\n> > inner\n";
+    let doc = md_to_ast(md, &AstOptions::default(), None);
+    match doc.children.first() {
+        Some(Block::BlockQuote { children, .. }) => {
+            // The outer quote holds the paragraph and the nested quote as
+            // separate children.
+            assert!(matches!(children[0], Block::Paragraph { .. }));
+            assert!(matches!(children[1], Block::BlockQuote { .. }));
+        }
+        other => panic!("expected BlockQuote, got {:?}", other),
+    }
 }
 
 // ---------------------------------------------------------------------------

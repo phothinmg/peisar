@@ -593,11 +593,18 @@ impl<'a> ParserState<'a> {
                 self.pos += consumed;
                 let item_end = self.pos;
 
-                // GFM task list detection
+                // GFM task list detection.  The `[ ]`/`[x]` marker is part
+                // of the collected content, so strip it when present —
+                // otherwise it would render as literal text alongside the
+                // generated `<input type="checkbox">`.
                 let task = if self.opts.gfm {
                     parse_task_marker(line).map(|(state, _)| state)
                 } else {
                     None
+                };
+                let content = match task {
+                    Some(_) => strip_task_marker(content),
+                    None => content,
                 };
 
                 let inner = super::md_to_ast_with_hooks(
@@ -931,6 +938,9 @@ fn collect_list_item(lines: &[&str], start: usize) -> (String, usize) {
 }
 /// Parse a GFM task list marker: `[ ]`, `[x]`, `[X]`.
 /// Returns `(TaskState, content_start_offset)`.
+///
+/// The offset counts from the start of the (trimmed) line and points just
+/// past the closing `]` of the marker.
 pub fn parse_task_marker(line: &str) -> Option<(TaskState, usize)> {
     let t = line.trim_start();
     // Must be after a list marker like `- `, `* `, `+ `, `1. `
@@ -965,6 +975,47 @@ pub fn parse_task_marker(line: &str) -> Option<(TaskState, usize)> {
 // ---------------------------------------------------------------------------
 // Link reference definition helpers
 // ---------------------------------------------------------------------------
+
+/// Strip a leading GFM task-list marker (`[ ]`, `[x]`, or `[X]`, plus one
+/// optional following space) from list-item content collected by
+/// [`collect_list_item`].
+///
+/// Returns the content unchanged when it does not start with a marker.
+fn strip_task_marker(content: String) -> String {
+    for marker in ["[ ]", "[x]", "[X]"] {
+        if let Some(rest) = content.strip_prefix(marker) {
+            return rest.strip_prefix(' ').unwrap_or(rest).to_string();
+        }
+    }
+    content
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_task_marker, strip_task_marker};
+    use crate::markdown::ast::tokens::token::TaskState;
+
+    #[test]
+    fn strip_task_marker_removes_marker_and_one_space() {
+        assert_eq!(strip_task_marker("[ ] todo".into()), "todo");
+        assert_eq!(strip_task_marker("[x] done".into()), "done");
+        assert_eq!(strip_task_marker("[X]no-space".into()), "no-space");
+        // No marker → unchanged.
+        assert_eq!(strip_task_marker("plain".into()), "plain");
+        // Only the leading marker counts.
+        assert_eq!(strip_task_marker("text [ ] stays".into()), "text [ ] stays");
+    }
+
+    #[test]
+    fn parse_task_marker_reports_state_and_offset() {
+        let (state, off) = parse_task_marker("- [ ] todo").unwrap();
+        assert_eq!(state, TaskState::Unchecked);
+        assert_eq!(off, 5); // just past the `]`
+        let (state, _) = parse_task_marker("1. [x] done").unwrap();
+        assert_eq!(state, TaskState::Checked);
+        assert!(parse_task_marker("- plain").is_none());
+    }
+}
 
 /// Normalise a link label per CommonMark: trim, collapse internal whitespace
 /// to single spaces, lowercase.

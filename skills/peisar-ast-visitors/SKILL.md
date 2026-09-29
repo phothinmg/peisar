@@ -31,24 +31,28 @@ console.log(document.html); // <h2>Hello</h2>\n
 
 `visitBlock` and `visitInline` may return these optional camel-case fields:
 
-| Field | Effect |
-| --- | --- |
-| `recurse: true` | Keep the node and visit its children |
-| `replaceWith: [nodes]` | Replace the current node |
-| `remove: true` | Remove the current node |
-| `insertBefore: [nodes]` | Insert siblings before it |
-| `insertAfter: [nodes]` | Insert siblings after it |
+| Field                   | Effect                               |
+| ----------------------- | ------------------------------------ |
+| `recurse: true`         | Keep the node and visit its children |
+| `replaceWith: [nodes]`  | Replace the current node             |
+| `remove: true`          | Remove the current node              |
+| `insertBefore: [nodes]` | Insert siblings before it            |
+| `insertAfter: [nodes]`  | Insert siblings after it             |
 
-An omitted return value keeps the node but does not recurse. Callbacks may
+An omitted return value keeps the node but does not recurse. `recurse`
+defaults to `false` — return `{ recurse: true }` (JS) or use
+`VisitControl::keep_and_recurse()` (Rust) to visit children. Callbacks may
 also mutate the supplied node. Traversal is pre-order, and replacement nodes
 are not re-visited. Visitors are applied each time `ast`, `astJson`, `html`,
 or `frontmatter` is read, so write visitors that are safe to run repeatedly.
 
-Node `type` values are PascalCase: block nodes include `Heading`, `Paragraph`,
-`CodeBlock`, `BlockQuote`, `List`, `Table`, `ThematicBreak`, `HtmlBlock`,
-`LinkReferenceDefinition`, and `Comment`; inline nodes include `Text`,
-`Emphasis`, `Code`, `HtmlInline`, `Strikethrough`, `HardBreak`, `SoftBreak`,
-`Image`, `Link`, and `LinkReference`.
+Node `type` values are PascalCase in the `ast` object: block nodes include
+`Heading`, `Paragraph`, `CodeBlock`, `BlockQuote`, `List`, `Table`,
+`ThematicBreak`, `HtmlBlock`, `LinkReferenceDefinition`, and `Comment`;
+inline nodes include `Text`, `Emphasis`, `Code`, `HtmlInline`,
+`Strikethrough`, `HardBreak`, `SoftBreak`, `Image`, `Link`, and
+`LinkReference`. (The `astJson` string uses snake_case types instead — see
+the peisar-parse-markdown skill.)
 
 ## Rust
 
