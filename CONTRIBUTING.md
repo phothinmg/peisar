@@ -33,17 +33,14 @@ src/
 │   ├── config/mod.rs         PeisarOptions resolution
 │   ├── html/mod.rs           AST-to-HTML renderer
 │   └── peisar/mod.rs         exported N-API Peisar class
-├── ssg/
-│   ├── cache/mod.rs          file cache and watcher
-│   ├── files/mod.rs          markdown and asset file discovery
-│   └── ssg_config/mod.rs     Peisar.toml parser and loader
 └── lib.rs                    public module declarations
 
-test/peisar.test.js           Node.js integration tests
+js_tests/peisar.test.txt      Node.js integration tests
+
+`npm test` runs them against a freshly built addon in a temporary directory;
+the file is kept as `.txt` so `node --test` does not auto-discover it.
 tests/readme_paths.rs         compile-checks README API paths
-schema/peisar-ssg.json        Peisar.toml JSON Schema
 skills/                       Agent Skills for AI coding tools
-contents/                     documentation site content
 ```
 
 Rust consumers use module paths such as `peisar::markdown::ast::Document`,
@@ -85,15 +82,11 @@ or methods change; the tests load the addon from the local build.
 - `PeisarAst` owns raw Markdown, front matter, hooks, and visitors. Adding a
   parser hook reparses the raw Markdown; document reads apply registered
   visitors.
-- The cache keys everything by absolute path. `PeisarCache` mirrors entries to
-  `.peisar_cache` on disk; `dispose()` must be called to release the watcher
-  and worker threads so Node can exit.
-- The JavaScript-facing SSG loader exits on configuration failures; Rust
-  consumers should use the fallible `load_config`. Keep this split.
 - Add tests for new behavior: Rust parser tests in
-  `src/markdown/ast/tests.rs`, Node.js tests in `test/peisar.test.js`. If you
-  document a new API path in `README.md`, also add it to
-  `tests/readme_paths.rs` so it stays compile-checked.
+  `src/markdown/ast/tests.rs`, Node.js tests in
+  `js_tests/peisar.test.txt`. If you document a new API path in
+  `README.md`, also add it to `tests/readme_paths.rs` so it stays
+  compile-checked.
 
 ## Commit message convention
 
@@ -143,6 +136,9 @@ Open a GitHub issue with:
 - What you did (minimal reproduction steps or code snippet)
 - What you expected and what actually happened
 - Peisar version, Node.js version, and OS
+
+For security vulnerabilities, do not open a public issue — follow the private
+reporting process in [SECURITY.md](SECURITY.md) instead.
 
 ## License
 

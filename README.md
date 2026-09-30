@@ -12,8 +12,8 @@
 
 Peisar parses CommonMark Markdown with GitHub Flavored Markdown (GFM),
 Kramdown block attributes, YAML front matter, source spans, AST visitors, and
-custom parser hooks. The crate also contains an in-memory Markdown and asset
-cache plus a `Peisar.toml` static-site configuration loader.
+custom parser hooks. The static-site tooling built on Peisar now lives in the
+separate `peisar-ssg` package.
 
 ## Features
 
@@ -24,8 +24,8 @@ cache plus a `Peisar.toml` static-site configuration loader.
 - Source spans on every AST node
 - AST visitors and during-parse extension hooks
 - A native N-API Node.js addon with generated TypeScript declarations
-- A Rust library (`rlib`) with public module paths for parser, renderer, cache,
-  and SSG configuration APIs
+- A Rust library (`rlib`) with public module paths for the parser, renderer,
+  and high-level document APIs
 
 ## Node.js
 
@@ -158,68 +158,7 @@ least one character; a missing or zero `consumed` value declines the result.
 Peisar recomputes the source span of a hook-returned node, so a complete
 placeholder `pos` is sufficient.
 
-### Cache and SSG configuration
 
-`PeisarCache` loads Markdown and asset files from an entry directory (plus an
-optional assets directory), exposes their absolute paths and contents, mirrors
-everything to a `.peisar_cache` directory on disk, and — once watching starts —
-keeps both in sync. Call `dispose()` when a watcher is no longer needed; it is
-safe to call more than once.
-
-```js
-const { PeisarCache } = require("peisar");
-
-const cache = new PeisarCache("contents", "public");
-// or: const cache = PeisarCache.withConfigJs("contents", "public");
-
-console.log(cache.markdownFiles()); // absolute paths of cached .md files
-console.log(cache.assetFiles());    // absolute paths of cached assets
-console.log(cache.getText("/absolute/path/to/contents/index.md")); // cached text, or null
-console.log(cache.getBinary("/absolute/path/to/public/img/logo.png")); // byte array, or null
-console.log(cache.listFiles());       // everything in the cache
-
-cache.startWatchingJs();              // begin recursive file watching
-
-const id = cache.onChange((event) => {
-  // event: { path, kind: "create" | "modify" | "remove" | "other",
-  //          isMarkdown }
-  console.log(event.kind, event.path);
-});
-cache.offChange(id); // unsubscribe again
-cache.dispose();
-```
-
-The constructor accepts a relative or absolute entry directory and an
-optional second directory for assets. Without a second argument the cache
-falls back to a `public` directory at the project root when one exists.
-Change callbacks fire on the watcher thread's events after `startWatchingJs()`,
-and the cache keys everything by absolute path.
-
-`peisarSsgConfig()` reads `Peisar.toml` from the current working directory.
-It returns resolved defaults, but reports an invalid or missing configuration
-to stderr and exits the host process. Use it only where that fatal behavior is
-appropriate.
-
-```toml
-[site]
-title = "My Site"
-
-[directories]
-outDir = "build"
-
-[devServer]
-port = 3838
-host = "127.0.0.1"
-```
-
-```js
-const { peisarSsgConfig } = require("peisar");
-console.log(peisarSsgConfig().directories.outDir); // "build"
-```
-
-The directory defaults are `rootDir = "."`, `contentsDir = "contents"`,
-`publicDir = "public"`, `themeDir = "themes"`, and `outDir = ".peisar"`.
-The development-server defaults are `127.0.0.1:3838`.
 
 ## Rust
 
@@ -227,7 +166,7 @@ Add the crate to a Rust project:
 
 ```toml
 [dependencies]
-peisar = "0.1.2"
+peisar = "0.2.0"
 ```
 
 The public Rust API is module-based. Import the parser from
@@ -295,10 +234,6 @@ are `VisitControl` and `InlineVisitControl` from that same `visitor` module.
 hook-enabled parser entry point is not yet public to external Rust consumers.
 Use `useParser` from Node.js for registered custom syntax today.
 
-The SSG configuration parser is available as
-`peisar::ssg::ssg_config::parse_config`; use
-`peisar::ssg::ssg_config::load_config` for the fallible current-directory
-loader. The cache type is `peisar::ssg::cache::PeisarCache`.
 
 ## Development
 
@@ -312,6 +247,8 @@ cargo test
 Run `npm run build:local` after changing N-API-annotated Rust code; it
 regenerates the package loader and TypeScript declarations before the Node.js
 tests run.
+
+More detail in [CONTRIBUTING](CONTRIBUTING.md)
 
 ## AI integration
 
@@ -336,12 +273,14 @@ src/
 │   ├── config/              combined parser and renderer options
 │   ├── html/                HTML renderer
 │   └── peisar/              high-level N-API `Peisar` class
-├── ssg/
-│   ├── cache/               file cache and watcher
-│   ├── files/               markdown and asset file discovery
-│   └── ssg_config/          `Peisar.toml` parser and loader
 └── lib.rs                   public module declarations
 ```
 
-The generated Node.js declaration file is `index.d.ts` in published builds.
-Run `cargo doc --no-deps --open` for Rust API documentation.
+## LICENSE
+[Apache-2.0][license] © [Pho Thin Maung][ptm]
+
+Security policy: [SECURITY.md](SECURITY.md)
+
+[license]: LICENSE
+[ptm]: https://github.com/phothinmg
+

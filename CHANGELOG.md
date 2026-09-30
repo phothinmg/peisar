@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-30
+
 ### Added
 
 - Custom parser hooks via `useParser`: block hooks (`parseBlock`) and inline
@@ -14,22 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with consume-or-decline semantics
 - High-level `peisar::markdown::peisar::Peisar` parse-and-render wrapper for
   Rust consumers
-- `PeisarCache` Node.js and Rust API: `new PeisarCache(entryDir, assetsDir?)`,
-  `PeisarCache.withConfigJs`, `getText`, `getBinary`, `listFiles`,
-  `markdownFiles`, `assetFiles`, `onChange`/`offChange`, `startWatchingJs`,
-  and `dispose`
-  - Keys entries by absolute path and mirrors the cache to a `.peisar_cache`
-    directory on disk; `PEISAR_CACHE_FORMAT=bincode` switches entries to
-    compact `.bin` files
-  - Recursive file watching keeps the in-memory cache and the disk mirror in
-    sync; `dispose()` releases the watcher and worker threads (safe to call
-    more than once)
-- `Peisar.toml` static-site configuration loading:
-  `peisar::ssg::ssg_config::parse_config` and the fallible
-  `peisar::ssg::ssg_config::load_config`, plus the `peisarSsgConfig()`
-  Node.js export
-- JSON Schema for `Peisar.toml` at `schema/peisar-ssg.json`
-- Markdown and asset file discovery under `peisar::ssg::files`
 - Git hooks: a `commit-msg` hook enforcing the commit message convention
   (`.githooks/commit-msg`), plus `scripts/commit.sh` (`npm run commit`) and
   `scripts/install-hooks.sh` (`npm run hooks:install`)
@@ -39,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `peisar-development`
 - Integration tests that compile-check every documented Rust and Node.js API
   path in `README.md` (`tests/readme_paths.rs`)
+- Security policy (`SECURITY.md`): supported versions, the removal notice for
+  the `PeisarCache` components that moved to `peisar-ssg`, the renderer's
+  trust model, and a private vulnerability reporting process
 - CI workflow that tests on Ubuntu, macOS, and Windows, and builds the native
   addon for eight targets (GNU/MUSL Linux x64/arm64, macOS x64/arm64, and
   Windows x64/arm64) on every published release
@@ -52,19 +41,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `peisar::markdown::config` — combined `PeisarOptions`
   - `peisar::markdown::peisar` — high-level document wrapper
   - `peisar::frontmatter` — YAML front-matter parser
-  - `peisar::ssg::{cache, files, ssg_config}` — cache, discovery, SSG config
 - Expanded the parser test suite (`src/markdown/ast/tests.rs`) and the
-  Node.js integration tests (`test/peisar.test.js`) to cover front matter,
-  visitors, hooks, and their composition
-- Rewrote documentation: README plus the `contents/` guide and reference
-  pages
+  Node.js integration tests (`js_tests/peisar.test.txt`) to cover front
+  matter, visitors, hooks, and their composition
+- Rewrote documentation: README, CONTRIBUTING, and the Agent Skills
 
-### Fixed
+### Removed
 
-- Blank lines are no longer stripped inside template literals during
-  consolidation steps
-- Cache disposal now reliably releases watcher and worker threads so Node
-  processes exit cleanly after tests
+- Static-site support, moved to the separate `peisar-ssg` project:
+  - The `PeisarCache` and `peisarSsgConfig()` Node.js exports
+  - The `peisar::ssg::{cache, files, ssg_config}` Rust modules
+  - `Peisar.toml` configuration loading and the `schema/peisar-ssg.json`
+    JSON Schema
+- The `blake3`, `notify`, `bincode`, and `toml` dependencies, which served
+  only the removed cache and configuration loader
+
+### Notes
+
+- Versions 0.1.3, 0.1.4, and 0.1.5 were published to npm only, while
+  crates.io stayed at 0.1.2. Version 0.2.0 realigns both registries and
+  documents all changes shipped in those interim releases.
+- Removing public APIs is a breaking change for Rust and Node.js consumers;
+  Semantic Versioning permits breaking changes between 0.x minor versions.
 
 ## [0.1.2] - 2026-09-28
 
@@ -90,6 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and parse/render options (GFM and Kramdown enabled by default)
 - Rust `rlib` crate and Node.js integration test suite
 
-[Unreleased]: https://github.com/phothinmg/peisar/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/phothinmg/peisar/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/phothinmg/peisar/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/phothinmg/peisar/compare/v0.1.0...v0.1.2
 [0.1.0]: https://github.com/phothinmg/peisar/releases/tag/v0.1.0

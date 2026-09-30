@@ -2,9 +2,8 @@
 //!
 //! `peisar` is a practical Markdown parser written in Rust and exposed to
 //! Node.js through napi-rs.  It parses Markdown (with GFM and Kramdown
-//! extensions) into a typed AST, renders that AST to HTML, extracts YAML
-//! front matter, and provides a file cache for static-site-generation
-//! workflows.
+//! extensions) into a typed AST, renders that AST to HTML, and extracts YAML
+//! front matter.
 //!
 //! ## Layout
 //!
@@ -17,10 +16,6 @@
 //!     and render options.
 //!   - [`markdown::html`] — AST → HTML rendering.
 //!   - [`markdown::peisar`] — the `Peisar` class exported to JavaScript.
-//! - [`ssg`] — static-site support: a markdown/asset
-//!   [`PeisarCache`](ssg::cache::PeisarCache) with file watching and disk
-//!   persistence, plus `Peisar.toml` site configuration
-//!   ([`ssg::ssg_config`]).
 //!
 //! ## Quick start (Rust)
 //!
@@ -49,15 +44,6 @@
 //! assert_eq!(parsed.yaml_data().unwrap()["title"], "Hello");
 //! ```
 //!
-//! Load `Peisar.toml` for the static-site generator:
-//!
-//! ```
-//! use peisar::ssg::ssg_config::parse_config;
-//!
-//! let config = parse_config("[site]\ntitle = \"My Site\"\n").unwrap();
-//! assert_eq!(config.site.title, "My Site");
-//! assert_eq!(config.directories.contents_dir, "contents");
-//! ```
 //!
 //! ## JavaScript surface
 //!
@@ -68,4 +54,3 @@
 
 pub mod frontmatter;
 pub mod markdown;
-pub mod ssg;

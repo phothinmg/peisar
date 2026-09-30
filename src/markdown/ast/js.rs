@@ -328,7 +328,7 @@ impl AstParser for RegisteredJsParser {
             match cb.borrow_back(&self.env) {
                 Ok(f) => f,
                 Err(e) => {
-                    eprintln!("peisar: parseBlock hook could not be invoked: {e}");
+                    eprintln!("{}{}", "parseBlock hook could not be invoked: ", e);
                     return None;
                 }
             };
@@ -337,9 +337,12 @@ impl AstParser for RegisteredJsParser {
             Ok(r) => r?,
             Err(e) => {
                 eprintln!(
-                    "peisar: parseBlock hook returned an invalid result: {e}\n  \
+                    "{}",
+                    format!(
+                        "parseBlock hook returned an invalid result: {e}\n  \
                      note: the returned `block` must be a complete node — every \
                      field (including `pos` with line/column/offset) is required"
+                    )
                 );
                 return None;
             }
@@ -355,7 +358,7 @@ impl AstParser for RegisteredJsParser {
             match cb.borrow_back(&self.env) {
                 Ok(f) => f,
                 Err(e) => {
-                    eprintln!("peisar: parseInline hook could not be invoked: {e}");
+                    eprintln!("{}", format!("parseInline hook could not be invoked: {e}"));
                     return None;
                 }
             };
@@ -364,9 +367,12 @@ impl AstParser for RegisteredJsParser {
             Ok(r) => r?,
             Err(e) => {
                 eprintln!(
-                    "peisar: parseInline hook returned an invalid result: {e}\n  \
+                    "{}",
+                    format!(
+                        "parseInline hook returned an invalid result: {e}\n  \
                      note: the returned `inline` must be a complete node — every \
                      field (including `pos` with line/column/offset) is required"
+                    )
                 );
                 return None;
             }

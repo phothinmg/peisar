@@ -1,6 +1,6 @@
 ---
 name: peisar-development
-description: Build, test, and modify Peisar's Rust implementation and native Node.js bindings. Use when changing Markdown parsing, HTML rendering, SSG configuration, cache behavior, or N-API surfaces.
+description: Build, test, and modify Peisar's Rust implementation and native Node.js bindings. Use when changing Markdown parsing, HTML rendering or N-API surfaces.
 ---
 
 # Peisar Development
@@ -23,26 +23,12 @@ src/
 │   ├── config/mod.rs                  PeisarOptions resolution
 │   ├── html/mod.rs                    AST-to-HTML renderer
 │   └── peisar/mod.rs                  exported N-API Peisar class
-├── ssg/
-│   ├── cache/mod.rs                   file cache and watcher
-│   ├── files/mod.rs                   markdown and asset file discovery
-│   └── ssg_config/mod.rs              Peisar.toml parser and loader
 └── lib.rs                             public module declarations
 ```
 
 The Node.js `Peisar` class exposes `ast`, `html`, `frontmatter`, `astJson`,
-`useVisitor`, and `useParser`. It also exports `PeisarCache` and
-`peisarSsgConfig`. The generated TypeScript declarations are output by the
-N-API build; do not hand-edit them.
-
-The `PeisarCache` JS surface is: `new PeisarCache(entryDir, assetsDir?)`,
-`PeisarCache.withConfigJs(entryDir, assetsDir?)`, `getText(abs)`,
-`getBinary(abs)`, `listFiles()`, `markdownFiles()`, `assetFiles()`,
-`onChange(cb) → id`, `offChange(id)`, `startWatchingJs()`, and `dispose()`.
-The cache keys by absolute path and mirrors its entries to `.peisar_cache`
-on disk (JSON by default, `PEISAR_CACHE_FORMAT=bincode` for compact `.bin`
-entries); `dispose()` must be called to release the watcher and worker
-threads so Node can exit.
+`useVisitor`, and `useParser`. The generated TypeScript declarations are
+output by the N-API build; do not hand-edit them.
 
 ## Build and test
 
@@ -55,8 +41,9 @@ cargo test
 
 `npm run build:local` generates the package loader and declarations in the
 local build output, then compiles the native addon. Run it before `npm test`
-after changing N-API-visible Rust types or methods. Node integration tests are
-in `test/peisar.test.js`; Rust parser tests are in
+after changing N-API-visible Rust types or methods. `npm test` builds a fresh
+addon in a temporary directory and runs the Node integration tests in
+`js_tests/peisar.test.txt`; Rust parser tests are in
 `src/markdown/ast/tests.rs`; documentation API paths are compile-checked in
 `tests/readme_paths.rs`.
 
@@ -73,5 +60,3 @@ in `test/peisar.test.js`; Rust parser tests are in
   visitors.
 - Rust consumers use module paths such as `peisar::markdown::ast::Document`,
   not root re-exports.
-- The JavaScript-facing SSG loader exits on configuration failures; Rust
-  consumers should use the fallible `load_config`.

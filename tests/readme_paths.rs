@@ -12,8 +12,6 @@ use peisar::markdown::ast::{
 use peisar::markdown::config::PeisarOptions;
 use peisar::markdown::html::{RenderOptions, render_document_html};
 use peisar::markdown::peisar::Peisar;
-use peisar::ssg::cache::PeisarCache;
-use peisar::ssg::ssg_config::{self, PeisarSSGConfig};
 
 #[test]
 fn markdown_module_paths() {
@@ -174,29 +172,4 @@ fn frontmatter_paths() {
     let (md, yaml) = parsed.into_parts();
     assert_eq!(md, "# Hello");
     assert!(yaml.is_some());
-}
-
-#[test]
-fn ssg_paths() {
-    // Config parsing (pure function)
-    let config: PeisarSSGConfig = ssg_config::parse_config(
-        "[site]\ntitle = \"My Site\"\n\n[directories]\noutDir = \"build\"\n",
-    )
-    .unwrap();
-    assert_eq!(config.site.title, "My Site");
-    assert_eq!(config.directories.out_dir, "build");
-    assert_eq!(config.directories.contents_dir, "contents");
-    assert_eq!(config.dev_server.port, 3838);
-}
-
-// The napi-exposed `Visitor` / `Parser` object shapes live at
-// `peisar::markdown::ast::{Visitor, Parser}` but are napi-internal;
-// Rust consumers use the traits above.
-
-#[test]
-#[ignore = "requires a real entry dir; run manually"]
-fn cache_smoke() {
-    let mut cache = PeisarCache::new(".").unwrap();
-    let _all = cache.all();
-    cache.dispose();
 }

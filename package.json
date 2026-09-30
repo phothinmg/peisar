@@ -1,12 +1,12 @@
 {
   "name": "peisar",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "A practical Markdown parser written in Rust",
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
     "build:local": "napi build --platform --config-path napi.config.json --output-dir local_build",
-    "test": "node --test",
+    "test": "bash scripts/wf_tests.sh",
     "hooks:install": "bash scripts/install-hooks.sh",
     "commit": "bash scripts/commit.sh",
     "wf:test": "bash scripts/wf_tests.sh"
@@ -25,6 +25,8 @@
   },
   "files": [
     "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
     "LICENSE",
     "index.js",
     "index.d.ts"

@@ -1,6 +1,6 @@
 ---
 name: peisar-parse-markdown
-description: Parse Markdown and render HTML with Peisar's native Node.js addon or Rust library. Use for HTML rendering, AST access, YAML front matter, parser options, cache, or SSG configuration.
+description: Parse Markdown and render HTML with Peisar's native Node.js addon or Rust library. Use for HTML rendering, AST access, YAML front matter, parser options.
 ---
 
 # Parse Markdown with Peisar
@@ -57,16 +57,6 @@ use `document.useVisitor(...)`. Register both before relying on a document
 read: parser registration reparses the original source, and visitors run when
 `ast`, `astJson`, `html`, or `frontmatter` is read.
 
-`PeisarCache` provides `new PeisarCache(entryDir, assetsDir?)`, the
-`PeisarCache.withConfigJs(entryDir, assetsDir?)` factory, `getText`,
-`getBinary`, `listFiles`, `markdownFiles`, `assetFiles`, `onChange(cb) → id`,
-`offChange(id)`, `startWatchingJs`, and `dispose`. Everything is keyed by
-absolute path. A missing second argument falls back to a `public` directory
-at the project root when one exists. The constructor and each method accept
-plain strings. `peisarSsgConfig()` loads `Peisar.toml` from the current
-directory and terminates the host process if the configuration is invalid or
-missing.
-
 ## Rust
 
 The Rust API is module-based; do not use old root imports such as
@@ -101,8 +91,6 @@ Use these paths:
 
 `parse_markdown_frontmatter` returns a `ParseResult`. Use
 `pure_markdown_content()`, `yaml_data()`, or `into_parts()` to access it.
-For SSG projects use `peisar::ssg::ssg_config::{parse_config, load_config}`;
-the cache type is `peisar::ssg::cache::PeisarCache`.
 
 ## Output details
 
