@@ -19,6 +19,7 @@
   "devDependencies": {
     "@napi-rs/cli": "^3.10.5"
   },
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/phothinmg/peisar"
