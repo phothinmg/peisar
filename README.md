@@ -67,6 +67,10 @@ module.exports = nextConfig // or export default nextConfig if using .mjs
 
 ### Vite
 
+**Example App :** <https://github.com/phothinmg/peisar/tree/main/examples/vite>
+
+**Demo Web APP :** <https://peisar-vite-example.vercel.app/>
+
 Vite browser applications must use Peisar's WebAssembly package rather than
 the native `peisar` package:
 
