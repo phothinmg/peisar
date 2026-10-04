@@ -4,9 +4,9 @@
   "description": "A practical Markdown parser written in Rust",
   "main": "index.js",
   "types": "index.d.ts",
+  "browser": "browser.js",
   "scripts": {
     "build:local": "napi build --platform --config-path napi.config.json --output-dir local_build",
-    "test": "bash scripts/wf_tests.sh",
     "hooks:install": "bash scripts/install-hooks.sh",
     "commit": "bash scripts/commit.sh",
     "wf:test": "bash scripts/wf_tests.sh"
@@ -17,7 +17,8 @@
   ],
   "type": "commonjs",
   "devDependencies": {
-    "@napi-rs/cli": "^3.10.5"
+    "@napi-rs/cli": "^3.9.1",
+    "emnapi": "^2.0.0-alpha.5"
   },
   "license": "Apache-2.0",
   "repository": {
@@ -34,5 +35,8 @@
   ],
   "publishConfig": {
     "access": "public"
+  },
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=23.5.0 || ^24.21.0"
   }
 }

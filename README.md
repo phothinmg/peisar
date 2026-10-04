@@ -3,7 +3,7 @@
 <div align="center">
 <img src="https://pub-c9ba018358dd48a99b70013b65a25e5f.r2.dev/logo/peisar.webp" width="160" height="160" alt="Peisar logo" />
   <h1>Peisar</h1>
-  <p>A Rust Markdown parser and HTML renderer with native Node.js bindings.</p>
+  <p>A practical Markdown parser written in Rust</p>
 </div>
 
 ---
@@ -12,8 +12,7 @@
 
 Peisar parses CommonMark Markdown with GitHub Flavored Markdown (GFM),
 Kramdown block attributes, YAML front matter, source spans, AST visitors, and
-custom parser hooks. The static-site tooling built on Peisar now lives in the
-separate `peisar-ssg` package.
+custom parser hooks.
 
 ## Features
 
@@ -32,8 +31,41 @@ separate `peisar-ssg` package.
 Install the package:
 
 ```sh
-npm install peisar
+npm i peisar
 ```
+
+### Next.js 
+
+Next.js provides a built-in configuration option called `serverExternalPackages`.This opts specific dependencies out of Server Component bundling and allows the server to use a native Node.js `require` to load them directly from `node_modules`.
+
+Add `peisar` to `serverExternalPackages` in your configuration file:
+
+For `next.config.ts` (TypeScript)
+
+```ts
+import type { NextConfig } from 'next'
+
+const nextConfig: NextConfig = {
+  serverExternalPackages: ["peisar"],
+}
+
+export default nextConfig
+
+```
+
+For `next.config.js` or `next.config.mjs` (JavaScript)
+
+```js
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  serverExternalPackages: ["peisar"],
+}
+
+module.exports = nextConfig // or export default nextConfig if using .mjs
+
+```
+
+### Use
 
 Create a `Peisar` document, then read its AST, rendered HTML, front matter, or
 serialized AST:
