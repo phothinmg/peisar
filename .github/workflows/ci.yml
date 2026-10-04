@@ -27,16 +27,23 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+          cache: true
+
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version: 24
+          cache: "pnpm"
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install dependencies
-        run: pnpm ci
+        run: pnpm install
 
       - name: Run JavaScript unit tests
         run: pnpm wf:test
@@ -75,10 +82,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+          cache: true
+
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version: 24
+          cache: "pnpm"
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -86,7 +100,7 @@ jobs:
           targets: ${{ matrix.settings.target }}
 
       - name: Install dependencies
-        run: pnpm ci
+        run: pnpm install
 
       # Install Zig for musl cross-compilation
       - name: Setup Zig
@@ -119,6 +133,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+          cache: true
+
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
@@ -126,7 +146,7 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
-        run: pnpm ci
+        run: pnpm install
 
       # 0. Generate JS binding (index.js) and type declarations (index.d.ts)
       #    for the root package — these are needed at publish time but are
