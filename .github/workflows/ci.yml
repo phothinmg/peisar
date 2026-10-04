@@ -103,7 +103,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: peisar-${{ matrix.settings.target }}
-          path: "*.node"
+          path: |
+            "*.node"
+            "*.wasm"
           if-no-files-found: error
 
   # ── Publish
