@@ -113,7 +113,7 @@ jobs:
       - name: Build & package artifacts
         run: |
           pnpm napi build --release --platform --config-path napi.config.json --target ${{ matrix.settings.target }} ${{ matrix.settings.flags }}
-
+      # Upload artifact step in build job to include the generated WASM JavaScript files
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
@@ -121,6 +121,11 @@ jobs:
           path: |
             ${{ env.APP_NAME }}.*.node
             ${{ env.APP_NAME }}.*.wasm
+            ${{ env.APP_NAME }}.wasi.cjs
+            ${{ env.APP_NAME }}.wasi.d.cts
+            ${{ env.APP_NAME }}.wasi-browser.js
+            wasi-worker.mjs
+            wasi-worker-browser.mjs
           if-no-files-found: error
 
   # ── Publish
