@@ -11,6 +11,9 @@ importers:
       next:
         specifier: 16.3.8
         version: 16.3.8(@types/node@20.19.43)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      peisar:
+        specifier: ^0.2.0
+        version: 0.2.0
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -313,6 +316,50 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@peisar/peisar-darwin-arm64@0.2.0':
+    resolution: {integrity: sha512-p5NoZpkmTsHMG5P7G3wpB4oHXJ8paCxiw99H0hswMgXWTXHKCqTMilewF6f9jMl+MTqjesAQukZZh3LUnfhK6Q==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@peisar/peisar-darwin-x64@0.2.0':
+    resolution: {integrity: sha512-OzY3JQXBtsO5Lr5cwyAgEY9nCMWZAK8adQKavXlK79iRF4Y4LBdCAOO1hSpW7Q9Y/m5/pTQ2uypnZGETXLSehQ==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@peisar/peisar-linux-arm64-gnu@0.2.0':
+    resolution: {integrity: sha512-N9T8YzLUox5+1YY1FKk8aWclaP3EZWiXJrVDPLoqalccKQMaHwucW0TpdnNeINAkjk+uqCNjZRMv5O+TQd/Dng==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@peisar/peisar-linux-arm64-musl@0.2.0':
+    resolution: {integrity: sha512-Osfvp5ECw4SuTetJVPAc0kP9OfjQQBgBQlRwQJtCnTPpxcn6xYU9Cml9sM7VvGM5DcTzc3dazHQQQ2D7d38d/w==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@peisar/peisar-linux-x64-gnu@0.2.0':
+    resolution: {integrity: sha512-IUUfN5Rap2GErMdwJN+5FiBAebiUWB80dhp3nTEygoIIUsbZU14bY2qb5xSIzbVzsfv/bvZNLXVX9K5G9Cw7Sw==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@peisar/peisar-linux-x64-musl@0.2.0':
+    resolution: {integrity: sha512-6BVBEcwfVukKzw/EKGfeWQroo+lw/IPzUog+OHgh6zeqNgffPcV/vzvOChpBZcEdwP9UAzD6O/UCZA3/Ba+0bA==}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@peisar/peisar-win32-arm64-msvc@0.2.0':
+    resolution: {integrity: sha512-lC4zlagWE8E91L71/WT64IQykIIvfAtL7VWuMxu/ApN2n1XU7lNb2U8pFIlQ1fZYzth93D8vQvYlm+ig45LjtQ==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@peisar/peisar-win32-x64-msvc@0.2.0':
+    resolution: {integrity: sha512-/UcYaioBjRsNPQOYujOYF75YehVFPGKRdaMuXGBD8H7Z/c0En7TBsk+K3GPa/807tZWZ3Sztilafcczkrd8k4Q==}
+    cpu: [x64]
+    os: [win32]
+
   '@swc/helpers@0.5.23':
     resolution: {integrity: sha512-5lSsMOTXURePglDfvuAQUqkGek9Hg2kksOYay2m0+XR++b2NWYL/4sWyuvVBIs8oKnJaxkdi9whaL/sqN13afw==}
 
@@ -370,6 +417,9 @@ packages:
         optional: true
       sass:
         optional: true
+
+  peisar@0.2.0:
+    resolution: {integrity: sha512-ktYnAtU90j+YhwchiRtVr+9hxILWz+GH+4wSO17a6J9bHUnDHzsiUOR0nPJ2LFYXIqiASptKK05RXHz+QK5SPA==}
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -607,6 +657,30 @@ snapshots:
   '@next/swc-win32-x64-msvc@16.3.8':
     optional: true
 
+  '@peisar/peisar-darwin-arm64@0.2.0':
+    optional: true
+
+  '@peisar/peisar-darwin-x64@0.2.0':
+    optional: true
+
+  '@peisar/peisar-linux-arm64-gnu@0.2.0':
+    optional: true
+
+  '@peisar/peisar-linux-arm64-musl@0.2.0':
+    optional: true
+
+  '@peisar/peisar-linux-x64-gnu@0.2.0':
+    optional: true
+
+  '@peisar/peisar-linux-x64-musl@0.2.0':
+    optional: true
+
+  '@peisar/peisar-win32-arm64-msvc@0.2.0':
+    optional: true
+
+  '@peisar/peisar-win32-x64-msvc@0.2.0':
+    optional: true
+
   '@swc/helpers@0.5.23':
     dependencies:
       tslib: 2.8.1
@@ -660,6 +734,17 @@ snapshots:
       - '@babel/core'
       - '@types/node'
       - babel-plugin-macros
+
+  peisar@0.2.0:
+    optionalDependencies:
+      '@peisar/peisar-darwin-arm64': 0.2.0
+      '@peisar/peisar-darwin-x64': 0.2.0
+      '@peisar/peisar-linux-arm64-gnu': 0.2.0
+      '@peisar/peisar-linux-arm64-musl': 0.2.0
+      '@peisar/peisar-linux-x64-gnu': 0.2.0
+      '@peisar/peisar-linux-x64-musl': 0.2.0
+      '@peisar/peisar-win32-arm64-msvc': 0.2.0
+      '@peisar/peisar-win32-x64-msvc': 0.2.0
 
   picocolors@1.1.1: {}
 
