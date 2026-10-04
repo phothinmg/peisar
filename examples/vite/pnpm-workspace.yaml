@@ -1,0 +1,2 @@
+minimumReleaseAgeExclude:
+  - '@peisar/peisar-wasm32-wasi@0.2.22'
