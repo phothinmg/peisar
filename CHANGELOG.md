@@ -7,9 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-04
+
 ### Added
 
-- `wasm` package
+- WebAssembly (WASI) build, published as the
+  `@peisar/peisar-wasm32-wasi` package:
+  - A `wasm32-wasip1-threads` target in `napi.config.json`, built on
+    CI and uploaded with the release artifacts (`.wasm`,
+    `peisar.wasi.cjs`, `peisar.wasi.d.cts`, `peisar.wasi-browser.js`,
+    and the WASI worker scripts)
+  - A `browser` entry (`browser.js`) in the root package, so bundlers
+    resolve the WASM build instead of the native addon
+  - `emnapi` dependencies (`emnapi`, `@emnapi/core`,
+    `@emnapi/runtime`) for the WASM runtime
+- Node.js `engines` requirement
+  (`^20.19.0 || ^22.13.0 || >=23.5.0 || ^24.21.0`) in the root and
+  platform packages
+- A `license` field (`Apache-2.0`) in `package.json`
+
+### Changed
+
+- Migrated the CI workflow to pnpm 11 with dependency caching across
+  the test, build, and publish jobs; publishing now runs
+  `pnpm publish --no-git-checks`
+- Updated the README: a new tagline ("A practical Markdown parser
+  written in Rust"), a Next.js integration section documenting
+  `serverExternalPackages`, and removal of the `peisar-ssg` migration
+  notes
+
+### Removed
+
+- `package-lock.json`, replaced by `pnpm-lock.yaml`
+- The `test` script alias; run `wf:test` instead
+
+### Notes
+
+- Versions 0.2.1 through 0.2.22 were npm-only release iterations
+  (npm's latest, 0.2.22, already ships these changes), while
+  crates.io stayed at 0.2.0. Version 0.3.0 realigns both registries.
+- The new `engines` requirement drops Node.js runtimes older than
+  20.19 — a breaking change for consumers on older runtimes; Semantic
+  Versioning permits breaking changes between 0.x minor versions.
+- `@peisar/peisar-wasm32-wasi` is intentionally not part of the root
+  package's `optionalDependencies` (the @napi-rs/cli default), so npm
+  never downloads the `.wasm` binary for consumers whose native binary
+  loads. WebAssembly-restricted environments install it explicitly:
+  `npm i peisar @peisar/peisar-wasm32-wasi`. The README documents the
+  `NAPI_RS_FORCE_WASI` loader variables.
 
 ## [0.2.0] - 2026-09-30
 
@@ -92,7 +137,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and parse/render options (GFM and Kramdown enabled by default)
 - Rust `rlib` crate and Node.js integration test suite
 
-[Unreleased]: https://github.com/phothinmg/peisar/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/phothinmg/peisar/compare/v0.1.2...v0.2.0
+[Unreleased]: https://github.com/phothinmg/peisar/compare/0.3.0...HEAD
+[0.3.0]: https://github.com/phothinmg/peisar/compare/0.2.0...0.3.0
+[0.2.0]: https://github.com/phothinmg/peisar/compare/0.1.2...0.2.0
 [0.1.2]: https://github.com/phothinmg/peisar/compare/v0.1.0...v0.1.2
 [0.1.0]: https://github.com/phothinmg/peisar/releases/tag/v0.1.0

@@ -16,6 +16,9 @@
     "parser"
   ],
   "type": "commonjs",
+  "dependencies": {
+    "@peisar/peisar-wasm32-wasi": "^0.2.22"
+  },
   "devDependencies": {
     "@napi-rs/cli": "^3.9.1",
     "emnapi": "^2.0.0-alpha.5",
