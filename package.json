@@ -1,6 +1,6 @@
 {
   "name": "peisar",
-  "version": "0.2.2",
+  "version": "0.2.20",
   "description": "A practical Markdown parser written in Rust",
   "main": "index.js",
   "types": "index.d.ts",
@@ -18,7 +18,9 @@
   "type": "commonjs",
   "devDependencies": {
     "@napi-rs/cli": "^3.9.1",
-    "emnapi": "^2.0.0-alpha.5"
+    "emnapi": "^2.0.0-alpha.5",
+    "@emnapi/core": "^2.0.0-alpha.5",
+    "@emnapi/runtime": "^2.0.0-alpha.5"
   },
   "license": "Apache-2.0",
   "repository": {

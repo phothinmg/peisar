@@ -11,6 +11,7 @@ permissions:
   contents: read
 
 env:
+  APP_NAME: peisar
   RUST_BACKTRACE: 1
   MACOSX_DEPLOYMENT_TARGET: "10.13"
 
@@ -118,8 +119,8 @@ jobs:
         with:
           name: peisar-${{ matrix.settings.target }}
           path: |
-            "*.node"
-            "*.wasm"
+            ${{ env.APP_NAME }}.*.node
+            ${{ env.APP_NAME }}.*.wasm
           if-no-files-found: error
 
   # ── Publish
