@@ -36,6 +36,10 @@ npm i peisar
 
 ### Next.js 
 
+**Example App :** <https://github.com/phothinmg/peisar/tree/main/examples/next>
+
+**Demo Web APP :** <https://peisar-next-example.vercel.app/>
+
 Next.js provides a built-in configuration option called `serverExternalPackages`.This opts specific dependencies out of Server Component bundling and allows the server to use a native Node.js `require` to load them directly from `node_modules`.
 
 Add `peisar` to `serverExternalPackages` in your configuration file:
