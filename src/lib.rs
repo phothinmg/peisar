@@ -8,6 +8,9 @@
 //! ## Layout
 //!
 //! - [`frontmatter`] — YAML front-matter extraction (`--- … ---` blocks).
+//! - [`cache`] — the [`PeisarCache`](cache::PeisarCache) in-memory + on-disk
+//!   file cache with file-watching, exported to JavaScript for
+//!   the `peisar-ssg` package.
 //! - [`markdown`] — the Markdown pipeline:
 //!   - [`markdown::ast`] — the AST (`Block` / `Inline` tokens, options,
 //!     parsers, visitor, hooks), plus the JS-interop layer.
@@ -49,8 +52,13 @@
 //!
 //! The crate also compiles as a native addon.  JS consumers construct
 //! [`Peisar`](markdown::peisar::Peisar) with Markdown plus options and read
-//! its `ast`, `html`, `frontmatter`, or `astJson` properties; see the
-//! `peisar` npm package for the binding surface.
+//! its `ast`, `html`, `frontmatter`, or `astJson` properties.
+//! [`PeisarCache`](cache::PeisarCache) caches the Markdown and asset files of
+//! a site directory in memory (and under `.peisar_cache`), exposes
+//! `markdownFiles()`, `assetFiles()`, `listFiles()`, `getText()`, and
+//! `getBinary()`, and can keep itself in sync with the filesystem via
+//! `startWatchingJs()`; see the `peisar` npm package for the binding surface.
 
+pub mod cache;
 pub mod frontmatter;
 pub mod markdown;

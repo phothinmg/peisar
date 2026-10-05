@@ -1,6 +1,6 @@
 [package]
 name = "peisar"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/phothinmg/peisar"
@@ -14,6 +14,9 @@ serde_json = { version = "1.0.151", features = ["preserve_order"] }
 napi = { version = "3", features = ["serde-json"] }
 napi-derive = "3"
 serde_yaml = "0.9"
+blake3 = "1.4"
+notify = "6"
+bincode = "1.3"
 
 [build-dependencies]
 napi-build = "2"

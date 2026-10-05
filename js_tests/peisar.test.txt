@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { Peisar } = require("./index.js");
+const { Peisar, PeisarCache } = require("./index.js");
 
 test("parses Markdown into an AST and renders a fragment", () => {
   const document = new Peisar("# Hello **world**", { fragment: true });
@@ -186,4 +186,43 @@ test("parser hooks and visitors compose", () => {
     document.html,
     "<p>replaced</p>\n<p>a lone bang becomes a break</p>\n",
   );
+});
+
+test("PeisarCache collects markdown and asset files", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const os = require("node:os");
+
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "peisar-cache-"));
+  const origCwd = process.cwd();
+  try {
+    fs.mkdirSync(path.join(root, "docs", "sub"), { recursive: true });
+    fs.mkdirSync(path.join(root, "assets"), { recursive: true });
+    fs.writeFileSync(path.join(root, "docs", "page.md"), "# Hello\n");
+    fs.writeFileSync(path.join(root, "docs", "sub", "deep.markdown"), "# Deep\n");
+    fs.writeFileSync(path.join(root, "assets", "logo.png"), Buffer.from([1, 2, 3]));
+
+    process.chdir(root);
+    const cache = new PeisarCache("docs", "assets");
+
+    const md = cache.markdownFiles().map((p) => path.basename(p)).sort();
+    assert.deepEqual(md, ["deep.markdown", "page.md"]);
+
+    const assets = cache.assetFiles();
+    assert.equal(assets.length, 1);
+    assert.equal(path.basename(assets[0]), "logo.png");
+
+    assert.equal(cache.listFiles().length, 3);
+
+    const raw = cache.getText(cache.markdownFiles()[0]);
+    assert.ok(raw === "# Hello\n" || raw === "# Deep\n");
+    assert.ok(cache.getBinary(assets[0]).length >= 3);
+
+    assert.strictEqual(cache.getText("/no/such/file.md"), null);
+
+    cache.dispose();
+  } finally {
+    process.chdir(origCwd);
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });

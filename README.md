@@ -294,6 +294,41 @@ least one character; a missing or zero `consumed` value declines the result.
 Peisar recomputes the source span of a hook-returned node, so a complete
 placeholder `pos` is sufficient.
 
+### File cache
+
+`PeisarCache` collects every Markdown file under an entry directory (plus
+optional assets) into memory, mirrors them to a `.peisar_cache` directory on
+disk, and keeps both in sync with recursive file-watching once
+`startWatchingJs()` is called. This is the engine behind
+[`peisar-ssg`](https://github.com/phothinmg/peisar)'s dev server and build
+pipeline.
+
+```js
+const { PeisarCache } = require("peisar");
+
+// new PeisarCache(entryDir, assetsDir?)
+const cache = new PeisarCache("contents", "public");
+
+cache.markdownFiles(); // absolute paths of cached markdown files
+cache.assetFiles(); // absolute paths of cached assets
+cache.listFiles(); // everything cached
+
+const raw = cache.getText(cache.markdownFiles()[0]); // cached file text, or null
+const bytes = cache.getBinary(cache.assetFiles()[0]); // cached bytes, or null
+
+cache.startWatchingJs(); // keep the cache in sync with the filesystem
+const id = cache.onChange((event) => {
+  // event: { path, kind: "create" | "modify" | "remove" | "other", isMarkdown }
+});
+cache.offChange(id); // unsubscribe
+cache.dispose(); // stop the watcher and release worker threads
+```
+
+Paths are absolute on both sides: `markdownFiles()` returns absolute paths,
+so consumers pass them straight back to `getText()` / `getBinary()`. Always
+call `dispose()` when done so the watcher and persistence threads do not keep
+the Node process alive.
+
 
 
 ## Rust
@@ -404,6 +439,7 @@ npx skills add phothinmg/peisar
 ```text
 src/
 ├── frontmatter/             YAML front-matter parser
+├── cache/                   Markdown/asset file cache (`PeisarCache`)
 ├── markdown/
 │   ├── ast/                 AST nodes, parsers, visitors, and hooks
 │   ├── config/              combined parser and renderer options

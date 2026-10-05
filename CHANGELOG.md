@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.0] - 2026-10-04
+## [0.3.0] - 2026-10-06
 
 ### Added
 
@@ -25,6 +25,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`^20.19.0 || ^22.13.0 || >=23.5.0 || ^24.21.0`) in the root and
   platform packages
 - A `license` field (`Apache-2.0`) in `package.json`
+- `PeisarCache` Node.js export: the in-memory Markdown/asset file cache with
+  `.peisar_cache` disk persistence and recursive file-watching, restored for
+  the `peisar-ssg` package:
+  - `new PeisarCache(entryDir, assetsDir?)` constructor and a
+    `PeisarCache.withConfigJs` factory
+  - `startWatchingJs()` to start the recursive watcher
+  - `getText(absPath)` / `getBinary(absPath)` cached-content accessors
+  - `listFiles()`, `markdownFiles()`, and `assetFiles()` path listings
+  - `onChange(cb) → id` / `offChange(id)` change subscriptions delivering
+    `{ path, kind, isMarkdown }` events
+  - `dispose()` to stop the watcher and release the persistence worker so the
+    Node process can exit
+- A `cache` module (`peisar::cache`) in the Rust crate powering the above,
+  along with the `blake3`, `notify`, and `bincode` dependencies it needs
+
+### Fixed
+
+- Cache targets for paths outside the working directory no longer clobber the
+  original source file: `PathBuf::join` with an absolute path replaces the
+  buffer, so paths are now mirrored by their normal components
+  (e.g. `/elsewhere/b.png` → `.peisar_cache/elsewhere/b.png`)
+- Watcher events now carry `isMarkdown: true` correctly when `PeisarCache`
+  was constructed with a relative entry directory (notify delivers absolute
+  paths, so the entry dir is normalized to absolute at construction)
 
 ### Changed
 
@@ -55,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   loads. WebAssembly-restricted environments install it explicitly:
   `npm i peisar @peisar/peisar-wasm32-wasi`. The README documents the
   `NAPI_RS_FORCE_WASI` loader variables.
+
 
 ## [0.2.0] - 2026-09-30
 

@@ -14,6 +14,9 @@ separate JavaScript source tree.
 ```text
 src/
 ├── frontmatter/mod.rs                 YAML front-matter extraction
+├── cache/
+│   ├── mod.rs                         PeisarCache: N-API class, watcher, disk cache
+│   └── file.rs                       markdown/asset file discovery and extensions
 ├── markdown/
 │   ├── ast/
 │   │   ├── tokens/                    AST nodes, spans, and attributes
@@ -27,7 +30,10 @@ src/
 ```
 
 The Node.js `Peisar` class exposes `ast`, `html`, `frontmatter`, `astJson`,
-`useVisitor`, and `useParser`. The generated TypeScript declarations are
+`useVisitor`, and `useParser`. The Node.js `PeisarCache` class exposes
+`markdownFiles`, `assetFiles`, `listFiles`, `getText`, `getBinary`,
+`startWatchingJs`, `onChange`, `offChange`, and `dispose` (see
+`src/cache/mod.rs`). The generated TypeScript declarations are
 output by the N-API build; do not hand-edit them.
 
 ## Build and test
