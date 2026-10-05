@@ -52,18 +52,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Migrated the CI workflow to pnpm 11 with dependency caching across
-  the test, build, and publish jobs; publishing now runs
-  `pnpm publish --no-git-checks`
 - Updated the README: a new tagline ("A practical Markdown parser
   written in Rust"), a Next.js integration section documenting
   `serverExternalPackages`, and removal of the `peisar-ssg` migration
   notes
-
-### Removed
-
-- `package-lock.json`, replaced by `pnpm-lock.yaml`
-- The `test` script alias; run `wf:test` instead
 
 ### Notes
 
