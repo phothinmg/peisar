@@ -10,7 +10,7 @@
 
 [![NPM](https://nodei.co/npm/peisar.svg)](https://nodei.co/npm/peisar/)
 
-[![Documentation][docs_img]][docs] [![CI Status][ci_badge]][ci_link]
+[![Documentation][docs_img]][docs]
 
 **The project is still under active development, and its API may change. It will stabilize in the next major release.**
 
@@ -505,5 +505,3 @@ Security policy: [SECURITY.md](SECURITY.md)
 [ptm]: https://github.com/phothinmg
 [docs]: https://docs.rs/peisar "Documentation"
 [docs_img]: https://docs.rs/peisar/badge.svg "Documentation"
-[ci_badge]: https://github.com/phothinmg/peisar/actions/workflows/ci.yaml/badge.svg "CI Status"
-[ci_link]: https://github.com/phothinmg/peisar/actions/workflows/ci.yaml "Workflow Link"
