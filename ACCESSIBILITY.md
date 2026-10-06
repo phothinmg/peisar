@@ -1,98 +1,99 @@
 # Accessibility
 
-Accessibility is a core priority for open-source projects. We want everyone — including people with disabilities and people using assistive technology — to be able to read, navigate, and contribute to this site.
+Peisar is an open-source Markdown parser and renderer. We want its
+documentation, examples, APIs, and generated HTML to be usable by people with
+disabilities and by people using keyboards, screen readers, magnification, or
+other assistive technology.
 
+Because Peisar is a library, the accessibility of a final website or
+application also depends on the Markdown content, styles, scripts, and user
+interface provided by the application that uses it. This document describes
+what the project maintains and how to report a barrier.
 
-<!--
-Include a brief statement describing why accessibility matters to your
-project, who should be able to use and contribute to it, and what this
-document covers, such as your accessibility commitments, contributor
-expectations, and issue-reporting process.
+## Our commitments
 
-Write for people who may read this after encountering a barrier. Use plain
-language and describe user experiences rather than relying on legal
-language, technical jargon, or standards codes.
--->
+We aim to:
 
-## Priorities
+- write documentation and examples in clear language and use meaningful
+  headings, links, and code samples;
+- keep project documentation usable with keyboard navigation and assistive
+  technology where the hosting platform supports it;
+- preserve meaningful Markdown structure when rendering HTML, including
+  headings, lists, tables, links, and alternative text supplied for images;
+- avoid changes that unnecessarily remove semantic HTML or make generated
+  output harder for consuming applications to make accessible; and
+- consider accessibility impact when reviewing user-facing documentation,
+  examples, and rendering changes.
 
-<!--
-Describe the outcomes the project prioritizes and how it works toward them.
-If you name a WCAG level as an accessibility target, make clear that it is
-an aspirational goal rather than a verified conformance claim. Only claim
-conformance after an evaluation, and identify the evaluated scope, date,
-method, and evaluator. Also describe the areas you prioritize, such as
-keyboard, screen reader, content, or language support.
--->
+We do not claim that Peisar, its documentation, or HTML produced from arbitrary
+Markdown conforms to a particular accessibility standard. Applications using
+Peisar remain responsible for evaluating their complete user experience.
+
+## Guidance for users of Peisar
+
+When using Peisar to render Markdown in an application, use the generated HTML
+as semantic content rather than replacing its structure with non-semantic
+elements. In particular:
+
+- use one logical heading hierarchy;
+- provide useful alternative text for informative images;
+- ensure links describe their destination or purpose;
+- give tables headers and avoid using tables only for visual layout;
+- provide captions, transcripts, or other alternatives for audio and video;
+- make custom controls and interactive content keyboard-operable; and
+- test the rendered page with the browsers and assistive technology used by
+  your audience.
+
+The repository's examples demonstrate integration, not a guarantee that the
+example applications meet every accessibility need.
 
 ## Contributor expectations
 
-<!--
-Describe the accessibility guardrails that apply to contributions,
-including relevant testing, documentation, and continuous integration
-checks. Name specific tools only when the project uses them, and explain
-what evidence contributors should include with user-facing changes.
--->
+Contributors should consider accessibility when changing documentation,
+examples, public APIs, or HTML rendering. User-facing changes should preserve
+semantic structure and should not rely only on color, pointer input, or visual
+position to convey information or complete a task.
 
-## Reporting accessibility issues
+When a change affects rendered HTML or an example application, describe any
+accessibility impact in the pull request and include appropriate tests or
+manual verification. If a trade-off is necessary, explain it so maintainers
+and users can evaluate it.
 
-<!--
-Provide a direct, accessible way to report a barrier or request help.
-Invite useful context such as the affected task, URL, observed behavior,
-browser, operating system, and assistive technology. Make screenshots or
-recordings optional and do not require disability disclosure.
--->
+## Reporting an accessibility issue
 
-### Severity
+Please report accessibility barriers through the
+[GitHub issue tracker](https://github.com/phothinmg/peisar/issues). You do not
+need to disclose a disability or provide a screenshot, recording, or personal
+information.
 
-<!--
-If your project uses severity levels, define them and give practical
-examples based on how strongly a barrier affects a user's ability to
-complete a task. Keep labels consistent with your issue template and
-resolution targets if those processes exist. Maintainers can assign or
-confirm severity during triage; reporters do not need to.
--->
+Useful details include:
 
-### How we respond
+- the task you were trying to complete;
+- the Markdown input, documentation page, example, or API involved;
+- what happened and what you expected instead;
+- the Peisar version and, if relevant, your browser or Node.js version; and
+- the operating system, browser, and assistive technology involved, if you are
+  comfortable sharing them.
 
-<!--
-Explain what reporters can expect after submitting an accessibility issue,
-including acknowledgement, status updates, workarounds, expected timelines,
-and opportunities to verify a fix. Use commitments your project can
-consistently uphold.
--->
+If possible, include a small reproducible Markdown example. Please remove any
+private or sensitive information first.
 
-## Ownership and maintenance
+## How we respond
 
-<!--
-Identify the team, role, or maintainer responsible for accessibility and
-describe their responsibilities to the project. Include the review cadence
-and how ownership transfers when responsibilities change.
--->
+Maintainers will triage reported barriers, request only the information needed
+to reproduce them, and track confirmed issues publicly when appropriate. We
+will prioritize barriers that prevent someone from reading documentation,
+using the library, or completing a core task. We cannot promise a specific
+resolution time, but we will provide status updates as investigation and fixes
+progress.
 
-## Supported environments
+If you can suggest or verify a fix, contributions and follow-up feedback are
+welcome.
 
-<!--
-List the platforms, devices, browsers, input methods, and assistive
-technologies the project supports or has tested. Include versions where
-useful, note partial support, and avoid implying support for combinations
-that have not been evaluated.
--->
+## Improving this statement
 
-## Known limitations
-
-<!--
-Describe known barriers in terms of the affected user experience, such as
-"videos do not have captions," rather than standards codes. Include
-available workarounds or equivalent access and link to tracked issues. If
-no limitations are currently documented, describe what has been tested
-instead of claiming that no barriers exist.
--->
-
-## Feedback and improvements
-
-<!--
-Explain how users and contributors can suggest improvements to this
-statement or the project's accessibility practices. Direct active
-accessibility barriers to the reporting process above.
--->
+Accessibility practices evolve with the project and its users. To suggest an
+improvement to this statement or to the project's accessibility approach, open
+an issue in the [GitHub issue tracker](https://github.com/phothinmg/peisar/issues).
+For an active accessibility barrier, use the reporting process above so it can
+be triaged promptly.

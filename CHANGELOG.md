@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Rustdoc for the `peisar::cache` module (module-level overview with a Rust
+  usage example, discovery/disk-format/threading sections, and doc comments
+  for `PeisarCache`, `CachedContent`, `start_watching`, `get`, `all`, and the
+  file-discovery helpers in `cache::file`)
+- A "File cache" subsection in the README's Rust section covering
+  `PeisarCache::with_config`, `all()`, `get()`, `start_watching()`, and the
+  drop-based cleanup, compile-checked by a new `cache_paths` test in
+  `tests/readme_paths.rs`
+- `PeisarEmphasisLevel`, `PeisarTaskState`, `PeisarTableCellAlignment`, and
+  `PeisarTableCellAlignments` type unions in the generated TypeScript
+  declarations (via the `dtsHeaderFile` in `napi.config.json`); in the
+  JavaScript AST, `Emphasis.level`, `ListItem.task`, and
+  `Table.alignments` now surface as string literals (`"Bold"`,
+  `"Checked"`, `["Left", "Center"]`) instead of numeric enums
+
+### Changed
+
+- N-API bindings are now optional behind the `npm` Cargo feature: the crate
+  builds as a plain `rlib` without it, and `npm run build:local` (and the
+  `napi` invocations in `scripts/build.sh` / `scripts/wf_tests.sh`) enable
+  it explicitly
+- Bumped the README's Rust dependency snippet to the published `0.3.0`
+  version
+
 ## [0.3.0] - 2026-10-06
 
 ### Added

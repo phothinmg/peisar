@@ -8,12 +8,12 @@
 //! - `line` is the line index (0 = first line),
 //! - `column` is the character column within that line,
 //! - `offset` is the byte offset from the start of the input.
-
+#[cfg(feature = "npm")]
 use napi_derive::napi;
 use serde::Serialize;
 
 /// A zero-based point in the source text.
-#[napi(object)]
+#[cfg_attr(feature = "npm", napi(object))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
 pub struct Position {
     /// Line number, 0-based.
@@ -28,7 +28,7 @@ pub struct Position {
 ///
 /// `start` is inclusive and `end` is exclusive; both positions point into the
 /// original source string.
-#[napi(object)]
+#[cfg_attr(feature = "npm", napi(object))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
 pub struct Span {
     /// The start position (inclusive).

@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { Peisar, PeisarCache } = require("./index.js");
+const { Peisar, PeisarCache } = require("./index.cjs");
 
 test("parses Markdown into an AST and renders a fragment", () => {
   const document = new Peisar("# Hello **world**", { fragment: true });
@@ -21,7 +21,7 @@ test("parses Markdown into an AST and renders a fragment", () => {
       },
       {
         type: "Emphasis",
-        level: 1,
+        level: "Bold",
         children: [
           {
             type: "Text",

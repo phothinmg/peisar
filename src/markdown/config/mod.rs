@@ -6,6 +6,7 @@
 
 use crate::markdown::ast::AstOptions;
 use crate::markdown::html::RenderOptions;
+#[cfg(feature = "npm")]
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 
@@ -25,7 +26,7 @@ use serde::{Deserialize, Serialize};
 /// | `charset`  | `true`      |
 /// | `viewport` | `true`      |
 /// | `file_name`, `title`, `body_class`, `style` | `null` |
-#[napi(object)]
+#[cfg_attr(feature = "npm", napi(object))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PeisarOptions {
     /// Enable GitHub Flavored Markdown (tables, strikethrough, task lists,
@@ -58,7 +59,7 @@ pub struct PeisarOptions {
     /// Default: `None`.
     pub style: Option<String>,
 }
-#[napi]
+#[cfg_attr(feature = "npm", napi)]
 impl Default for PeisarOptions {
     fn default() -> Self {
         Self {

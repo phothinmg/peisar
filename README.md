@@ -10,6 +10,10 @@
 
 [![NPM](https://nodei.co/npm/peisar.svg)](https://nodei.co/npm/peisar/)
 
+[![Documentation][docs_img]][docs] [![CI Status][ci_badge]][ci_link]
+
+**The project is still under active development, and its API may change. It will stabilize in the next major release.**
+
 Peisar parses CommonMark Markdown with GitHub Flavored Markdown (GFM),
 Kramdown block attributes, YAML front matter, source spans, AST visitors, and
 custom parser hooks.
@@ -337,12 +341,13 @@ Add the crate to a Rust project:
 
 ```toml
 [dependencies]
-peisar = "0.2.0"
+peisar = "0.3.0"
 ```
 
 The public Rust API is module-based. Import the parser from
-`peisar::markdown::ast`, the renderer from `peisar::markdown::html`, and the
-high-level document wrapper from `peisar::markdown::peisar`.
+`peisar::markdown::ast`, the renderer from `peisar::markdown::html`, the
+high-level document wrapper from `peisar::markdown::peisar`, and the file
+cache from `peisar::cache`.
 
 ### Parse and render
 
@@ -383,9 +388,9 @@ assert_eq!(document.html(), "<h1>Hello</h1>\n");
 ### Front matter and visitors
 
 ```rust
-use peisar::frontmatter::parse_markdown_frontmatter;
+use peisar::frontmatter::frontmatter;
 
-let parsed = parse_markdown_frontmatter("---\ntitle: Hello\n---\n\n# Hello")?;
+let parsed = frontmatter("---\ntitle: Hello\n---\n\n# Hello")?;
 assert_eq!(parsed.yaml_data().unwrap()["title"], "Hello");
 assert_eq!(parsed.pure_markdown_content(), "# Hello");
 ```
@@ -404,6 +409,48 @@ are `VisitControl` and `InlineVisitControl` from that same `visitor` module.
 `peisar::markdown::ast` for integration with Peisar internals, but the
 hook-enabled parser entry point is not yet public to external Rust consumers.
 Use `useParser` from Node.js for registered custom syntax today.
+
+### File cache
+
+The JavaScript `PeisarCache` class has a Rust equivalent,
+`peisar::cache::PeisarCache`. It loads every Markdown file under an entry
+directory (plus optional assets) into memory, mirrors them to a
+`.peisar_cache` directory on disk, and keeps both in sync with recursive
+file-watching once `start_watching()` is called.
+
+```rust
+use peisar::cache::{CachedContent, PeisarCache};
+
+// Markdown from "contents", assets from "public". Relative paths are
+// resolved against the current working directory.
+let mut cache = PeisarCache::with_config("contents", Some("public"))?;
+
+// Every cached Markdown file: absolute path -> raw text.
+for (path, text) in cache.all() {
+    println!("{} ({} bytes)", path.display(), text.len());
+}
+
+// Single entries keep their variant: Markdown is `Text`, binary assets
+// are `Binary`.
+let index = std::env::current_dir()?.join("contents").join("index.md");
+match cache.get(&index) {
+    Some(CachedContent::Text(md)) => println!("{md}"),
+    Some(CachedContent::Binary(bytes)) => println!("{} bytes", bytes.len()),
+    None => println!("not cached"),
+}
+
+// Keep memory and disk in sync with the filesystem.
+cache.start_watching()?;
+// Dropping the cache stops the watcher and joins the persistence
+// worker; Rust consumers need no explicit dispose.
+```
+
+The cache is keyed by absolute paths, so keys from `all()` can be passed
+straight back to `get()`. `all()` returns only text entries; use `get()` to
+read binary assets. Construction persists the snapshot to `.peisar_cache`
+and appends that directory to `.gitignore` when one exists; set
+`PEISAR_CACHE_FORMAT=bincode` for compact `.bin` entries instead of the
+default `.json`.
 
 
 ## Development
@@ -453,5 +500,10 @@ src/
 
 Security policy: [SECURITY.md](SECURITY.md)
 
+<!-- Links and Badges -->
 [license]: LICENSE
 [ptm]: https://github.com/phothinmg
+[docs]: https://docs.rs/peisar "Documentation"
+[docs_img]: https://docs.rs/peisar/badge.svg "Documentation"
+[ci_badge]: https://github.com/phothinmg/peisar/actions/workflows/ci.yaml/badge.svg "CI Status"
+[ci_link]: https://github.com/phothinmg/peisar/actions/workflows/ci.yaml "Workflow Link"

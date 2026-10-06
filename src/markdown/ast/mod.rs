@@ -1,30 +1,30 @@
-mod js;
+mod control;
 mod options;
 mod parsers;
 #[cfg(test)]
 mod tests;
 pub mod tokens;
 
+use crate::frontmatter::frontmatter;
+pub use control::{Parser, Visitor};
+use control::{RegisteredParser, RegisteredVisitor};
+#[cfg(feature = "npm")]
+use napi::Env;
 pub use options::AstOptions;
 pub use parsers::Document;
 pub use parsers::hooks::{AstParser, BlockParseContext, InlineParseContext, ParseHooks};
 pub use parsers::inline::{LinkRefMap, parse_inline, parse_inline_with_refs};
-pub use parsers::visitor::{self, AstVisitor};
-
-use crate::frontmatter::parse_markdown_frontmatter;
-pub use js::{Parser, Visitor};
-use js::{RegisteredJsParser, RegisteredJsVisitor};
-use napi::Env;
 use parsers::md_to_ast_with_hooks;
 use parsers::visitor::visit_document_mut;
+pub use parsers::visitor::{self, AstVisitor};
 use serde_json::Value;
 pub struct PeisarAst {
     /// The parsed AST document (private — use the `ast` getter
     /// [`get_ast`][Self::get_ast] or [`frontmatter`][Self::get_frontmatter]
     /// getters which auto-run visitors).
     ast: Document,
-    /// Registered JS visitors (adapter wrappers).
-    visitors: Vec<RegisteredJsVisitor>,
+    /// Registered visitor adapters.
+    visitors: Vec<RegisteredVisitor>,
     /// Parsed YAML front-matter (if any).
     frontmatter: Option<Value>,
     /// The raw Markdown source (kept for re-parsing when parser hooks are
@@ -32,8 +32,8 @@ pub struct PeisarAst {
     raw_md: String,
     /// Parsing options used for (re-)parsing.
     ast_opts: AstOptions,
-    /// Registered JS parser hooks (adapter wrappers).
-    parsers: Vec<RegisteredJsParser>,
+    /// Registered parser hook adapters.
+    parsers: Vec<RegisteredParser>,
 }
 
 impl PeisarAst {
@@ -43,11 +43,10 @@ impl PeisarAst {
         let f_n = opts.file_name.clone();
 
         // Parse front matter (reuse the same logic as PeisarAst).
-        let (md_content, frontmatter) = match parse_markdown_frontmatter(&raw_md) {
+        let (md_content, frontmatter) = match frontmatter(raw_md.to_string()) {
             Ok(parsed) => parsed.into_parts(),
             Err(_) => (raw_md.clone(), None),
         };
-
         let ast = parsers::md_to_ast(&md_content, &opts, f_n);
 
         Self {
@@ -60,7 +59,7 @@ impl PeisarAst {
         }
     }
 
-    /// Register a JS visitor (\"plugin\").
+    /// Register a visitor plugin.
     ///
     /// `visitor` is a plain JS object with two optional function
     /// properties:
@@ -75,11 +74,17 @@ impl PeisarAst {
     /// Either callback may be `null` / omitted to skip that node kind.
     /// The JS function receives a `Block` or `Inline` and returns a
     /// `VisitControlJs` / `InlineVisitControlJs` (or `undefined`).
+    #[cfg(feature = "npm")]
     pub fn add_visitor(&mut self, env: Env, visitor: Visitor) {
         self.visitors.push(visitor.register(env));
     }
 
-    /// Register a JS parser hook.
+    #[cfg(not(feature = "npm"))]
+    pub fn add_visitor(&mut self, visitor: Visitor) {
+        self.visitors.push(visitor.register());
+    }
+
+    /// Register a parser hook.
     ///
     /// `parser` is a plain JS object with two optional function properties:
     ///
@@ -93,8 +98,15 @@ impl PeisarAst {
     /// Because the document is parsed eagerly at construction, registering
     /// a parser hook re-parses the stored raw Markdown immediately (then
     /// re-runs any registered visitors on the fresh AST).
+    #[cfg(feature = "npm")]
     pub fn add_parser(&mut self, env: Env, parser: Parser) {
         self.parsers.push(parser.register(env));
+        self.reparse();
+    }
+
+    #[cfg(not(feature = "npm"))]
+    pub fn add_parser(&mut self, parser: Parser) {
+        self.parsers.push(parser.register());
         self.reparse();
     }
 
@@ -108,11 +120,10 @@ impl PeisarAst {
     /// parser hooks, replacing the internal AST.  Front matter is
     /// re-extracted; registered visitors run afterwards on next access.
     pub fn reparse(&mut self) {
-        let (md_content, frontmatter) = match parse_markdown_frontmatter(&self.raw_md) {
+        let (md_content, frontmatter) = match frontmatter(self.raw_md.to_string()) {
             Ok(parsed) => parsed.into_parts(),
             Err(_) => (self.raw_md.clone(), None),
         };
-
         // Build the hook registry from the registered JS adapters.
         let mut hooks = ParseHooks::empty();
         for p in &self.parsers {

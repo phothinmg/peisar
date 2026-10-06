@@ -1,18 +1,17 @@
+use crate::markdown::ast::tokens::token::{EmphasisLevel, TableCellAlignment, TaskState};
 use crate::markdown::ast::{
     Document,
     tokens::{
         Attributes,
-        token::{
-            Block, EmphasisLevel, Inline, ListItem, Table as AstTable, TableCellAlignment,
-            TaskState,
-        },
+        token::{Block, Inline, ListItem, Table as AstTable},
     },
 };
+#[cfg(feature = "npm")]
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 
 /// Options that control how the AST is rendered to HTML.
-#[napi(object)]
+#[cfg_attr(feature = "npm", napi(object))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RenderOptions {
     /// If `true`, emit only the body content (no `<!DOCTYPE>`, `<html>`,
@@ -36,7 +35,7 @@ pub struct RenderOptions {
     /// Default: `None`.
     pub style: Option<String>,
 }
-#[napi]
+#[cfg_attr(feature = "npm", napi)]
 impl Default for RenderOptions {
     fn default() -> Self {
         Self {
@@ -51,7 +50,7 @@ impl Default for RenderOptions {
 }
 /// Convenience: create `Some(true)` for fragment mode (backward-compatible
 /// with the old `render_document(doc, Some(bool))` API).
-#[napi]
+#[cfg_attr(feature = "npm", napi)]
 impl From<bool> for RenderOptions {
     fn from(fragment: bool) -> Self {
         Self {

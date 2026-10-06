@@ -11,8 +11,8 @@ description = "A practical Markdown parser written in Rust"
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["preserve_order"] }
-napi = { version = "3", features = ["serde-json"] }
-napi-derive = "3"
+napi = { version = "3", features = ["serde-json"], optional = true }
+napi-derive = { version = "3", optional = true }
 serde_yaml = "0.9"
 blake3 = "1.4"
 notify = "6"
@@ -28,3 +28,8 @@ path = "src/lib.rs"
 # `rlib` for the CLI binary + integration tests; `cdylib` for the Node
 # native addon (only built when the `napi` feature is on).
 crate-type = ["rlib", "cdylib"]
+
+[features]
+default = []
+# When this feature is active, it pulls in napi-rs dependencies
+npm = ["dep:napi", "dep:napi-derive"]

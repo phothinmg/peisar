@@ -5,14 +5,14 @@
 //! struct stores the parsed `id`, `classes`, and arbitrary key/value pairs
 //! and can render them as an HTML attribute string via
 //! [`Attributes::to_html_attr_string`].
-
+#[cfg(feature = "npm")]
 use napi_derive::napi;
 use serde::Serialize;
 
 /// Parsed Kramdown block attributes (`{:#id .class key="val"}`).
 ///
 
-#[napi(object)]
+#[cfg_attr(feature = "npm", napi(object))]
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
 pub struct Attributes {
     /// HTML `id` attribute.

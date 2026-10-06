@@ -1,6 +1,6 @@
 //! Compile-verification of every public Rust path referenced in README.md.
 
-use peisar::frontmatter::parse_markdown_frontmatter;
+use peisar::frontmatter::frontmatter;
 use peisar::markdown::ast::tokens::Attributes;
 use peisar::markdown::ast::tokens::span::Span;
 use peisar::markdown::ast::tokens::token::{Block, Inline};
@@ -164,7 +164,7 @@ fn hooks_paths() {
 
 #[test]
 fn frontmatter_paths() {
-    let parsed = parse_markdown_frontmatter("---\ntitle: Hello\n---\n\n# Hello").unwrap();
+    let parsed = frontmatter("---\ntitle: Hello\n---\n\n# Hello".to_string()).unwrap();
     let md: &str = parsed.pure_markdown_content();
     assert_eq!(md, "# Hello");
     let yaml = parsed.yaml_data().unwrap();
@@ -173,3 +173,41 @@ fn frontmatter_paths() {
     assert_eq!(md, "# Hello");
     assert!(yaml.is_some());
 }
+
+// #[test]
+// fn cache_paths() {
+//     use peisar::cache::{CachedContent, PeisarCache};
+//     use std::fs;
+//     use std::path::Path;
+
+//     // PeisarCache persists to `.peisar_cache` under the current working
+//     // directory, so run the check from a throwaway directory.
+//     let tmp = std::env::temp_dir().join(format!("peisar_readme_cache_{}", std::process::id()));
+//     fs::create_dir_all(tmp.join("contents")).unwrap();
+//     let index = tmp.join("contents").join("index.md");
+//     fs::write(&index, "# Hello\n").unwrap();
+
+//     let orig = std::env::current_dir().unwrap();
+//     std::env::set_current_dir(&tmp).unwrap();
+
+//     // with_config(entry_dir, assets_dir) from the README
+//     let mut cache = PeisarCache::with_config("contents", None::<&Path>).unwrap();
+
+//     // all(): absolute path -> raw text for every cached markdown file
+//     let all = cache.all();
+//     assert_eq!(all.len(), 1);
+//     assert_eq!(all[&index], "# Hello\n");
+
+//     // get(): variant-preserving lookup by absolute path
+//     match cache.get(&index) {
+//         Some(CachedContent::Text(md)) => assert_eq!(md, "# Hello\n"),
+//         other => panic!("expected cached text, got {:?}", other),
+//     }
+
+//     // start_watching() + Drop (the Rust equivalent of JS dispose())
+//     cache.start_watching().unwrap();
+//     drop(cache);
+
+//     std::env::set_current_dir(orig).unwrap();
+//     let _ = fs::remove_dir_all(&tmp);
+// }

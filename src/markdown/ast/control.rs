@@ -42,7 +42,10 @@
 use crate::markdown::ast::parsers::hooks::{AstParser, BlockParseContext, InlineParseContext};
 use crate::markdown::ast::parsers::visitor::{AstVisitor, InlineVisitControl, VisitControl};
 use crate::markdown::ast::tokens::token::{Block, Inline};
+
+#[cfg(feature = "npm")]
 use napi::bindgen_prelude::{Env, Function, FunctionRef};
+#[cfg(feature = "npm")]
 use napi_derive::napi;
 
 // ---------------------------------------------------------------------------
@@ -53,9 +56,9 @@ use napi_derive::napi;
 ///
 /// Returned from the JS `visitBlock` callback.  All fields are optional;
 /// omitting a field means "no change" for that operation.
-#[napi(object)]
+#[cfg_attr(feature = "npm", napi(object))]
 #[derive(Debug, Default, Clone)]
-pub struct VisitControlJs {
+pub struct VisitorControl {
     /// Nodes to insert before the current node.
     pub insert_before: Option<Vec<Block>>,
     /// Nodes to insert after the current node.
@@ -68,8 +71,8 @@ pub struct VisitControlJs {
     pub recurse: Option<bool>,
 }
 
-impl From<VisitControlJs> for VisitControl {
-    fn from(js: VisitControlJs) -> Self {
+impl From<VisitorControl> for VisitControl {
+    fn from(js: VisitorControl) -> Self {
         VisitControl {
             insert_before: js.insert_before.unwrap_or_default(),
             insert_after: js.insert_after.unwrap_or_default(),
@@ -79,14 +82,13 @@ impl From<VisitControlJs> for VisitControl {
         }
     }
 }
-
 /// JS-facing mirror of [`InlineVisitControl`].
 ///
 /// Returned from the JS `visitInline` callback.  All fields are optional;
 /// omitting a field means "no change" for that operation.
-#[napi(object)]
+#[cfg_attr(feature = "npm", napi(object))]
 #[derive(Debug, Default, Clone)]
-pub struct InlineVisitControlJs {
+pub struct InlineVisitorControl {
     /// Nodes to insert before the current node.
     pub insert_before: Option<Vec<Inline>>,
     /// Nodes to insert after the current node.
@@ -99,8 +101,8 @@ pub struct InlineVisitControlJs {
     pub recurse: Option<bool>,
 }
 
-impl From<InlineVisitControlJs> for InlineVisitControl {
-    fn from(js: InlineVisitControlJs) -> Self {
+impl From<InlineVisitorControl> for InlineVisitControl {
+    fn from(js: InlineVisitorControl) -> Self {
         InlineVisitControl {
             insert_before: js.insert_before.unwrap_or_default(),
             insert_after: js.insert_after.unwrap_or_default(),
@@ -110,7 +112,6 @@ impl From<InlineVisitControlJs> for InlineVisitControl {
         }
     }
 }
-
 // ---------------------------------------------------------------------------
 // Synchronous JS callbacks (napi FunctionRef wrappers)
 // ---------------------------------------------------------------------------
@@ -130,18 +131,22 @@ impl From<InlineVisitControlJs> for InlineVisitControl {
 
 /// Synchronous block-visitor callback. Receives a `Block`, returns
 /// `VisitControlJs` (or `undefined` for no changes).
-#[napi]
-pub type BlockCallback = FunctionRef<(Block,), Option<VisitControlJs>>;
 
+#[cfg(feature = "npm")]
+#[napi]
+pub type BlockCallback = FunctionRef<(Block,), Option<VisitorControl>>;
+#[cfg(not(feature = "npm"))]
+pub type BlockCallback = Box<dyn Fn(Block) -> Option<VisitorControl> + Send + 'static>;
 /// Synchronous inline-visitor callback. Receives an `Inline`, returns
 /// `InlineVisitControlJs` (or `undefined` for no changes).
+#[cfg(feature = "npm")]
 #[napi]
-pub type InlineCallback = FunctionRef<(Inline,), Option<InlineVisitControlJs>>;
-
+pub type InlineCallback = FunctionRef<(Inline,), Option<InlineVisitorControl>>;
+#[cfg(not(feature = "npm"))]
+pub type InlineCallback = Box<dyn Fn(Inline) -> Option<InlineVisitorControl> + Send + 'static>;
 // ---------------------------------------------------------------------------
 // JsVisitor object shape and registered AstVisitor adapter
 // ---------------------------------------------------------------------------
-
 /// JavaScript object shape for a visitor callback pair.
 ///
 /// On the JS side it is a plain object with two optional
@@ -156,7 +161,7 @@ pub type InlineCallback = FunctionRef<(Inline,), Option<InlineVisitControlJs>>;
 /// ```
 ///
 /// Either property may be omitted / `null` to skip that node kind.
-#[napi(object, object_to_js = false)]
+#[cfg_attr(feature = "npm", napi(object, object_to_js = false))]
 #[derive(Default)]
 pub struct Visitor {
     /// Optional JS callback for block nodes (JS: `visitBlock`).
@@ -166,25 +171,37 @@ pub struct Visitor {
 }
 
 impl Visitor {
-    pub(crate) fn register(self, env: Env) -> RegisteredJsVisitor {
-        RegisteredJsVisitor {
+    #[cfg(feature = "npm")]
+    pub(crate) fn register(self, env: Env) -> RegisteredVisitorJs {
+        RegisteredVisitorJs {
             visit_block: self.visit_block,
             visit_inline: self.visit_inline,
             env,
         }
     }
+    #[cfg(not(feature = "npm"))]
+    pub(crate) fn register(self) -> RegisteredVisitorRs {
+        RegisteredVisitorRs {
+            visit_block: self.visit_block,
+            visit_inline: self.visit_inline,
+        }
+    }
 }
 
 /// Internal adapter that keeps the environment required by callback references.
-pub(crate) struct RegisteredJsVisitor {
-    visit_block: Option<BlockCallback>,
-    visit_inline: Option<InlineCallback>,
+#[cfg(feature = "npm")]
+pub(crate) struct RegisteredVisitorJs {
+    pub visit_block: Option<BlockCallback>,
+    pub visit_inline: Option<InlineCallback>,
     /// The napi `Env` captured at registration time, used to `borrow_back`
     /// the `FunctionRef`s when calling them.
-    env: Env,
+    pub env: Env,
 }
-
-impl AstVisitor for RegisteredJsVisitor {
+#[cfg(feature = "npm")]
+pub type RegisteredVisitor = RegisteredVisitorJs;
+#[cfg(feature = "npm")]
+impl AstVisitor for RegisteredVisitorJs {
+    #[cfg(feature = "npm")]
     fn visit_block(&mut self, block: &mut Block) -> VisitControl {
         let cb = match &self.visit_block {
             Some(cb) => cb,
@@ -192,7 +209,7 @@ impl AstVisitor for RegisteredJsVisitor {
         };
         // `borrow_back` creates a short-lived `Function` bound to `env`;
         // calling it runs the JS function inline on this (main) thread.
-        let func: Function<(Block,), Option<VisitControlJs>> = match cb.borrow_back(&self.env) {
+        let func: Function<(Block,), Option<VisitorControl>> = match cb.borrow_back(&self.env) {
             Ok(f) => f,
             Err(_) => return VisitControl::default(),
         };
@@ -201,13 +218,13 @@ impl AstVisitor for RegisteredJsVisitor {
         let js_ctrl = func.call((snapshot,)).unwrap_or(None).unwrap_or_default();
         js_ctrl.into()
     }
-
+    #[cfg(feature = "npm")]
     fn visit_inline(&mut self, inline: &mut Inline) -> InlineVisitControl {
         let cb = match &self.visit_inline {
             Some(cb) => cb,
             _ => return InlineVisitControl::default(),
         };
-        let func: Function<(Inline,), Option<InlineVisitControlJs>> =
+        let func: Function<(Inline,), Option<InlineVisitorControl>> =
             match cb.borrow_back(&self.env) {
                 Ok(f) => f,
                 Err(_) => return InlineVisitControl::default(),
@@ -218,7 +235,32 @@ impl AstVisitor for RegisteredJsVisitor {
         js_ctrl.into()
     }
 }
-
+#[cfg(not(feature = "npm"))]
+pub(crate) struct RegisteredVisitorRs {
+    pub visit_block: Option<BlockCallback>,
+    pub visit_inline: Option<InlineCallback>,
+}
+#[cfg(not(feature = "npm"))]
+pub(crate) type RegisteredVisitor = RegisteredVisitorRs;
+#[cfg(not(feature = "npm"))]
+impl AstVisitor for RegisteredVisitorRs {
+    fn visit_block(&mut self, block: &mut Block) -> VisitControl {
+        let cb = match &self.visit_block {
+            Some(cb) => cb,
+            _ => return VisitControl::default(),
+        };
+        let snapshot = block.clone();
+        cb(snapshot).unwrap_or_default().into()
+    }
+    fn visit_inline(&mut self, inline: &mut Inline) -> InlineVisitControl {
+        let cb = match &self.visit_inline {
+            Some(cb) => cb,
+            _ => return InlineVisitControl::default(),
+        };
+        let snapshot = inline.clone();
+        cb(snapshot).unwrap_or_default().into()
+    }
+}
 // ---------------------------------------------------------------------------
 // Custom parser hooks (JS interop)
 // ---------------------------------------------------------------------------
@@ -234,9 +276,9 @@ impl AstVisitor for RegisteredJsVisitor {
 ///
 /// All fields are optional; omitting `block` (or returning `undefined`)
 /// declines the position so the next hook / built-in parser handles it.
-#[napi(object)]
+#[cfg_attr(feature = "npm", napi(object))]
 #[derive(Debug, Default, Clone)]
-pub struct BlockParseResultJs {
+pub struct BlockParseResult {
     /// The parsed block node.
     pub block: Option<Block>,
     /// Number of source lines consumed (must be at least `1`).
@@ -247,9 +289,9 @@ pub struct BlockParseResultJs {
 ///
 /// All fields are optional; omitting `inline` (or returning `undefined`)
 /// declines the position so the next hook / built-in parser handles it.
-#[napi(object)]
+#[cfg_attr(feature = "npm", napi(object))]
 #[derive(Debug, Default, Clone)]
-pub struct InlineParseResultJs {
+pub struct InlineParseResult {
     /// The parsed inline node.
     pub inline: Option<Inline>,
     /// Number of characters consumed (`0` or missing declines).
@@ -258,41 +300,22 @@ pub struct InlineParseResultJs {
 
 /// Synchronous block parser hook. Receives a [`BlockParseContext`], returns
 /// a [`BlockParseResultJs`] (or `undefined` to decline).
+#[cfg(feature = "npm")]
 #[napi]
-pub type BlockParseCallback = FunctionRef<(BlockParseContext,), Option<BlockParseResultJs>>;
-
+pub type BlockParseCallback = FunctionRef<(BlockParseContext,), Option<BlockParseResult>>;
+#[cfg(not(feature = "npm"))]
+pub type BlockParseCallback =
+    Box<dyn Fn(BlockParseContext) -> Option<BlockParseResult> + Send + 'static>;
 /// Synchronous inline parser hook. Receives an [`InlineParseContext`],
 /// returns an [`InlineParseResultJs`] (or `undefined` to decline).
+#[cfg(feature = "npm")]
 #[napi]
-pub type InlineParseCallback = FunctionRef<(InlineParseContext,), Option<InlineParseResultJs>>;
-
-/// JavaScript object shape for a parser hook pair.
-///
-/// ```js
-/// const myParser = {
-///   parseBlock(ctx) {
-///     if (!ctx.line.startsWith(':::')) return;         // decline
-///     const name = ctx.line.slice(3).trim();
-///     return {
-///       block: { type: 'HtmlBlock', html: `<div data-name="${name}"></div>`, pos: { start: {}, end: {} } },
-///       consumed: 1,
-///     };
-///   },
-///   parseInline(ctx) {
-///     if (!ctx.rest.startsWith('@@')) return;          // decline
-///     const end = ctx.rest.indexOf(' ', 2);
-///     const name = end === -1 ? ctx.rest.slice(2) : ctx.rest.slice(2, end);
-///     return {
-///       inline: { type: 'HtmlInline', html: `<span data-name="${name}"></span>`, pos: { start: {}, end: {} } },
-///       consumed: name.length + 2,
-///     };
-///   },
-/// };
-/// document.useParser(myParser);
-/// ```
-///
+pub type InlineParseCallback = FunctionRef<(InlineParseContext,), Option<InlineParseResult>>;
+#[cfg(not(feature = "npm"))]
+pub type InlineParseCallback =
+    Box<dyn Fn(InlineParseContext) -> Option<InlineParseResult> + Send + 'static>;
 /// Either property may be omitted / `null` to skip that phase.
-#[napi(object, object_to_js = false)]
+#[cfg_attr(feature = "npm", napi(object, object_to_js = false))]
 #[derive(Default)]
 pub struct Parser {
     /// Optional JS block parser hook (JS: `parseBlock`).
@@ -302,29 +325,41 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub(crate) fn register(self, env: Env) -> RegisteredJsParser {
-        RegisteredJsParser {
+    #[cfg(feature = "npm")]
+    pub(crate) fn register(self, env: Env) -> RegisteredParserJs {
+        RegisteredParserJs {
             parse_block: self.parse_block,
             parse_inline: self.parse_inline,
             env,
+        }
+    }
+
+    #[cfg(not(feature = "npm"))]
+    pub(crate) fn register(self) -> RegisteredParserRs {
+        RegisteredParserRs {
+            parse_block: self.parse_block,
+            parse_inline: self.parse_inline,
         }
     }
 }
 
 /// Internal adapter that keeps the environment required by callback
 /// references, implementing the Rust [`AstParser`] trait.
-pub(crate) struct RegisteredJsParser {
-    parse_block: Option<BlockParseCallback>,
-    parse_inline: Option<InlineParseCallback>,
+#[cfg(feature = "npm")]
+pub(crate) struct RegisteredParserJs {
+    pub parse_block: Option<BlockParseCallback>,
+    pub parse_inline: Option<InlineParseCallback>,
     /// The napi `Env` captured at registration time, used to `borrow_back`
     /// the `FunctionRef`s when calling them.
-    env: Env,
+    pub env: Env,
 }
-
-impl AstParser for RegisteredJsParser {
+#[cfg(feature = "npm")]
+pub(crate) type RegisteredParser = RegisteredParserJs;
+#[cfg(feature = "npm")]
+impl AstParser for RegisteredParserJs {
     fn try_parse_block(&self, ctx: &BlockParseContext) -> Option<(Block, usize)> {
         let cb = self.parse_block.as_ref()?;
-        let func: Function<(BlockParseContext,), Option<BlockParseResultJs>> =
+        let func: Function<(BlockParseContext,), Option<BlockParseResult>> =
             match cb.borrow_back(&self.env) {
                 Ok(f) => f,
                 Err(e) => {
@@ -354,11 +389,11 @@ impl AstParser for RegisteredJsParser {
 
     fn try_parse_inline(&self, ctx: &InlineParseContext) -> Option<(Inline, usize)> {
         let cb = self.parse_inline.as_ref()?;
-        let func: Function<(InlineParseContext,), Option<InlineParseResultJs>> =
+        let func: Function<(InlineParseContext,), Option<InlineParseResult>> =
             match cb.borrow_back(&self.env) {
                 Ok(f) => f,
                 Err(e) => {
-                    eprintln!("{}", format!("parseInline hook could not be invoked: {e}"));
+                    eprintln!("parseInline hook could not be invoked: {e}");
                     return None;
                 }
             };
@@ -367,18 +402,39 @@ impl AstParser for RegisteredJsParser {
             Ok(r) => r?,
             Err(e) => {
                 eprintln!(
-                    "{}",
-                    format!(
-                        "parseInline hook returned an invalid result: {e}\n  \
+                    "parseInline hook returned an invalid result: {e}\n  \
                      note: the returned `inline` must be a complete node — every \
                      field (including `pos` with line/column/offset) is required"
-                    )
                 );
                 return None;
             }
         };
         let inline = result.inline?;
         let consumed = result.consumed.unwrap_or(0) as usize;
-        Some((inline, consumed))
+        (consumed > 0).then_some((inline, consumed))
+    }
+}
+#[cfg(not(feature = "npm"))]
+pub(crate) struct RegisteredParserRs {
+    pub parse_block: Option<BlockParseCallback>,
+    pub parse_inline: Option<InlineParseCallback>,
+}
+#[cfg(not(feature = "npm"))]
+pub(crate) type RegisteredParser = RegisteredParserRs;
+#[cfg(not(feature = "npm"))]
+impl AstParser for RegisteredParserRs {
+    fn try_parse_block(&self, ctx: &BlockParseContext) -> Option<(Block, usize)> {
+        let cb = self.parse_block.as_ref()?;
+        let result = cb(ctx.clone())?;
+        let block = result.block?;
+        let consumed = result.consumed.unwrap_or(1).max(1) as usize;
+        Some((block, consumed))
+    }
+    fn try_parse_inline(&self, ctx: &InlineParseContext) -> Option<(Inline, usize)> {
+        let cb = self.parse_inline.as_ref()?;
+        let result = cb(ctx.clone())?;
+        let inline = result.inline?;
+        let consumed = result.consumed.unwrap_or(0) as usize;
+        (consumed > 0).then_some((inline, consumed))
     }
 }

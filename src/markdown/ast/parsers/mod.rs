@@ -25,6 +25,7 @@ use crate::markdown::ast::options::AstOptions;
 use crate::markdown::ast::parsers::hooks::ParseHooks;
 use crate::markdown::ast::tokens::{span::Span, token::Block};
 use inline::LinkRefMap;
+#[cfg(feature = "npm")]
 use napi_derive::napi;
 use serde::Serialize;
 
@@ -38,7 +39,7 @@ use serde::Serialize;
 /// collected from the source text.
 ///
 
-#[napi(object)]
+#[cfg_attr(feature = "npm", napi(object))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Document {
     /// Always `"root"`.

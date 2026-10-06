@@ -1,23 +1,82 @@
-//! In-memory + on-disk cache of Markdown and asset files for the SSG.
+//! In-memory + on-disk cache of Markdown and asset files.
 //!
 //! [`PeisarCache`] loads every markdown file under an entry directory
 //! (plus optional assets) into memory, mirrors them to a `.peisar_cache`
 //! directory on disk, and — once [`PeisarCache::start_watching`] is called —
-//! keeps both in sync with recursive file-watching.
+//! keeps both in sync with recursive file-watching. It is the engine behind
+//! the `peisar-ssg` dev server, but it works as a plain Rust dependency too.
 //!
-//! ## Disk format
+//! # Rust usage
+//!
+//! Construct a cache with [`PeisarCache::new`] or
+//! [`PeisarCache::with_config`]. Construction walks the entry directory
+//! once, snapshots every discovered file into memory, and persists the
+//! snapshot to `.peisar_cache` before returning:
+//!
+//! ```no_run
+//! use peisar::cache::{CachedContent, PeisarCache};
+//!
+//! # fn main() -> std::io::Result<()> {
+//! // Markdown from "contents", assets from "public". Relative paths are
+//! // resolved against the current working directory.
+//! let mut cache = PeisarCache::with_config("contents", Some("public"))?;
+//!
+//! // Every cached markdown file, as absolute path -> raw text.
+//! for (path, text) in cache.all() {
+//!     println!("{} ({} bytes)", path.display(), text.len());
+//! }
+//!
+//! // Single entries keep their variant: markdown is `Text`, binary assets
+//! // are `Binary`. The cache is keyed by absolute paths, so keys from
+//! // `all()` — or `current_dir()`-joined paths — can be passed to `get()`.
+//! let index = std::env::current_dir()?.join("contents").join("index.md");
+//! match cache.get(&index) {
+//!     Some(CachedContent::Text(md)) => println!("{md}"),
+//!     Some(CachedContent::Binary(bytes)) => println!("{} bytes", bytes.len()),
+//!     None => println!("not cached"),
+//! }
+//!
+//! // Keep memory and disk in sync with the filesystem until the cache is
+//! // dropped (which stops the watcher and joins the worker thread).
+//! cache.start_watching()?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Discovery rules
+//!
+//! - *Markdown*: files under the entry directory whose extension is `md`,
+//!   `markdown`, `mdown`, `mkdn`, `mkd`, `mdwn`, `mkdown`, or `ron`; they are
+//!   cached as UTF-8 text.
+//! - *Assets*: files under the assets directory — the `public` directory of
+//!   the current working directory when no assets directory is given — with
+//!   a known image, script, style, font, or audio/video extension. Images,
+//!   fonts, and audio/video files are cached as raw bytes; `js`, `css`,
+//!   `map`, and `svg` are cached as UTF-8 text.
+//!
+//! # Disk format
 //!
 //! - Text (markdown) entries are stored as `.json` (default) or `.bin`
 //!   (when `PEISAR_CACHE_FORMAT=bincode`) files that embed the raw content
 //!   and the parsed front matter.
 //! - Binary assets are mirrored verbatim under their original names.
-//! - Writes are atomic (temp file + rename) and content-hashed so
-//!   unchanged entries are not rewritten.
+//! - Writes are atomic (temp file + rename) and content-hashed (BLAKE3) so
+//!   unchanged entries are not rewritten; files removed from the source
+//!   tree are pruned from the cache directory.
 //! - A `.peisar_cache` entry is appended to `.gitignore` automatically.
 //!
-//! ## JavaScript surface
+//! # Threading and lifecycle
 //!
-//! `new PeisarCache(entryDir, assetsDir?)`, `PeisarCache.withConfig`,
+//! Disk persistence runs on a background worker thread fed by a channel.
+//! Watcher events update the in-memory cache first, then enqueue an
+//! incremental update/remove/sync command so the watcher callback never
+//! blocks on I/O. Dropping a [`PeisarCache`] stops the watcher, closes the
+//! channel, and joins the worker thread — Rust consumers need no explicit
+//! `dispose()`.
+//!
+//! # JavaScript surface
+//!
+//! `new PeisarCache(entryDir, assetsDir?)`, `PeisarCache.withConfigJs`,
 //! `startWatchingJs()`, `getText`, `getBinary`, `listFiles`,
 //! `markdownFiles()`, `assetFiles()`, `onChange(cb) → id`, `offChange(id)`,
 //! `dispose()`.
@@ -27,7 +86,9 @@ use file::{
     ASSET_BINARY_EXTENSIONS, ASSET_EXTENSIONS, MARKDOWN_EXTENSIONS, collect_asset_files,
     collect_markdown_files,
 };
+#[cfg(feature = "npm")]
 use napi::bindgen_prelude::*;
+#[cfg(feature = "npm")]
 use napi_derive::napi;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
@@ -41,8 +102,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, RwLock, mpsc};
 use std::thread;
 
-/// A file-change event delivered to JavaScript `onChange` callbacks.
-#[napi(object)]
+/// A file-change event delivered to change callbacks
+/// (see [`PeisarCache::on_change`]).
+#[cfg_attr(feature = "npm", napi(object))]
 #[derive(Debug, Clone)]
 pub struct CacheChangeEvent {
     /// Absolute path of the changed file.
@@ -53,6 +115,9 @@ pub struct CacheChangeEvent {
     pub is_markdown: bool,
 }
 
+/// Serialized form of a cached text entry, embedded in every `.json` / `.bin`
+/// cache file: the source path relative to the working directory, the raw
+/// markdown, and its parsed front matter.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct CacheEntry {
     file_path: String,
@@ -62,6 +127,8 @@ struct CacheEntry {
     is_binary: bool,
 }
 
+/// Parse a leading `--- … ---` YAML front-matter block, returning `None`
+/// when the content does not start with one.
 fn parse_frontmatter(content: &str) -> Option<YamlValue> {
     let mut lines = content.lines();
     if let Some(first) = lines.next() {
@@ -86,10 +153,10 @@ fn parse_frontmatter(content: &str) -> Option<YamlValue> {
     }
 }
 
-/// An entry stored in the cache: raw UTF-8 text (markdown) or raw bytes
-/// (binary assets).  Exposed to JavaScript so JS consumers can branch on
-/// the variant.
-#[napi]
+/// An entry stored in the cache: raw UTF-8 text (markdown and textual
+/// assets) or raw bytes (binary assets). Exposed to JavaScript so JS
+/// consumers can branch on the variant.
+#[cfg_attr(feature = "npm", napi)]
 #[derive(Debug, Clone)]
 pub enum CachedContent {
     /// UTF-8 text content (markdown files and textual assets).
@@ -98,18 +165,24 @@ pub enum CachedContent {
     Binary(Vec<u8>),
 }
 
-/// JavaScript callback invoked on every cache change while watching.
-pub type JsChangeCallback = Box<dyn Fn(CacheChangeEvent) + Send + 'static>;
+/// Boxed change callback held in the subscription registry.
+///
+/// In npm builds, JavaScript callbacks are wrapped into a thread-safe
+/// function before they are stored because watcher events fire off-thread.
+pub type CacheChangeCallback = Box<dyn Fn(CacheChangeEvent) + Send + 'static>;
+
+/// Backward-compatible name for callbacks used by the JavaScript binding.
+pub type JsChangeCallback = CacheChangeCallback;
 
 /// Shared registry of JS change callbacks, keyed by subscription id.
 #[derive(Clone, Default)]
 struct ChangeCallbacks {
-    inner: Arc<std::sync::Mutex<HashMap<u32, JsChangeCallback>>>,
+    inner: Arc<std::sync::Mutex<HashMap<u32, CacheChangeCallback>>>,
     next_id: Arc<AtomicU32>,
 }
 
 impl ChangeCallbacks {
-    fn add(&self, cb: JsChangeCallback) -> u32 {
+    fn add(&self, cb: CacheChangeCallback) -> u32 {
         let mut map = self.inner.lock().unwrap();
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         map.insert(id, cb);
@@ -132,6 +205,8 @@ impl ChangeCallbacks {
     }
 }
 
+/// Incremental command sent to the persistence worker by construction and
+/// the file watcher.
 #[derive(Debug)]
 enum PersistCommand {
     Update(PathBuf, CachedContent),
@@ -139,6 +214,9 @@ enum PersistCommand {
     SyncAll(HashMap<PathBuf, CachedContent>),
 }
 
+/// Map a source path to its on-disk cache target and its path relative to
+/// `cwd`. Text entries gain the cache-format extension (`.json` / `.bin`);
+/// binary assets keep their original file name.
 fn compute_target_for_source(src: &Path, cwd: &Path, is_binary: bool) -> (PathBuf, PathBuf) {
     // returns (target_path, rel_path)
     //
@@ -190,6 +268,8 @@ fn compute_target_for_source(src: &Path, cwd: &Path, is_binary: bool) -> (PathBu
     (target, rel_path)
 }
 
+/// Synchronously persist `map` to `<cwd>/.peisar_cache`, prune stale cache
+/// files, and make sure `.gitignore` contains a `.peisar_cache` entry.
 fn persist_cache_map(map: &HashMap<PathBuf, CachedContent>) -> io::Result<()> {
     let cwd = env::current_dir()?;
     let cache_dir = cwd.join(".peisar_cache");
@@ -337,9 +417,17 @@ fn persist_cache_map(map: &HashMap<PathBuf, CachedContent>) -> io::Result<()> {
     Ok(())
 }
 
-/// In-memory cache of markdown files under a given directory.
-/// The cache maps absolute PathBuf -> raw file contents.
-#[napi]
+/// In-memory cache of the Markdown and asset files under a directory tree.
+///
+/// The cache maps absolute source paths to [`CachedContent`] entries, is
+/// mirrored to a `.peisar_cache` directory on disk, and — after
+/// [`PeisarCache::start_watching`] — tracks the source directories with a
+/// recursive file watcher.
+///
+/// Rust consumers read the cache with [`PeisarCache::get`] and
+/// [`PeisarCache::all`]; JavaScript consumers use the N-API methods below
+/// (`getText`, `getBinary`, `listFiles`, `markdownFiles`, `assetFiles`, …).
+#[cfg_attr(feature = "npm", napi)]
 pub struct PeisarCache {
     // cache maps source path -> cached content (text or binary)
     cache: Arc<RwLock<HashMap<PathBuf, CachedContent>>>,
@@ -354,11 +442,12 @@ pub struct PeisarCache {
     change_callbacks: ChangeCallbacks,
 }
 
-#[napi]
+#[cfg_attr(feature = "npm", napi)]
 impl PeisarCache {
     /// Construct a new PeisarCache using the default discovery behavior.
     ///
     /// JS: `new PeisarCache(entryDir, assetsDir?)` — both plain strings.
+    #[cfg(feature = "npm")]
     #[napi(constructor)]
     pub fn new_js(entry_dir: String, assets_dir: Option<String>) -> Result<Self> {
         Self::with_config_js(entry_dir, assets_dir)
@@ -366,16 +455,23 @@ impl PeisarCache {
 
     /// JS: same as the constructor, for callers that prefer a factory shape.
     /// Kept non-generic so NAPI can export it.
+    #[cfg(feature = "npm")]
     #[napi(factory)]
     pub fn with_config_js(entry_dir: String, assets_dir: Option<String>) -> Result<Self> {
         PeisarCache::with_config(entry_dir, assets_dir)
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{}", e)))
     }
 
-    /// Construct a new PeisarCache using the default discovery behavior.
+    /// Construct a [`PeisarCache`] over `entry_dir` with the default
+    /// discovery behavior — equivalent to `with_config(entry_dir, None)`.
     ///
-    /// This is equivalent to calling `with_config(entry_dir, None)` and will
-    /// use the "public" directory at project root when present.
+    /// `entry_dir` may be absolute or relative (resolved against the
+    /// current working directory); it is normalized to an absolute path so
+    /// watcher events match the cache keys. Assets default to the `public`
+    /// directory of the current working directory when present.
+    /// Construction snapshots every discovered file into memory and
+    /// persists the snapshot to `.peisar_cache` before returning; see the
+    /// [module documentation](crate::cache) for a full example.
     ///
     /// Rust-only constructor kept for the crate's internal users and tests
     /// (generic signatures cannot cross the NAPI boundary).
@@ -383,15 +479,21 @@ impl PeisarCache {
         PeisarCache::with_config(entry_dir, None::<&Path>)
     }
 
-    /// Load all markdown files under `entry_dir` into the cache.
-    /// Also persists the cache to the `.peisar_cache` directory and ensures
-    /// the `.gitignore` contains an entry for `.peisar_cache`.
-    /// Construct a PeisarCache with an optional custom assets directory.
+    /// Construct a [`PeisarCache`] with an optional custom assets directory.
     ///
     /// If `assets_dir` is `Some(path)`, that path (absolute or relative to
-    /// current working directory) will be used to discover assets. If
-    /// `assets_dir` is `None`, the default behavior is to use the "public"
+    /// the current working directory) is used to discover assets. If
+    /// `assets_dir` is `None`, the default behavior is to use the `public`
     /// directory at project root when present.
+    ///
+    /// Construction loads all markdown files under `entry_dir` (and the
+    /// assets) into the in-memory cache, persists the cache to the
+    /// `.peisar_cache` directory, and ensures `.gitignore` contains an
+    /// entry for `.peisar_cache`.
+    ///
+    /// Rust-only constructor (generic signatures cannot cross the NAPI
+    /// boundary); JavaScript uses the `PeisarCache` constructor or the
+    /// `withConfigJs` factory.
     pub fn with_config<P: AsRef<Path>, Q: AsRef<Path>>(
         entry_dir: P,
         assets_dir: Option<Q>,
@@ -804,20 +906,25 @@ impl PeisarCache {
         })
     }
 
-    /// Start watching the entry_dir recursively. The watcher will update the
-    /// in-memory cache on create/modify/remove events for markdown files and
-    /// assets, and persist updates to disk.
-    ///
-    /// The returned Result is only for watcher setup errors; runtime errors are
-    /// printed to stderr by the watch callback.
-    ///
-    /// JS: `cache.startWatchingJs()` — errors surface as JS exceptions.
+    /// JS: `cache.startWatchingJs()` — start watching the entry (and
+    /// assets) directories recursively; errors surface as JS exceptions.
+    #[cfg(feature = "npm")]
     #[napi]
     pub fn start_watching_js(&mut self) -> Result<()> {
         self.start_watching()
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{}", e)))
     }
 
+    /// Start watching the entry (and assets) directories recursively.
+    ///
+    /// From then on, create/modify/remove events for markdown files and
+    /// assets update the in-memory cache and enqueue a matching persistence
+    /// command; events on directories trigger a full rescan. Events are also
+    /// forwarded to JavaScript `onChange` subscribers (see
+    /// [`PeisarCache::on_change`]).
+    ///
+    /// The returned [`io::Result`] covers watcher setup errors only; runtime
+    /// errors are printed to stderr by the watch callback.
     pub fn start_watching(&mut self) -> io::Result<()> {
         let cache = Arc::clone(&self.cache);
         let entry_dir = self.entry_dir.clone();
@@ -1046,11 +1153,12 @@ impl PeisarCache {
         Ok(())
     }
 
-    /// Get a cached content entry by path, if present.
+    /// Get a cached entry by source path, if present.
     ///
-    /// Returns `Some(CachedContent)` for both textual and binary entries. This is
-    /// a backwards-incompatible change from the previous API that returned an
-    /// `Option<String>` for textual entries only.
+    /// The cache is keyed by absolute paths — the keys of [`PeisarCache::all`]
+    /// — so relative paths never match. The returned [`CachedContent`]
+    /// preserves the variant the file was cached as: `Text` for markdown and
+    /// textual assets, `Binary` for binary assets.
     pub fn get(&self, path: &Path) -> Option<CachedContent> {
         match self.cache.read() {
             Ok(r) => r.get(path).cloned(),
@@ -1058,7 +1166,9 @@ impl PeisarCache {
         }
     }
 
-    /// Return a clone of the entire cache map for textual entries only.
+    /// Return a clone of the entire cache map for textual entries only:
+    /// absolute source path -> raw UTF-8 text. Binary assets are omitted;
+    /// use [`PeisarCache::get`] to read them.
     pub fn all(&self) -> HashMap<PathBuf, String> {
         match self.cache.read() {
             Ok(r) => {
@@ -1081,7 +1191,7 @@ impl PeisarCache {
     /// do not cross the NAPI boundary.
 
     /// JS: `cache.getText(absPath)` — cached text of a file, or null.
-    #[napi]
+    #[cfg_attr(feature = "npm", napi)]
     pub fn get_text(&self, abs_path: String) -> Option<String> {
         match self.cache.read() {
             Ok(r) => match r.get(Path::new(&abs_path)) {
@@ -1093,7 +1203,7 @@ impl PeisarCache {
     }
 
     /// JS: `cache.getBinary(absPath)` — cached bytes of a binary asset, or null.
-    #[napi]
+    #[cfg_attr(feature = "npm", napi)]
     pub fn get_binary(&self, abs_path: String) -> Option<Vec<u8>> {
         match self.cache.read() {
             Ok(r) => match r.get(Path::new(&abs_path)) {
@@ -1105,7 +1215,7 @@ impl PeisarCache {
     }
 
     /// JS: `cache.listFiles()` — absolute paths of everything cached.
-    #[napi]
+    #[cfg_attr(feature = "npm", napi)]
     pub fn list_files(&self) -> Vec<String> {
         match self.cache.read() {
             Ok(r) => r.keys().map(|p| p.to_string_lossy().to_string()).collect(),
@@ -1114,13 +1224,13 @@ impl PeisarCache {
     }
 
     /// JS: `cache.markdownFiles()` — absolute paths of cached markdown files.
-    #[napi]
+    #[cfg_attr(feature = "npm", napi)]
     pub fn markdown_files(&self) -> Vec<String> {
         self.filter_cached_files(|ext| MARKDOWN_EXTENSIONS.contains(&ext))
     }
 
     /// JS: `cache.assetFiles()` — absolute paths of cached non-markdown files.
-    #[napi]
+    #[cfg_attr(feature = "npm", napi)]
     pub fn asset_files(&self) -> Vec<String> {
         self.filter_cached_files(|ext| !MARKDOWN_EXTENSIONS.contains(&ext))
     }
@@ -1149,6 +1259,7 @@ impl PeisarCache {
     ///
     /// The callback is wrapped in a `ThreadsafeFunction` because notify
     /// events fire on the watcher thread, not the JS main thread.
+    #[cfg(feature = "npm")]
     #[napi]
     pub fn on_change(
         &self,
@@ -1178,21 +1289,39 @@ impl PeisarCache {
             })))
     }
 
+    /// Register a Rust callback that receives every change detected while
+    /// watching is active. Returns a subscription id that can be passed to
+    /// [`PeisarCache::off_change`].
+    #[cfg(not(feature = "npm"))]
+    pub fn on_change<F>(&self, callback: F) -> u32
+    where
+        F: Fn(CacheChangeEvent) + Send + 'static,
+    {
+        self.change_callbacks.add(Box::new(callback))
+    }
+
     /// JS: `cache.offChange(id)` — remove a previously registered callback.
-    #[napi]
+    #[cfg_attr(feature = "npm", napi)]
     pub fn off_change(&self, id: u32) {
         self.change_callbacks.remove(id);
     }
 
     /// JS: `cache.dispose()` — stop the watcher and drop JS change callbacks.
     /// Safe to call more than once.
-    #[napi]
+    ///
+    /// Rust consumers do not need this: dropping the [`PeisarCache`] stops
+    /// the watcher, closes the persistence channel, and joins the worker.
+    #[cfg_attr(feature = "npm", napi)]
     pub fn dispose(&mut self) {
         self.watcher = None;
         self.change_callbacks.clear();
     }
 }
 
+// Dropping a `PeisarCache` is the Rust equivalent of the JS `dispose()`:
+// the watcher is released with the struct, closing the channel exits the
+// persistence worker, and joining it guarantees queued writes land before
+// the value goes away.
 impl Drop for PeisarCache {
     fn drop(&mut self) {
         // Closing the sender will cause the worker thread to exit.
@@ -1211,6 +1340,38 @@ mod tests {
     use std::sync::Mutex;
 
     static TEST_CWD_LOCK: Mutex<()> = Mutex::new(());
+
+    #[cfg(not(feature = "npm"))]
+    #[test]
+    fn on_change_registers_a_rust_callback() -> io::Result<()> {
+        let _guard = TEST_CWD_LOCK.lock().unwrap();
+        let tmp = env::temp_dir().join(format!(
+            "peisar_change_callback_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|e| io::Error::other(format!("time error: {e}")))?
+                .as_millis()
+        ));
+        fs::create_dir_all(&tmp)?;
+
+        let cache = PeisarCache::new(&tmp)?;
+        let received = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let received_callback = Arc::clone(&received);
+        let subscription = cache.on_change(move |event| {
+            received_callback.lock().unwrap().push(event);
+        });
+
+        cache.change_callbacks.dispatch(CacheChangeEvent {
+            path: "/tmp/example.md".to_string(),
+            kind: "modify".to_string(),
+            is_markdown: true,
+        });
+        cache.off_change(subscription);
+
+        assert_eq!(received.lock().unwrap().len(), 1);
+        fs::remove_dir_all(&tmp)?;
+        Ok(())
+    }
 
     #[test]
     fn test_persist_cache_and_gitignore_created() -> io::Result<()> {

@@ -4,6 +4,7 @@
 //! when parsing.  It is passed to [`Document::parse`](crate::markdown::ast::Document::parse)
 //! or [`md_to_ast`](crate::markdown::ast::parsers::md_to_ast).
 
+#[cfg(feature = "npm")]
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 /// Options that control how Markdown is parsed.
@@ -14,7 +15,7 @@ use serde::{Deserialize, Serialize};
 /// strict CommonMark only:
 ///
 
-#[napi(object)]
+#[cfg_attr(feature = "npm", napi(object))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AstOptions {
     /// Enable GitHub Flavored Markdown (tables, strikethrough, task lists,

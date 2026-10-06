@@ -6,9 +6,9 @@ cd "$repo_root"
 
 TEMP_DIR="js_tests_temp"
 SOURCE_TEST_FILE="js_tests/peisar.test.txt"
-DEST_TEST_FILE="$TEMP_DIR/peisar.test.js"
+DEST_TEST_FILE="$TEMP_DIR/peisar.test.cjs"
 
-npx napi build --platform --config-path napi.config.json --output-dir "$TEMP_DIR"
+npx napi build --platform --features npm --js index.cjs --config-path napi.config.json --output-dir "$TEMP_DIR"
 
 cp "$SOURCE_TEST_FILE" "$DEST_TEST_FILE"
 sleep 3

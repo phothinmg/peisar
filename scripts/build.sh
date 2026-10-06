@@ -4,6 +4,6 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
-npx napi build --platform --config-path napi.config.json
+npx napi build --platform --features npm --js index.cjs --config-path napi.config.json
 
 rm -rf peisar.linux-x64-gnu.node

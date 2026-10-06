@@ -26,24 +26,24 @@
 //! assert_eq!(parsed.pure_markdown_content(), "# Body");
 //! assert_eq!(parsed.yaml_data().unwrap()["title"], "Hello");
 //! ```
-
+#[cfg(feature = "npm")]
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// The Markdown body and YAML metadata parsed from a front-matter document.
-#[napi(object)]
+#[cfg_attr(feature = "npm", napi(object))]
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ParseResult {
+pub struct FrontmatterResult {
     /// Markdown source after the leading YAML front matter is removed.
     pub pure_markdown_content: String,
     /// Deserialized YAML front matter, or `null` when no front matter exists.
-    #[napi(ts_type = "Record<string, any>")]
+    #[cfg_attr(feature = "npm", napi(ts_type = "Record<string, any>"))]
     pub yaml_data: Option<Value>,
 }
-#[napi]
-impl ParseResult {
+#[cfg_attr(feature = "npm", napi)]
+impl FrontmatterResult {
     /// Returns the deserialized YAML front matter, if one was present.
     pub fn yaml_data(&self) -> Option<&Value> {
         self.yaml_data.as_ref()
@@ -53,7 +53,7 @@ impl ParseResult {
         &self.pure_markdown_content
     }
 
-    /// Consume the ParseResult and return the owned Markdown content and owned
+    /// Consume the FrontmatterResult and return the owned Markdown content and owned
     /// optional YAML front matter in one allocation. This is useful for callers
     /// that need to take ownership of the parsed frontmatter value.
     pub fn into_parts(self) -> (String, Option<Value>) {
@@ -61,9 +61,23 @@ impl ParseResult {
     }
 }
 
+#[cfg(feature = "npm")]
+/// Parses a YAML document into a JSON-compatible value.
+///
+/// When consumed from Node.js, the result is exposed as a JavaScript object
+/// with the TypeScript type `Record<string, any>`.
+///
+/// # Panics
+///
+/// Panics when `yaml_str` is not valid YAML.
+#[napi(ts_return_type = "Record<string, any>")]
+pub fn yaml_parser(yaml_str: String) -> Value {
+    serde_yaml::from_str(&yaml_str).unwrap()
+}
+
 /// Parses leading YAML front matter from Markdown source.
 ///
-/// The returned [`ParseResult`] preserves the Markdown body and, when present,
+/// The returned [`FrontmatterResult`] preserves the Markdown body and, when present,
 /// deserializes the YAML metadata into a JSON-compatible value.
 ///
 /// # Behavior
@@ -85,7 +99,7 @@ impl ParseResult {
 /// assert!(parsed.yaml_data().is_none());
 /// assert_eq!(parsed.pure_markdown_content(), "# Just markdown");
 /// ```
-pub fn parse_markdown_frontmatter(content: &str) -> Result<ParseResult, String> {
+fn parse_markdown_frontmatter(content: &str) -> Result<FrontmatterResult, String> {
     let trimmed = content.trim_start();
     let has_frontmatter_start = trimmed.starts_with("---\n") || trimmed.starts_with("---\r\n");
     // Only slice off the `---` opener when one is actually present; slicing
@@ -107,15 +121,26 @@ pub fn parse_markdown_frontmatter(content: &str) -> Result<ParseResult, String> 
         yaml_data = serde_yaml::from_str(yaml_str)
             .map_err(|e| format!("Failed to parse YAML front matter: {}", e))?;
     }
-    Ok(ParseResult {
+    Ok(FrontmatterResult {
         yaml_data,
         pure_markdown_content,
     })
 }
 
+#[cfg(feature = "npm")]
+#[napi]
+pub fn frontmatter(content: String) -> Result<FrontmatterResult, napi::Error> {
+    parse_markdown_frontmatter(&content).map_err(napi::Error::from_reason)
+}
+
+#[cfg(not(feature = "npm"))]
+pub fn frontmatter(content: String) -> Result<FrontmatterResult, String> {
+    parse_markdown_frontmatter(&content)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ParseResult, parse_markdown_frontmatter};
+    use super::{FrontmatterResult, parse_markdown_frontmatter};
 
     #[test]
     fn extracts_yaml_and_body() {
@@ -176,7 +201,8 @@ mod tests {
 
     #[test]
     fn into_parts_yields_owned_values() {
-        let parsed: ParseResult = parse_markdown_frontmatter("---\nx: 1\n---\n# Body").unwrap();
+        let parsed: FrontmatterResult =
+            parse_markdown_frontmatter("---\nx: 1\n---\n# Body").unwrap();
         let (md, yaml) = parsed.into_parts();
         assert_eq!(md, "# Body");
         assert_eq!(yaml.unwrap()["x"], 1);

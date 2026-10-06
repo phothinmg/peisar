@@ -30,6 +30,7 @@ use crate::markdown::ast::tokens::{
     span::Span,
     token::{Block, Inline},
 };
+#[cfg(feature = "npm")]
 use napi_derive::napi;
 
 // ---------------------------------------------------------------------------
@@ -40,7 +41,7 @@ use napi_derive::napi;
 ///
 /// On the JavaScript side the fields are exposed as `line`, `lineIndex`,
 /// and `lines`.
-#[napi(object)]
+#[cfg_attr(feature = "npm", napi(object))]
 #[derive(Debug, Clone)]
 pub struct BlockParseContext {
     /// The current (unmodified) source line.
@@ -54,7 +55,7 @@ pub struct BlockParseContext {
 /// Context passed to inline parser hooks.
 ///
 /// On the JavaScript side the fields are exposed as `rest` and `index`.
-#[napi(object)]
+#[cfg_attr(feature = "npm", napi(object))]
 #[derive(Debug, Clone)]
 pub struct InlineParseContext {
     /// Remaining inline text starting at the current character position.

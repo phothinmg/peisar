@@ -98,7 +98,7 @@ jobs:
 
       - name: Build & package artifacts
         run: |
-          npx napi build --release --platform --config-path napi.config.json --target ${{ matrix.settings.target }} ${{ matrix.settings.flags }}
+          npx napi build --release --platform --features npm --js index.cjs --config-path napi.config.json --target ${{ matrix.settings.target }} ${{ matrix.settings.flags }}
       # Upload artifact step in build job to include the generated WASM JavaScript files
       - name: Upload artifact
         uses: actions/upload-artifact@v7

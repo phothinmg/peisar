@@ -22,11 +22,13 @@ use super::hooks::{BlockParseContext, ParseHooks, finalize_hook_block};
 use super::inline::{LinkRefMap, parse_inline_with_hooks};
 use super::table::{build_table, is_table_start, parse_delimiter_alignments};
 use crate::markdown::ast::options::AstOptions;
+use crate::markdown::ast::tokens::token::TaskState;
 use crate::markdown::ast::tokens::{
     Attributes,
     span::{Position, Span},
-    token::{Block, LinkReferenceDefinition, ListItem, TaskState},
+    token::{Block, LinkReferenceDefinition, ListItem},
 };
+
 /// Compute the byte offset of the start of each line.
 ///
 /// Line 0 always starts at offset 0.  For each `\n` in `input`, a new
@@ -936,6 +938,7 @@ fn collect_list_item(lines: &[&str], start: usize) -> (String, usize) {
     }
     (content, consumed)
 }
+
 /// Parse a GFM task list marker: `[ ]`, `[x]`, `[X]`.
 /// Returns `(TaskState, content_start_offset)`.
 ///
