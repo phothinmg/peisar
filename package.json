@@ -29,10 +29,10 @@
   ],
   "type": "module",
   "devDependencies": {
-    "@napi-rs/cli": "^3.9.1",
-    "emnapi": "^2.0.0-alpha.5",
     "@emnapi/core": "^2.0.0-alpha.5",
-    "@emnapi/runtime": "^2.0.0-alpha.5"
+    "@emnapi/runtime": "^2.0.0-alpha.5",
+    "@napi-rs/cli": "^3.9.1",
+    "emnapi": "^2.0.0-alpha.5"
   },
   "license": "Apache-2.0",
   "repository": {
@@ -44,9 +44,7 @@
     "CHANGELOG.md",
     "SECURITY.md",
     "LICENSE",
-    "index.cjs",
-    "index.d.ts",
-    "index.mjs"
+    "dist/**/*"
   ],
   "publishConfig": {
     "access": "public"

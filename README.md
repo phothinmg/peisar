@@ -1,7 +1,6 @@
 <!-- markdownlint-disable MD033 -->
 <!-- markdownlint-disable MD041 -->
 <div align="center">
-<img src="https://pub-c9ba018358dd48a99b70013b65a25e5f.r2.dev/logo/peisar.webp" width="160" height="160" alt="Peisar logo" />
   <h1>Peisar</h1>
   <p>A practical Markdown parser written in Rust</p>
 </div>
@@ -315,7 +314,7 @@ const { PeisarCache } = require("peisar");
 const cache = new PeisarCache("contents", "public", {
   markdown: { fragment: true }, // PeisarOptions for every page render
   hosting: { provider: "githubPages", repo: "my-repo" },
-  outDir: "out",
+  outDir: ".peisar",
 });
 
 cache.markdownFiles(); // absolute paths of cached markdown files
@@ -345,6 +344,7 @@ cache.useVisitor({ visitBlock([block]) { return { recurse: true }; } });
 cache.useParser({ parseBlock([{ line }]) { /* … */ } });
 
 cache.startWatchingJs(); // keep the cache in sync with the filesystem
+// every change is logged to stderr, e.g. `created docs/intro.md`
 const id = cache.onChange((event) => {
   // event: { path, kind: "create" | "modify" | "remove" | "other", isMarkdown }
 });
@@ -479,9 +479,13 @@ for page in cache.page_objects() {
 }
 
 // Keep memory, derived objects, and the archive in sync with the filesystem.
+// Every change is logged to stderr: `created docs/intro.md` (paths relative
+// to the project root), colored on terminals.
 cache.start_watching()?;
-// Dropping the cache stops the watcher, flushes the archive, and joins
-// the workers; Rust consumers need no explicit dispose.
+// Stop watching and flush pending archive writes — the graceful shutdown
+// to wire to Ctrl+C in long-running processes. Dropping the cache does the
+// same cleanup automatically; Rust consumers need no explicit dispose.
+cache.stop_watching();
 ```
 
 The cache is keyed by absolute paths, so keys from `all()` can be passed

@@ -21,6 +21,13 @@ bincode = "1.3"
 [build-dependencies]
 napi-build = "2"
 
+# Signal handling (SIGINT/Ctrl+C) for the `cache` example. `libc` is
+# already in the dependency tree via `notify`, so this adds no new
+# transitive crates. The signal API used (`signal`, `SIGINT`, `SIG_ERR`,
+# `SIG_DFL`) is available on every supported target, Windows included.
+[dev-dependencies]
+libc = "0.2"
+
 
 [lib]
 name = "peisar"
@@ -31,8 +38,8 @@ crate-type = ["rlib", "cdylib"]
 
 [features]
 default = []
-# When this feature is active, it pulls in napi-rs dependencies
 npm = ["dep:napi", "dep:napi-derive"]
+
 
 [[example]]
 name = "cache_example"

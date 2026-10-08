@@ -415,6 +415,7 @@ version = "0.3.11"
 dependencies = [
  "bincode",
  "blake3",
+ "libc",
  "napi",
  "napi-build",
  "napi-derive",

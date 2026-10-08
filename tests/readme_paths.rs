@@ -217,7 +217,8 @@ fn cache_paths() {
     let pages = cache.page_objects();
     assert_eq!(pages.len(), 1);
     assert_eq!(pages[0].title.as_deref(), Some("Hello"));
-    assert_eq!(pages[0].out_file_path, "out/index.html");
+    // DEFAULT_OUT_DIR is ".peisar" when outDir is not configured.
+    assert_eq!(pages[0].out_file_path, ".peisar/index.html");
 
     // start_watching() + Drop (the Rust equivalent of JS dispose())
     cache.start_watching().unwrap();

@@ -23,7 +23,13 @@
 //! cache.mapJson();                   // the map.json document (search index)
 //! cache.archived();                  // paths flushed to the disk archive
 //! cache.startWatchingJs();           // keep everything in sync with the FS
+//! cache.dispose();                   // stop watching and flush the archive
 //! ```
+//!
+//! While watching, every file operation logs one pretty line to stderr —
+//! `created docs/intro.md` (ANSI-colored on terminals, path relative to
+//! the project root). Duplicate events from one save coalesce, and
+//! filesystem noise is not logged.
 //!
 //! # Rust usage
 //!
@@ -75,7 +81,9 @@
 //!
 //! The archive worker and file watcher run on background threads. JS
 //! consumers call `dispose()` (or drop the cache in Rust) to stop the
-//! watcher, flush pending archive writes, and join the workers.
+//! watcher, flush pending archive writes, and join the workers. Rust
+//! consumers may also call [`PeisarCache::stop_watching`] for the same
+//! graceful shutdown — e.g. after a `Ctrl+C` interrupt.
 
 mod archive;
 mod base_url;
@@ -113,10 +121,115 @@ use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::io;
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+/// ANSI color escape sequences for the watcher's pretty logs (disabled
+/// automatically when stderr is not an interactive terminal).
+const LOG_STYLE_DIM: &str = "\u{1b}[2m";
+const LOG_STYLE_GREEN: &str = "\u{1b}[32m";
+const LOG_STYLE_YELLOW: &str = "\u{1b}[33m";
+const LOG_STYLE_RED: &str = "\u{1b}[31m";
+const LOG_STYLE_RESET: &str = "\u{1b}[0m";
+
+/// `true` when the watcher's pretty logs may use ANSI colors — stderr
+/// must be an interactive terminal. Captured/piped output (CI logs, test
+/// runners) stays plain.
+fn log_use_color() -> bool {
+    io::stderr().is_terminal()
+}
+
+/// Build one pretty watcher line: `<label> <path>` with the label
+/// colored by change kind (when `color` is on). Paths are shown relative
+/// to `root` when possible, falling back to the absolute path for files
+/// outside it.
+fn format_change_line(kind: &str, path: &Path, root: &Path, color: bool) -> String {
+    let (label, style) = match kind {
+        "create" => ("created", LOG_STYLE_GREEN),
+        "modify" => ("modified", LOG_STYLE_YELLOW),
+        "remove" => ("removed", LOG_STYLE_RED),
+        _ => ("changed", LOG_STYLE_DIM),
+    };
+    let rel = pretty_path(path, root);
+    if color {
+        format!("{style}{label}{LOG_STYLE_RESET} {rel}")
+    } else {
+        format!("{label} {rel}")
+    }
+}
+
+/// Print one pretty watcher line to stderr — see
+/// [`PeisarCache::start_watching`] for the format.
+fn log_change_pretty(kind: &str, path: &Path, root: &Path) {
+    eprintln!("{}", format_change_line(kind, path, root, log_use_color()));
+}
+
+/// Window within which consecutive events for the same path count as
+/// one operation. Shell redirects, editors, and atomic saves emit
+/// several events for a single save — only the first within this
+/// window logs.
+const LOG_DEDUPE_WINDOW: Duration = Duration::from_secs(1);
+
+/// `true` when a path may ever enter the cache (and therefore deserves
+/// a pretty log line): markdown and asset extensions are the same
+/// allow-lists the cache admits content by, so editor side files
+/// (`.tmp`, swap files, lock files, …) never log.
+fn log_trackable(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|ext| {
+            let ext_l = ext.to_lowercase();
+            MARKDOWN_EXTENSIONS.contains(&ext_l.as_str())
+                || ASSET_EXTENSIONS.contains(&ext_l.as_str())
+        })
+        .unwrap_or(false)
+}
+
+/// Decide whether a watcher event gets a pretty log line: each path
+/// logs at most once per [`LOG_DEDUPE_WINDOW`] (create/remove included —
+/// renames and atomic saves fire several events per operation) and
+/// only for files the cache could ever track. Events are delivered to
+/// `onChange` subscribers either way — this only filters the stderr log.
+fn should_log_change(path: &Path, last_log_at: &HashMap<PathBuf, Instant>, now: Instant) -> bool {
+    log_trackable(path)
+        && !last_log_at
+            .get(path)
+            .is_some_and(|at| now.duration_since(*at) < LOG_DEDUPE_WINDOW)
+}
+
+/// Classify a watcher event from the **actual filesystem state** rather
+/// than the raw notify event kind. Editors and atomic saves surface as
+/// rename events ("modify"/"other" on the notify side), so the raw kind
+/// cannot be trusted for a correct `created` / `modified` / `removed`
+/// label:
+///
+/// - the file **exists** and was **already known to the cache** →
+///   `modify` (the entry is being updated in place);
+/// - the file **exists** and is **unknown** → `create`;
+/// - the file is **gone** → `remove`.
+///
+/// `known` here means present in the cache tiers — exactly the paths a
+/// create is allowed to add.
+fn classify_change(memory: &LruCache, archive: &ArchiveHandle, path: &Path) -> &'static str {
+    let known = memory.get(path).is_some() || archive.read(path).is_some();
+    if path.exists() {
+        if known { "modify" } else { "create" }
+    } else {
+        "remove"
+    }
+}
+
+/// Render `path` relative to `root` when it lives underneath it
+/// (`/project/contents/docs/a.md` → `contents/docs/a.md`), otherwise as
+/// the lossy absolute path.
+fn pretty_path(path: &Path, root: &Path) -> String {
+    path.strip_prefix(root)
+        .map(|rel| rel.to_string_lossy().to_string())
+        .unwrap_or_else(|_| path.to_string_lossy().to_string())
+}
 
 /// A file-change event delivered to change callbacks
 /// (see [`PeisarCache::on_change`]).
@@ -167,7 +280,7 @@ pub struct PeisarCacheConfig {
     /// Static-hosting baseUrl resolution (GitHub Pages/Vercel/…).
     pub hosting: Option<HostingConfig>,
     /// Build output directory used for `outFilePath` fields (default
-    /// `"out"`).
+    /// `".peisar"`).
     pub out_dir: Option<String>,
 }
 
@@ -280,7 +393,7 @@ pub const DEFAULT_SHARD_BYTES: u64 = 8 * 1024 * 1024;
 /// Default archive flush interval: 2 seconds.
 pub const DEFAULT_FLUSH_INTERVAL_MS: u64 = 2_000;
 /// Default build output directory.
-pub const DEFAULT_OUT_DIR: &str = "out";
+pub const DEFAULT_OUT_DIR: &str = ".peisar";
 
 /// Boxed change callback held in the subscription registry.
 ///
@@ -660,8 +773,14 @@ impl PeisarCache {
     ///
     /// From then on, create/modify/remove events update the memory tier
     /// first, then enqueue matching archive commands; directory events
-    /// trigger a full rescan. Events are also forwarded to `onChange`
-    /// subscribers (see [`PeisarCache::on_change`]).
+    /// trigger a full rescan. Every operation also logs one pretty line
+    /// to stderr — `created contents/docs/intro.md` — with the path
+    /// relative to the project root. The label is derived from the
+    /// actual filesystem state (editors surface atomic saves as rename
+    /// events, so the raw event kind cannot be trusted), duplicate events
+    /// for one save coalesce (an edit logs `modified` exactly once),
+    /// and filesystem noise is not logged; `onChange` subscribers still
+    /// receive every raw event (see [`PeisarCache::on_change`]).
     ///
     /// The returned [`io::Result`] covers watcher setup errors only; runtime
     /// errors are printed to stderr by the watch callback.
@@ -673,28 +792,40 @@ impl PeisarCache {
         let entry_dir = self.entry_dir.clone();
         let assets_dir = self.assets_dir.clone();
         let change_callbacks = self.change_callbacks.clone();
+        // Pretty logs render paths relative to the project root (the
+        // cwd the cache was constructed in).
+        let log_root = env::current_dir()?;
+        // One log line per file operation: remember when each path last
+        // logged so duplicate events from a single save (truncate +
+        // write, atomic rename, …) coalesce into one line.
+        let mut last_log_at: HashMap<PathBuf, Instant> = HashMap::new();
 
         let mut watcher: RecommendedWatcher =
             notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
                 match res {
                     Ok(event) => {
-                        let kind = event.kind;
                         for path in event.paths {
                             let is_markdown = path.starts_with(&entry_dir);
-                            let kind_str = if matches!(kind, notify::EventKind::Create(_)) {
-                                "create"
-                            } else if matches!(kind, notify::EventKind::Modify(_)) {
-                                "modify"
-                            } else if matches!(kind, notify::EventKind::Remove(_)) {
-                                "remove"
-                            } else {
-                                "other"
-                            };
+                            // The notify event kind cannot be trusted for
+                            // the correct label (editors and `mv` surface
+                            // atomic saves as rename/"modify" events), so
+                            // classify from the actual filesystem state.
+                            let kind_str = classify_change(&memory, &archive, &path);
                             change_callbacks.dispatch(CacheChangeEvent {
                                 path: path.to_string_lossy().to_string(),
                                 kind: kind_str.to_string(),
                                 is_markdown,
                             });
+                            // One log line per file operation, and only
+                            // for files the cache could ever track: the
+                            // same path may fire several events (rename
+                            // pairs, atomic saves) and editor side files
+                            // (`.tmp`, swap) never log.
+                            let now = Instant::now();
+                            if should_log_change(&path, &last_log_at, now) {
+                                log_change_pretty(kind_str, &path, &log_root);
+                                last_log_at.insert(path.clone(), now);
+                            }
                             // Directory events rescan everything.
                             if path.is_dir() {
                                 let mut new_map: HashMap<PathBuf, CachedContent> = HashMap::new();
@@ -777,6 +908,16 @@ impl PeisarCache {
 
         self.watcher = Some(watcher);
         Ok(())
+    }
+
+    /// Stop watching the entry/assets directories and flush pending
+    /// archive writes. The Rust counterpart of the JS `dispose()`: use it
+    /// to shut the cache down gracefully — e.g. on `Ctrl+C` — instead of
+    /// relying on the automatic [`Drop`] cleanup. Safe to call more than
+    /// once (and without ever calling `start_watching`).
+    pub fn stop_watching(&mut self) {
+        self.watcher = None;
+        self.archive.flush();
     }
 
     /// Read one entry: memory tier first, then the disk archive. Returns
@@ -1122,9 +1263,8 @@ impl PeisarCache {
     /// the watcher, flushes the archive, and joins the workers.
     #[cfg_attr(feature = "npm", napi)]
     pub fn dispose(&mut self) {
-        self.watcher = None;
+        self.stop_watching();
         self.change_callbacks.clear();
-        self.archive.flush();
     }
 }
 
@@ -1352,7 +1492,8 @@ mod tests {
         assert_eq!(logo.ext, "png");
         assert_eq!(logo.file_type, "Image");
         assert_eq!(logo.slug, "/img/logo.png");
-        assert_eq!(logo.out_file_path, "out/img/logo.png");
+        // DEFAULT_OUT_DIR is ".peisar" when outDir is not configured.
+        assert_eq!(logo.out_file_path, ".peisar/img/logo.png");
         // binary raw is base64
         assert_eq!(logo.raw, binary_to_base64(&[1u8, 2, 3]));
 
@@ -1462,6 +1603,154 @@ mod tests {
         assert_eq!(entry["frontmatter"]["tags"][0], "x");
         assert_eq!(entry["kind"], "text");
         assert!(entry["hash"].as_str().unwrap().len() == 64);
+
+        restore(orig, tmp);
+        Ok(())
+    }
+
+    #[test]
+    fn pretty_path_renders_relative_to_root() {
+        let root = Path::new("/project");
+        assert_eq!(
+            pretty_path(Path::new("/project/contents/docs/a.md"), root),
+            "contents/docs/a.md"
+        );
+        // Root-level paths render as their bare name.
+        assert_eq!(
+            pretty_path(Path::new("/project/README.md"), root),
+            "README.md"
+        );
+        // Paths outside the root fall back to the absolute path.
+        assert_eq!(
+            pretty_path(Path::new("/elsewhere/b.png"), root),
+            "/elsewhere/b.png"
+        );
+    }
+
+    #[test]
+    fn format_change_line_matches_kind_and_relative_path() {
+        let root = Path::new("/project");
+        let abs = root.join("contents").join("a.md");
+        assert_eq!(
+            format_change_line("create", &abs, root, false),
+            "created contents/a.md"
+        );
+        assert_eq!(
+            format_change_line("modify", &abs, root, false),
+            "modified contents/a.md"
+        );
+        assert_eq!(
+            format_change_line("remove", &abs, root, false),
+            "removed contents/a.md"
+        );
+        assert_eq!(
+            format_change_line("other", &abs, root, false),
+            "changed contents/a.md"
+        );
+        // Colors wrap the label only; the path stays plain.
+        let colored = format_change_line("modify", &abs, root, true);
+        assert_eq!(
+            colored,
+            format!("{LOG_STYLE_YELLOW}modified{LOG_STYLE_RESET} contents/a.md")
+        );
+        // Paths outside the root fall back to the absolute path.
+        let outside = Path::new("/elsewhere/b.png");
+        assert_eq!(
+            format_change_line("create", outside, root, false),
+            "created /elsewhere/b.png"
+        );
+    }
+
+    #[test]
+    fn classify_change_uses_filesystem_state() -> io::Result<()> {
+        let _guard = TEST_CWD_LOCK.lock().unwrap();
+        let (tmp, orig) = make_tmp("classify")?;
+        env::set_current_dir(&tmp)?;
+        write_md(&tmp, "docs/known.md", "# Known\n");
+
+        let cache = PeisarCache::new("docs")?;
+
+        // Exists + known to the cache → modify.
+        assert_eq!(
+            classify_change(
+                &cache.memory,
+                &cache.archive,
+                &tmp.join("docs").join("known.md")
+            ),
+            "modify"
+        );
+        // Exists + unknown → create.
+        write_md(&tmp, "docs/fresh.md", "# Fresh\n");
+        assert_eq!(
+            classify_change(
+                &cache.memory,
+                &cache.archive,
+                &tmp.join("docs").join("fresh.md")
+            ),
+            "create"
+        );
+        // Gone → remove (even though never cached).
+        assert_eq!(
+            classify_change(
+                &cache.memory,
+                &cache.archive,
+                &tmp.join("docs").join("ghost.md")
+            ),
+            "remove"
+        );
+
+        restore(orig, tmp);
+        Ok(())
+    }
+
+    #[test]
+    fn should_log_change_one_line_per_operation() {
+        let now = Instant::now();
+        let p = Path::new("/project/contents/a.md");
+        let mut last: HashMap<PathBuf, Instant> = HashMap::new();
+
+        // Untracked extensions (editor side files) never log.
+        let tmp = Path::new("/project/contents/a.md.tmp");
+        assert!(!should_log_change(tmp, &last, now));
+        // A trackable path with no recent line logs; the duplicate
+        // events of one operation (create/remove/modify within the
+        // window) do not log again.
+        assert!(should_log_change(p, &last, now));
+        last.insert(p.to_path_buf(), now);
+        assert!(!should_log_change(p, &last, now));
+        // A second operation 2 s later is a new save — log it.
+        let later = now + Duration::from_secs(2);
+        assert!(should_log_change(p, &last, later));
+    }
+
+    #[test]
+    fn log_trackable_matches_cache_admission() {
+        // Markdown and asset extensions log; editor side files never.
+        assert!(log_trackable(Path::new("a/hi.md")));
+        assert!(log_trackable(Path::new("a/hi.markdown")));
+        assert!(log_trackable(Path::new("a/logo.png")));
+        assert!(log_trackable(Path::new("a/style.css")));
+        assert!(!log_trackable(Path::new("a/hi.md.tmp")));
+        assert!(!log_trackable(Path::new("a/hi.tmp")));
+        assert!(!log_trackable(Path::new("a/.hi.md.swp")));
+        assert!(!log_trackable(Path::new("a/hi")));
+    }
+
+    #[test]
+    fn stop_watching_is_safe_without_starting() -> io::Result<()> {
+        let _guard = TEST_CWD_LOCK.lock().unwrap();
+        let (tmp, orig) = make_tmp("stopwatch")?;
+        env::set_current_dir(&tmp)?;
+        write_md(&tmp, "docs/a.md", "# A\n");
+
+        let mut cache = PeisarCache::new("docs")?;
+        // Stop without start, then stop twice — all must be no-ops.
+        cache.stop_watching();
+        cache.start_watching()?;
+        cache.stop_watching();
+        cache.stop_watching();
+        // The watcher is gone: the entry stayed in memory throughout.
+        assert!(cache.get(&tmp.join("docs").join("a.md")).is_some());
 
         restore(orig, tmp);
         Ok(())

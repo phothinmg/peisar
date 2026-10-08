@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Pretty change logs from the `PeisarCache` watcher: every add/edit/
+  delete prints exactly one line to stderr — `created docs/intro.md`,
+  `modified public/style.css`, `removed contents/old.md` — with the path
+  relative to the project root. Labels derive from the actual filesystem
+  state (exists + cached → `modified`, exists + new → `created`, gone →
+  `removed`), so editor atomic saves and renames log the right word even
+  when the OS reports them as generic events. Events coalesce within a
+  1 s window per path, and files the cache never tracks (editor `.tmp` /
+  swap side files) are not logged. Labels are ANSI-colored on interactive
+  terminals (green/yellow/red) and plain in piped/CI output. `onChange`
+  subscribers still receive every raw event.
+- `PeisarCache::stop_watching()` — the Rust counterpart of the JS
+  `dispose()`: stops the watcher and flushes pending archive writes for a
+  graceful shutdown. Safe to call more than once (or without ever
+  watching). The `cache_example` example now blocks until `Ctrl+C` and
+  shuts down gracefully through it.
+
 - Memory-first `PeisarCache` architecture: a size-aware LRU in-memory tier
   (bounded by `byteBudget`/`entryBudget`), backed by a background archive
   worker that flushes binary shard files to `.peisar-cache` with a `map.json`
