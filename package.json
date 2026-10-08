@@ -1,6 +1,6 @@
 {
   "name": "peisar",
-  "version": "0.3.11",
+  "version": "0.3.12",
   "description": "A practical Markdown parser written in Rust",
   "main": "dist/index.cjs",
   "types": "dist/index.d.ts",
