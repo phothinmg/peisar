@@ -11,7 +11,6 @@
 
 [![Documentation][docs_img]][docs]
 
-**The project is still under active development, and its API may change. It will stabilize in the next major release.**
 
 Peisar parses CommonMark Markdown with GitHub Flavored Markdown (GFM),
 Kramdown block attributes, YAML front matter, source spans, AST visitors, and
@@ -168,9 +167,6 @@ variable:
 - `NAPI_RS_FORCE_WASI=error` — require the WebAssembly build and fail when it
   is missing
 
-In browser bundles, the root package's `browser.js` entry re-exports
-`@peisar/peisar-wasm32-wasi`, so bundlers pick up the WebAssembly build once
-the package is installed.
 
 ### Use
 
@@ -313,7 +309,7 @@ const { PeisarCache } = require("peisar");
 // new PeisarCache(entryDir, assetsDir?, options?)
 const cache = new PeisarCache("contents", "public", {
   markdown: { fragment: true }, // PeisarOptions for every page render
-  hosting: { provider: "githubPages", repo: "my-repo" },
+  hosting: { provider: "GithubPages", repo: "my-repo" },
   outDir: ".peisar",
 });
 
@@ -369,7 +365,7 @@ Add the crate to a Rust project:
 
 ```toml
 [dependencies]
-peisar = "0.3.0"
+peisar = "1.0.0"
 ```
 
 The public Rust API is module-based. Import the parser from
@@ -499,14 +495,10 @@ one exists; call `cache.flush()` to force shards to disk immediately.
 
 ```sh
 npm install
-npm run build:local
-npm test
+npm run js:test
+npm run build
 cargo test
 ```
-
-Run `npm run build:local` after changing N-API-annotated Rust code; it
-regenerates the package loader and TypeScript declarations before the Node.js
-tests run.
 
 More detail in [CONTRIBUTING](CONTRIBUTING.md)
 

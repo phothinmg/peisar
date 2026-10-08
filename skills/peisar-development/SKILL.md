@@ -49,16 +49,17 @@ the N-API build; do not hand-edit them.
 
 ```sh
 npm install
-npm run build:local
-npm test
+npm run js:test
+npm run build
 cargo test
 ```
 
-`npm run build:local` generates the package loader and declarations in the
-local build output, then compiles the native addon. Run it before `npm test`
-after changing N-API-visible Rust types or methods. `npm test` builds a fresh
-addon in a temporary directory and runs the Node integration tests in
-`js_tests/peisar.test.txt`; Rust parser tests are in
+`npm run js:test` builds a fresh addon in a temporary directory, regenerates
+the package loader and TypeScript declarations, and runs the Node integration
+tests in `scripts/peisar.test.txt` — it covers both the build and the test
+step after changing N-API-visible Rust types or methods. `npm run build`
+produces the published package files (`index.cjs`, `index.mjs`,
+`index.d.ts`). Rust parser tests are in
 `src/markdown/ast/tests.rs`; documentation API paths are compile-checked in
 `tests/readme_paths.rs`.
 

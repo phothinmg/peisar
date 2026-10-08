@@ -35,10 +35,11 @@ src/
 │   └── peisar/mod.rs         exported N-API Peisar class
 └── lib.rs                    public module declarations
 
-js_tests/peisar.test.txt      Node.js integration tests
+scripts/peisar.test.txt     Node.js integration tests
 
-`npm test` runs them against a freshly built addon in a temporary directory;
-the file is kept as `.txt` so `node --test` does not auto-discover it.
+`npm run js:test` builds the addon in a temporary directory and runs the Node
+integration tests there; the file is kept as `.txt` so `node --test` does not
+auto-discover it.
 tests/readme_paths.rs         compile-checks README API paths
 skills/                       Agent Skills for AI coding tools
 ```
@@ -49,24 +50,26 @@ are produced by the N-API build — never hand-edit them.
 
 ## Development workflow
 
-Build the native addon into `local_build/` (this also regenerates the
-package loader and TypeScript declarations):
+Build and test the native addon (this also regenerates the package loader and
+TypeScript declarations):
 
 ```sh
-npm run build:local
+npm run js:test
 ```
 
 Run all checks before opening a pull request:
 
 ```sh
-npm run build:local   # after changing N-API-annotated Rust code
-npm test              # Node.js integration tests
-cargo test            # Rust parser and integration tests
-cargo fmt             # formatting (required by the commit helper)
+npm run js:test        # after changing N-API-annotated Rust code
+                      # Node.js integration tests
+npm run build          # package build (index.cjs / index.mjs / index.d.ts)
+cargo test             # Rust parser and integration tests
+cargo fmt              # formatting (required by the commit helper)
 ```
 
-Run `npm run build:local` before `npm test` whenever N-API-visible Rust types
-or methods change; the tests load the addon from the local build.
+`npm run js:test` compiles a fresh addon in a temporary directory and runs the
+Node.js integration tests against it — it covers both the build and the test
+step after N-API-visible Rust types or methods change.
 
 ## Change guidelines
 
@@ -84,7 +87,7 @@ or methods change; the tests load the addon from the local build.
   visitors.
 - Add tests for new behavior: Rust parser tests in
   `src/markdown/ast/tests.rs`, Node.js tests in
-  `js_tests/peisar.test.txt`. If you document a new API path in
+  `scripts/peisar.test.txt`. If you document a new API path in
   `README.md`, also add it to `tests/readme_paths.rs` so it stays
   compile-checked.
 
@@ -117,7 +120,7 @@ npm run commit          # prompts for type and message, formats, commits, pushes
 
 1. Fork the repository and create a branch from `main`.
 2. Make your changes and add tests.
-3. Run the full check list (`cargo fmt`, `npm run build:local`, `npm test`,
+3. Run the full check list (`cargo fmt`, `npm run js:test`,
    `cargo test`) and make sure everything passes.
 4. Commit using the conventional format above.
 5. Open a pull request against `main` with a short description of the change

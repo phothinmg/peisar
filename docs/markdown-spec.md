@@ -1,6 +1,6 @@
 # Peisar Markdown Language Specification
 
-Version 0.3.0 — describes exactly what `peisar` parses and renders with
+Version 1.0.0 — describes exactly what `peisar` parses and renders with
 **default options** (`gfm: true`, `kramdown: true`). Every example in this
 document was verified against the parser itself.
 

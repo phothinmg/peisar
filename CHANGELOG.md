@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2026-10-09
 
 ### Added
 
@@ -76,15 +76,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JavaScript AST, `Emphasis.level`, `ListItem.task`, and
   `Table.alignments` now surface as string literals (`"Bold"`,
   `"Checked"`, `["Left", "Center"]`) instead of numeric enums
-
-### Changed
-
 - N-API bindings are now optional behind the `npm` Cargo feature: the crate
-  builds as a plain `rlib` without it, and `npm run build:local` (and the
-  `napi` invocations in `scripts/build.sh` / `scripts/wf_tests.sh`) enable
-  it explicitly
-- Bumped the README's Rust dependency snippet to the published `0.3.0`
-  version
+  builds as a plain `rlib` without it, and `npm run build` / `npm run js:test`
+  enable it explicitly
+- Renamed the npm scripts to match their current behavior:
+  `build:local` → `build` and `wf:test` → `js:test`; `js:test` builds a
+  fresh addon in a temporary directory and runs the Node.js integration
+  tests against it, covering both the build and the test step after
+  N-API-visible Rust changes
+- Bumped the README's Rust dependency snippet to the current release
+
+### Notes
+
+- Versions 0.3.1 through 0.3.13 were npm-only release iterations (npm's
+  latest, 0.3.13, already ships these changes), while crates.io stayed at
+  0.3.11. Version 1.0.0 realigns both registries and marks the public API
+  stable: the AST, renderer, front matter, cache, and N-API surfaces are
+  covered by the test suites and are not expected to change within the
+  1.x series.
 
 ## [0.3.0] - 2026-10-06
 
@@ -96,8 +105,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     CI and uploaded with the release artifacts (`.wasm`,
     `peisar.wasi.cjs`, `peisar.wasi.d.cts`, `peisar.wasi-browser.js`,
     and the WASI worker scripts)
-  - A `browser` entry (`browser.js`) in the root package, so bundlers
-    resolve the WASM build instead of the native addon
   - `emnapi` dependencies (`emnapi`, `@emnapi/core`,
     `@emnapi/runtime`) for the WASM runtime
 - Node.js `engines` requirement
@@ -233,7 +240,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and parse/render options (GFM and Kramdown enabled by default)
 - Rust `rlib` crate and Node.js integration test suite
 
-[Unreleased]: https://github.com/phothinmg/peisar/compare/0.3.0...HEAD
+[Unreleased]: https://github.com/phothinmg/peisar/compare/1.0.0...HEAD
+[1.0.0]: https://github.com/phothinmg/peisar/compare/0.3.0...1.0.0
 [0.3.0]: https://github.com/phothinmg/peisar/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/phothinmg/peisar/compare/0.1.2...0.2.0
 [0.1.2]: https://github.com/phothinmg/peisar/compare/v0.1.0...v0.1.2

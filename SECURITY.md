@@ -2,13 +2,13 @@
 
 ## Supported versions
 
-Peisar is pre-1.0 software. Only the latest release receives security fixes.
+Only the latest release receives security fixes.
 
 | Version        | Supported   |
 | -------------- | ----------- |
-| 0.3.x (latest) | ✅ Yes      |
-| 0.2.x          | ✅ Yes      |
-| 0.1.x and older | ❌ No      |
+| 1.0.x (latest) | ✅ Yes      |
+| 0.3.x          | ✅ Yes      |
+| 0.2.x and older | ❌ No      |
 
 ### About the `PeisarCache` history
 

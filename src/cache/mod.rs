@@ -14,7 +14,7 @@
 //! const cache = new PeisarCache("contents", "public", {
 //!   markdown: { fragment: true },
 //!   archive: { shardBytes: 8 * 1024 * 1024, flushIntervalMs: 2000 },
-//!   hosting: { provider: "githubPages", repo: "site" },
+//!   hosting: { provider: "GithubPages", repo: "site" },
 //!   outDir: "out",
 //! });
 //! cache.pages();                    // PageObject[] — for Liquid themes
