@@ -13,16 +13,16 @@
 //! # The Markdown body follows
 //! ```
 //!
-//! Use [`parse_markdown_frontmatter`] to split a document into its Markdown
+//! Use [`frontmatter`] to split a document into its Markdown
 //! body and the deserialized YAML metadata (a `serde_json::Value`, so the
 //! result is directly usable from both Rust and JavaScript).
 //!
 //! # Example
 //!
 //! ```
-//! use peisar::frontmatter::parse_markdown_frontmatter;
+//! use peisar::frontmatter::frontmatter;
 //!
-//! let parsed = parse_markdown_frontmatter("---\ntitle: Hello\n---\n\n# Body").unwrap();
+//! let parsed = frontmatter("---\ntitle: Hello\n---\n\n# Body".to_string()).unwrap();
 //! assert_eq!(parsed.pure_markdown_content(), "# Body");
 //! assert_eq!(parsed.yaml_data().unwrap()["title"], "Hello");
 //! ```
@@ -89,16 +89,6 @@ pub fn yaml_parser(yaml_str: String) -> Value {
 ///   Markdown body and `yaml_data` is `None`.
 /// - Invalid YAML produces `Err` with a human-readable message.
 ///
-/// # Example
-///
-/// ```
-/// use peisar::frontmatter::parse_markdown_frontmatter;
-///
-/// // No front matter — body is the whole input.
-/// let parsed = parse_markdown_frontmatter("# Just markdown").unwrap();
-/// assert!(parsed.yaml_data().is_none());
-/// assert_eq!(parsed.pure_markdown_content(), "# Just markdown");
-/// ```
 fn parse_markdown_frontmatter(content: &str) -> Result<FrontmatterResult, String> {
     let trimmed = content.trim_start();
     let has_frontmatter_start = trimmed.starts_with("---\n") || trimmed.starts_with("---\r\n");

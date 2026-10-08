@@ -411,7 +411,7 @@ dependencies = [
 
 [[package]]
 name = "peisar"
-version = "0.3.0"
+version = "0.3.11"
 dependencies = [
  "bincode",
  "blake3",

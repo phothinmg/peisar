@@ -40,9 +40,9 @@
 //! Extract YAML front matter from a document:
 //!
 //! ```
-//! use peisar::frontmatter::parse_markdown_frontmatter;
+//! use peisar::frontmatter::frontmatter;
 //!
-//! let parsed = parse_markdown_frontmatter("---\ntitle: Hello\n---\n\n# Hello").unwrap();
+//! let parsed = frontmatter("---\ntitle: Hello\n---\n\n# Hello".to_string()).unwrap();
 //! assert_eq!(parsed.pure_markdown_content(), "# Hello");
 //! assert_eq!(parsed.yaml_data().unwrap()["title"], "Hello");
 //! ```
