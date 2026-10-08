@@ -2,26 +2,26 @@
   "name": "peisar",
   "version": "0.3.11",
   "description": "A practical Markdown parser written in Rust",
-  "main": "index.cjs",
-  "types": "index.d.ts",
-  "module": "index.mjs",
+  "main": "dist/index.cjs",
+  "types": "dist/index.d.ts",
+  "module": "dist/index.mjs",
   "exports": {
     ".": {
       "require": {
-        "default": "./index.cjs",
-        "types": "./index.d.ts"
+        "default": "./dist/index.cjs",
+        "types": "./dist/index.d.ts"
       },
       "import": {
-        "default": "./index.mjs",
-        "types": "./index.d.ts"
+        "default": "./dist/index.mjs",
+        "types": "./dist/index.d.ts"
       }
     }
   },
   "scripts": {
-    "build:local": "napi build --platform --features npm --js index.cjs --config-path napi.config.json --output-dir local_build",
+    "build": "bash scripts/build.sh",
     "hooks:install": "bash scripts/install-hooks.sh",
     "commit": "bash scripts/commit.sh",
-    "wf:test": "bash scripts/wf_tests.sh"
+    "js:test": "bash scripts/js_tests.sh"
   },
   "keywords": [
     "markdown",

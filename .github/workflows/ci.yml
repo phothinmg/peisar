@@ -40,7 +40,7 @@ jobs:
         run: npm ci
 
       - name: Run JavaScript unit tests
-        run: npm run wf:test
+        run: npm run js:test
   # ── Native builds for every supported platform ─────────────────────────
   build:
     if: github.event_name == 'release'
@@ -137,9 +137,7 @@ jobs:
       #    for the root package — these are needed at publish time but are
       #    not uploaded as build artifacts (only *.node files are).
       - name: Generate JS binding & types
-        run: |
-          bash scripts/build.sh
-
+        run: npm run build
       # 1. Download compiled artifacts from the build matrix
       - name: Download all artifacts
         uses: actions/download-artifact@v8

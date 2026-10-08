@@ -15,7 +15,12 @@ separate JavaScript source tree.
 src/
 ├── frontmatter/mod.rs                 YAML front-matter extraction
 ├── cache/
-│   ├── mod.rs                         PeisarCache: N-API class, watcher, disk cache
+│   ├── mod.rs                         PeisarCache: memory-first N-API class,
+│   │                                  watcher, page/asset objects
+│   ├── lru.rs                        size-aware LRU memory tier
+│   ├── archive.rs                    binary shard archive + map.json worker
+│   ├── base_url.rs                   hosting baseUrl resolution (GH Pages/…)
+│   ├── obj_cache.rs                   PageObject/AssetsObject + ObjectCache
 │   └── file.rs                       markdown/asset file discovery and extensions
 ├── markdown/
 │   ├── ast/
@@ -30,11 +35,15 @@ src/
 ```
 
 The Node.js `Peisar` class exposes `ast`, `html`, `frontmatter`, `astJson`,
-`useVisitor`, and `useParser`. The Node.js `PeisarCache` class exposes
-`markdownFiles`, `assetFiles`, `listFiles`, `getText`, `getBinary`,
+`useVisitor`, and `useParser`. The Node.js `PeisarCache` class is
+memory-first: an LRU in-memory tier backed by a background archive worker
+that flushes binary shards to `.peisar-cache` with a `map.json` search
+index. It exposes `markdownFiles`, `assetFiles`, `listFiles`, `getText`,
+`getBinary`, `pages`, `getPage`, `assets`, `getAsset`, `archived`, `mapJson`,
+`flush`, `baseUrl`, `resolveUrl`, `siteUrl`, `useVisitor`, `useParser`,
 `startWatchingJs`, `onChange`, `offChange`, and `dispose` (see
-`src/cache/mod.rs`). The generated TypeScript declarations are
-output by the N-API build; do not hand-edit them.
+`src/cache/mod.rs`). The generated TypeScript declarations are output by
+the N-API build; do not hand-edit them.
 
 ## Build and test
 
@@ -64,5 +73,12 @@ addon in a temporary directory and runs the Node integration tests in
 - `PeisarAst` owns raw Markdown, front matter, hooks, and visitors. Adding a
   parser hook reparses the raw Markdown; document reads apply registered
   visitors.
+- `PeisarCache` is memory-first: `LruCache` (src/cache/lru.rs) bounds the hot
+  set by bytes/entries; evicted entries stay readable through the archive
+  tier. The archive worker (src/cache/archive.rs) buffers upserts and writes
+  bincode shards + `map.json` on size/interval/drop; shards are immutable,
+  GC'd when unreferenced, and written atomically (tmp + rename).
+- napi numerics: config fields crossing the boundary use `i64`/`u32` (not
+  `u64`/`usize`); clamp in the resolved accessors.
 - Rust consumers use module paths such as `peisar::markdown::ast::Document`,
   not root re-exports.

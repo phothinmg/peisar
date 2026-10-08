@@ -1,43 +1,47 @@
-//! In-memory + on-disk cache of Markdown and asset files.
+//! Memory-first cache of a site's Markdown and asset files.
 //!
 //! [`PeisarCache`] loads every markdown file under an entry directory
-//! (plus optional assets) into memory, mirrors them to a `.peisar_cache`
-//! directory on disk, and — once [`PeisarCache::start_watching`] is called —
-//! keeps both in sync with recursive file-watching. It is the engine behind
-//! the `peisar-ssg` dev server, but it works as a plain Rust dependency too.
+//! (plus optional assets) into an in-memory LRU store, derives
+//! template-ready [`PageObject`] / [`AssetsObject`] values on demand, and
+//! — in the background — flushes content into a binary shard archive
+//! under `.peisar-cache` (with a `map.json` search index). Disk is *not*
+//! the primary store: reads hit memory first and only fall through to the
+//! archive for entries the LRU has evicted.
+//!
+//! # JS usage (napi-rs surface)
+//!
+//! ```js
+//! const cache = new PeisarCache("contents", "public", {
+//!   markdown: { fragment: true },
+//!   archive: { shardBytes: 8 * 1024 * 1024, flushIntervalMs: 2000 },
+//!   hosting: { provider: "githubPages", repo: "site" },
+//!   outDir: "out",
+//! });
+//! cache.pages();                    // PageObject[] — for Liquid themes
+//! cache.getPage("docs/intro.md");   // single page object (or null)
+//! cache.assets();                    // AssetsObject[]
+//! cache.mapJson();                   // the map.json document (search index)
+//! cache.archived();                  // paths flushed to the disk archive
+//! cache.startWatchingJs();           // keep everything in sync with the FS
+//! ```
 //!
 //! # Rust usage
 //!
-//! Construct a cache with [`PeisarCache::new`] or
-//! [`PeisarCache::with_config`]. Construction walks the entry directory
-//! once, snapshots every discovered file into memory, and persists the
-//! snapshot to `.peisar_cache` before returning:
-//!
 //! ```no_run
-//! use peisar::cache::{CachedContent, PeisarCache};
+//! use peisar::cache::{CachedContent, PeisarCache, PeisarCacheConfig};
+//! use std::path::Path;
 //!
 //! # fn main() -> std::io::Result<()> {
-//! // Markdown from "contents", assets from "public". Relative paths are
-//! // resolved against the current working directory.
-//! let mut cache = PeisarCache::with_config("contents", Some("public"))?;
-//!
-//! // Every cached markdown file, as absolute path -> raw text.
-//! for (path, text) in cache.all() {
-//!     println!("{} ({} bytes)", path.display(), text.len());
+//! let mut cache = PeisarCache::with_config(PeisarCacheConfig {
+//!     entry_dir: "contents".into(),
+//!     assets_dir: Some("public".into()),
+//!     ..PeisarCacheConfig::default()
+//! })?;
+//! for path in cache.markdown_files() {
+//!     if let Some(CachedContent::Text(md)) = cache.get(Path::new(&path)) {
+//!         println!("{} ({} bytes)", path, md.len());
+//!     }
 //! }
-//!
-//! // Single entries keep their variant: markdown is `Text`, binary assets
-//! // are `Binary`. The cache is keyed by absolute paths, so keys from
-//! // `all()` — or `current_dir()`-joined paths — can be passed to `get()`.
-//! let index = std::env::current_dir()?.join("contents").join("index.md");
-//! match cache.get(&index) {
-//!     Some(CachedContent::Text(md)) => println!("{md}"),
-//!     Some(CachedContent::Binary(bytes)) => println!("{} bytes", bytes.len()),
-//!     None => println!("not cached"),
-//! }
-//!
-//! // Keep memory and disk in sync with the filesystem until the cache is
-//! // dropped (which stops the watcher and joins the worker thread).
 //! cache.start_watching()?;
 //! # Ok(())
 //! # }
@@ -46,42 +50,56 @@
 //! # Discovery rules
 //!
 //! - *Markdown*: files under the entry directory whose extension is `md`,
-//!   `markdown`, `mdown`, `mkdn`, `mkd`, `mdwn`, `mkdown`, or `ron`; they are
-//!   cached as UTF-8 text.
-//! - *Assets*: files under the assets directory — the `public` directory of
-//!   the current working directory when no assets directory is given — with
-//!   a known image, script, style, font, or audio/video extension. Images,
-//!   fonts, and audio/video files are cached as raw bytes; `js`, `css`,
-//!   `map`, and `svg` are cached as UTF-8 text.
+//!   `markdown`, `mdown`, `mkdn`, `mkd`, `mdwn`, `mkdown`, or `ron`; cached
+//!   as UTF-8 text.
+//! - *Assets*: files under the assets directory with a known image, script,
+//!   style, font, or audio/video extension. Binary types are cached as raw
+//!   bytes; `js`, `css`, `map`, and `svg` are cached as UTF-8 text.
 //!
-//! # Disk format
+//! # Tiering
 //!
-//! - Text (markdown) entries are stored as `.json` (default) or `.bin`
-//!   (when `PEISAR_CACHE_FORMAT=bincode`) files that embed the raw content
-//!   and the parsed front matter.
-//! - Binary assets are mirrored verbatim under their original names.
-//! - Writes are atomic (temp file + rename) and content-hashed (BLAKE3) so
-//!   unchanged entries are not rewritten; files removed from the source
-//!   tree are pruned from the cache directory.
-//! - A `.peisar_cache` entry is appended to `.gitignore` automatically.
+//! 1. **Memory (hot)** — an LRU bounded by `byteBudget`/`entryBudget` in
+//!    `memory` config (or the constructor options). All reads start here.
+//!
+//! 2. **Disk archive (cold)** — a background worker buffers upserts and
+//!    flushes binary shards under `.peisar-cache` when the pending content
+//!    crosses `shardBytes`, on the `flushIntervalMs` tick, or on
+//!    flush/dispose/drop. `map.json` maps every flushed path to its shard
+//!    location and (for markdown) its parsed front matter.
+//!
+//! Entries evicted from memory stay readable via the archive
+//! (`getText`/`getBinary` fall through), so the byte budget is a *hot set*
+//! limit, not a correctness limit.
 //!
 //! # Threading and lifecycle
 //!
-//! Disk persistence runs on a background worker thread fed by a channel.
-//! Watcher events update the in-memory cache first, then enqueue an
-//! incremental update/remove/sync command so the watcher callback never
-//! blocks on I/O. Dropping a [`PeisarCache`] stops the watcher, closes the
-//! channel, and joins the worker thread — Rust consumers need no explicit
-//! `dispose()`.
-//!
-//! # JavaScript surface
-//!
-//! `new PeisarCache(entryDir, assetsDir?)`, `PeisarCache.withConfigJs`,
-//! `startWatchingJs()`, `getText`, `getBinary`, `listFiles`,
-//! `markdownFiles()`, `assetFiles()`, `onChange(cb) → id`, `offChange(id)`,
-//! `dispose()`.
+//! The archive worker and file watcher run on background threads. JS
+//! consumers call `dispose()` (or drop the cache in Rust) to stop the
+//! watcher, flush pending archive writes, and join the workers.
 
+mod archive;
+mod base_url;
 mod file;
+mod lru;
+mod obj_cache;
+
+pub use archive::{ARCHIVE_DIR_NAME, ArchiveHandle};
+pub use base_url::{BaseDirInfo, HostingProvider};
+pub use lru::LruCache;
+pub use obj_cache::{
+    AssetsObject, ObjectCache, PageObject, asset_file_type, asset_out_file, asset_slug,
+    extra_frontmatter_fields, file_name_no_ext, markdown_slug, page_out_file,
+};
+
+use crate::frontmatter::frontmatter;
+use crate::markdown::ast::visitor::visit_document_mut;
+use crate::markdown::ast::{
+    AstOptions, ParseHooks, RegisteredParser, RegisteredVisitor, md_to_ast_with_hooks,
+};
+#[cfg(feature = "npm")]
+use crate::markdown::ast::{Parser, Visitor};
+use crate::markdown::config::{PeisarOptions, get_options};
+use crate::markdown::html::{RenderOptions, render_document_html};
 use file::{
     ASSET_BINARY_EXTENSIONS, ASSET_EXTENSIONS, MARKDOWN_EXTENSIONS, collect_asset_files,
     collect_markdown_files,
@@ -91,16 +109,14 @@ use napi::bindgen_prelude::*;
 #[cfg(feature = "npm")]
 use napi_derive::napi;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use serde::{Deserialize, Serialize};
-use serde_yaml::Value as YamlValue;
 use std::collections::{HashMap, HashSet};
 use std::env;
-use std::fs::{self, OpenOptions};
-use std::io::{self, Write};
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, RwLock, mpsc};
-use std::thread;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 /// A file-change event delivered to change callbacks
 /// (see [`PeisarCache::on_change`]).
@@ -115,55 +131,156 @@ pub struct CacheChangeEvent {
     pub is_markdown: bool,
 }
 
-/// Serialized form of a cached text entry, embedded in every `.json` / `.bin`
-/// cache file: the source path relative to the working directory, the raw
-/// markdown, and its parsed front matter.
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct CacheEntry {
-    file_path: String,
-    markdown_raw_content: String,
-    frontmatter_data: Option<YamlValue>,
-    #[serde(default)]
-    is_binary: bool,
-}
-
-/// Parse a leading `--- … ---` YAML front-matter block, returning `None`
-/// when the content does not start with one.
-fn parse_frontmatter(content: &str) -> Option<YamlValue> {
-    let mut lines = content.lines();
-    if let Some(first) = lines.next() {
-        if first.trim() == "---" {
-            let mut fm_lines: Vec<&str> = Vec::new();
-            for line in lines {
-                if line.trim() == "---" {
-                    break;
-                }
-                fm_lines.push(line);
-            }
-            let fm_str = fm_lines.join("\n");
-            match serde_yaml::from_str(&fm_str) {
-                Ok(v) => Some(v),
-                Err(_) => None,
-            }
-        } else {
-            None
-        }
-    } else {
-        None
-    }
-}
-
 /// An entry stored in the cache: raw UTF-8 text (markdown and textual
 /// assets) or raw bytes (binary assets). Exposed to JavaScript so JS
-/// consumers can branch on the variant.
+/// consumers can branch on the variant. The serde derives back the
+/// bincode round-trip through the disk archive.
 #[cfg_attr(feature = "npm", napi)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum CachedContent {
     /// UTF-8 text content (markdown files and textual assets).
     Text(String),
     /// Raw bytes (binary assets like images or fonts).
     Binary(Vec<u8>),
 }
+
+/// Cache-wide configuration: directories, markdown options, memory/archive
+/// budgets, hosting/baseUrl resolution, and the build output directory.
+#[cfg_attr(feature = "npm", napi(object))]
+#[derive(Debug, Clone)]
+pub struct PeisarCacheConfig {
+    /// Entry directory holding the markdown files (absolute, or relative
+    /// to the current working directory).
+    pub entry_dir: String,
+    /// Optional assets directory (defaults to `public` under the cwd when
+    /// omitted).
+    pub assets_dir: Option<String>,
+    /// Markdown parsing/rendering options applied to every page render
+    /// (GFM/Kramdown toggles, `fragment`, title, …). Custom visitors and
+    /// parsers are registered separately via `useVisitor` / `useParser`.
+    pub markdown: Option<PeisarOptions>,
+    /// Memory-tier budgets (LRU eviction). Defaults: 64 MiB bytes,
+    /// unlimited entries.
+    pub memory: Option<MemoryConfig>,
+    /// Disk-archive tier thresholds. Defaults: 8 MiB shards, 2 s flush.
+    pub archive: Option<ArchiveConfig>,
+    /// Static-hosting baseUrl resolution (GitHub Pages/Vercel/…).
+    pub hosting: Option<HostingConfig>,
+    /// Build output directory used for `outFilePath` fields (default
+    /// `"out"`).
+    pub out_dir: Option<String>,
+}
+
+impl Default for PeisarCacheConfig {
+    fn default() -> Self {
+        Self {
+            entry_dir: "contents".to_string(),
+            assets_dir: None,
+            markdown: None,
+            memory: None,
+            archive: None,
+            hosting: None,
+            out_dir: None,
+        }
+    }
+}
+
+/// LRU budgets for the memory tier.
+#[cfg_attr(feature = "npm", napi(object))]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MemoryConfig {
+    /// Maximum total bytes of raw content kept in memory (`0` =
+    /// unlimited). When the budget is exceeded, the least recently used
+    /// entries are evicted (they remain readable from the disk archive).
+    pub byte_budget: Option<i64>,
+    /// Maximum number of entries in memory (`0` = unlimited).
+    pub entry_budget: Option<u32>,
+}
+
+impl MemoryConfig {
+    /// Resolved byte budget (`0` = unlimited).
+    pub fn byte_budget(&self) -> u64 {
+        self.byte_budget
+            .unwrap_or(DEFAULT_BYTE_BUDGET as i64)
+            .max(0) as u64
+    }
+
+    /// Resolved entry budget (`0` = unlimited).
+    pub fn entry_budget(&self) -> usize {
+        self.entry_budget.unwrap_or(0) as usize
+    }
+}
+
+/// Flush thresholds for the disk-archive tier.
+#[cfg_attr(feature = "npm", napi(object))]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ArchiveConfig {
+    /// Pending-content threshold (bytes) that triggers writing a new
+    /// shard; `0` disables size-based flushing (interval/drop only).
+    pub shard_bytes: Option<i64>,
+    /// Maximum time (ms) pending entries may sit in the worker buffer
+    /// before being flushed. `0` disables the timer.
+    pub flush_interval_ms: Option<i64>,
+}
+
+impl ArchiveConfig {
+    /// Resolved shard threshold.
+    pub fn shard_bytes(&self) -> u64 {
+        self.shard_bytes
+            .unwrap_or(DEFAULT_SHARD_BYTES as i64)
+            .max(0) as u64
+    }
+
+    /// Resolved flush interval.
+    pub fn flush_interval(&self) -> Duration {
+        Duration::from_millis(
+            self.flush_interval_ms
+                .unwrap_or(DEFAULT_FLUSH_INTERVAL_MS as i64)
+                .max(0) as u64,
+        )
+    }
+}
+
+/// Static-hosting configuration for baseUrl resolution.
+#[cfg_attr(feature = "npm", napi(object))]
+#[derive(Debug, Clone, Default)]
+pub struct HostingConfig {
+    /// Hosting provider (see [`HostingProvider`]).
+    pub provider: Option<HostingProvider>,
+    /// GitHub repository name for project pages (`/<repo>/` prefix).
+    pub repo: Option<String>,
+    /// Custom site URL (overrides provider defaults when set).
+    pub site_url: Option<String>,
+    /// Extra path prefix (e.g. `"subpath"` for `example.com/subpath/`).
+    pub path_prefix: Option<String>,
+}
+
+impl HostingConfig {
+    fn resolve(&self) -> BaseDirInfo {
+        let mut info = BaseDirInfo::new(
+            self.provider.unwrap_or(HostingProvider::Custom),
+            self.repo.clone(),
+            self.site_url.clone(),
+        );
+        info.path_prefix = self.path_prefix.clone();
+        info
+    }
+}
+
+impl Default for BaseDirInfo {
+    fn default() -> Self {
+        Self::new(HostingProvider::Custom, None, None)
+    }
+}
+
+/// Default LRU byte budget when none is configured: 64 MiB.
+pub const DEFAULT_BYTE_BUDGET: u64 = 64 * 1024 * 1024;
+/// Default pending-content shard threshold: 8 MiB.
+pub const DEFAULT_SHARD_BYTES: u64 = 8 * 1024 * 1024;
+/// Default archive flush interval: 2 seconds.
+pub const DEFAULT_FLUSH_INTERVAL_MS: u64 = 2_000;
+/// Default build output directory.
+pub const DEFAULT_OUT_DIR: &str = "out";
 
 /// Boxed change callback held in the subscription registry.
 ///
@@ -174,10 +291,10 @@ pub type CacheChangeCallback = Box<dyn Fn(CacheChangeEvent) + Send + 'static>;
 /// Backward-compatible name for callbacks used by the JavaScript binding.
 pub type JsChangeCallback = CacheChangeCallback;
 
-/// Shared registry of JS change callbacks, keyed by subscription id.
+/// Shared registry of change callbacks, keyed by subscription id.
 #[derive(Clone, Default)]
 struct ChangeCallbacks {
-    inner: Arc<std::sync::Mutex<HashMap<u32, CacheChangeCallback>>>,
+    inner: Arc<Mutex<HashMap<u32, CacheChangeCallback>>>,
     next_id: Arc<AtomicU32>,
 }
 
@@ -205,305 +322,193 @@ impl ChangeCallbacks {
     }
 }
 
-/// Incremental command sent to the persistence worker by construction and
-/// the file watcher.
-#[derive(Debug)]
-enum PersistCommand {
-    Update(PathBuf, CachedContent),
-    Remove(PathBuf),
-    SyncAll(HashMap<PathBuf, CachedContent>),
-}
-
-/// Map a source path to its on-disk cache target and its path relative to
-/// `cwd`. Text entries gain the cache-format extension (`.json` / `.bin`);
-/// binary assets keep their original file name.
-fn compute_target_for_source(src: &Path, cwd: &Path, is_binary: bool) -> (PathBuf, PathBuf) {
-    // returns (target_path, rel_path)
-    //
-    // Paths outside `cwd` are mirrored by their normal path components
-    // (e.g. `/elsewhere/b.png` → `elsewhere/b.png`).  Keeping the relative
-    // path free of a leading root is important: `PathBuf::join` with an
-    // absolute path *replaces* the buffer, which would otherwise make the
-    // cache write its entry over the original source file.
-    let rel_path = match src.strip_prefix(cwd) {
-        Ok(rel) => rel.to_path_buf(),
-        Err(_) => {
-            let mut rel = PathBuf::new();
-            rel.extend(src.components().filter_map(|c| match c {
-                std::path::Component::Normal(p) => Some(p),
-                _ => None,
-            }));
-            rel
-        }
-    };
-    let parent = rel_path.parent().map(|p| p.to_path_buf());
-    let fname = rel_path
-        .file_name()
-        .map(|f| f.to_string_lossy().to_string())
-        .unwrap_or_default();
-    let cache_dir = cwd.join(".peisar_cache");
-
-    let target = if is_binary {
-        // mirror original filename for binary assets
-        match &parent {
-            Some(p) => cache_dir.join(p).join(&fname),
-            None => cache_dir.join(&fname),
-        }
-    } else {
-        // text entries are stored in the configured cache format (default: JSON).
-        // Set PEISAR_CACHE_FORMAT=bincode to store compact binary entries (.bin).
-        let fmt = env::var("PEISAR_CACHE_FORMAT").unwrap_or_else(|_| "json".to_string());
-        let ext = if fmt.eq_ignore_ascii_case("bincode") {
-            ".bin"
-        } else {
-            ".json"
-        };
-        let cache_name = format!("{}{}", fname, ext);
-        match &parent {
-            Some(p) => cache_dir.join(p).join(&cache_name),
-            None => cache_dir.join(&cache_name),
-        }
-    };
-
-    (target, rel_path)
-}
-
-/// Synchronously persist `map` to `<cwd>/.peisar_cache`, prune stale cache
-/// files, and make sure `.gitignore` contains a `.peisar_cache` entry.
-fn persist_cache_map(map: &HashMap<PathBuf, CachedContent>) -> io::Result<()> {
-    let cwd = env::current_dir()?;
-    let cache_dir = cwd.join(".peisar_cache");
-    fs::create_dir_all(&cache_dir)?;
-
-    let mut expected_files: HashSet<PathBuf> = HashSet::new();
-
-    for (path, content) in map {
-        match content {
-            CachedContent::Text(text) => {
-                let (target, rel_path) = compute_target_for_source(path, &cwd, false);
-                let target_dir = target
-                    .parent()
-                    .map(|p| p.to_path_buf())
-                    .unwrap_or(cache_dir.clone());
-                fs::create_dir_all(&target_dir)?;
-
-                let file_path_str = rel_path.to_string_lossy().to_string();
-                let fm = parse_frontmatter(text);
-                let entry = CacheEntry {
-                    file_path: file_path_str,
-                    markdown_raw_content: text.clone(),
-                    frontmatter_data: fm,
-                    is_binary: false,
-                };
-
-                // Support configurable on-disk format via PEISAR_CACHE_FORMAT.
-                let fmt = env::var("PEISAR_CACHE_FORMAT").unwrap_or_else(|_| "json".to_string());
-                if fmt.eq_ignore_ascii_case("bincode") {
-                    let bytes = bincode::serialize(&entry).map_err(|e| {
-                        io::Error::new(io::ErrorKind::Other, format!("bincode error: {}", e))
-                    })?;
-
-                    // Write atomically to a temp file then rename
-                    let fname = target
-                        .file_name()
-                        .map(|f| f.to_string_lossy().to_string())
-                        .unwrap_or_default();
-                    let tmp_name = format!("{}.tmp", fname);
-                    let tmp_path = target_dir.join(&tmp_name);
-                    fs::write(&tmp_path, &bytes)?;
-                    fs::rename(&tmp_path, &target)?;
-                } else {
-                    let json = serde_json::to_string_pretty(&entry).map_err(|e| {
-                        io::Error::new(io::ErrorKind::Other, format!("serde_json error: {}", e))
-                    })?;
-
-                    // Write atomically to a temp file then rename
-                    let fname = target
-                        .file_name()
-                        .map(|f| f.to_string_lossy().to_string())
-                        .unwrap_or_default();
-                    let tmp_name = format!("{}.tmp", fname);
-                    let tmp_path = target_dir.join(&tmp_name);
-                    fs::write(&tmp_path, json.as_bytes())?;
-                    fs::rename(&tmp_path, &target)?;
-                }
-
-                expected_files.insert(target);
-            }
-            CachedContent::Binary(bytes) => {
-                let (target, _rel_path) = compute_target_for_source(path, &cwd, true);
-                let target_dir = target
-                    .parent()
-                    .map(|p| p.to_path_buf())
-                    .unwrap_or(cache_dir.clone());
-                fs::create_dir_all(&target_dir)?;
-
-                let fname = target
-                    .file_name()
-                    .map(|f| f.to_string_lossy().to_string())
-                    .unwrap_or_default();
-                let tmp_name = format!("{}.tmp", fname);
-                let tmp_path = target_dir.join(&tmp_name);
-                fs::write(&tmp_path, bytes)?;
-                fs::rename(&tmp_path, &target)?;
-
-                expected_files.insert(target);
-            }
-        }
-    }
-
-    // Remove stale files that are present in .peisar_cache but not expected
-    fn collect_files(dir: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-            let p = entry.path();
-            if p.is_dir() {
-                collect_files(&p, out)?;
-            } else if p.is_file() {
-                out.push(p);
-            }
-        }
-        Ok(())
-    }
-
-    if cache_dir.exists() {
-        let mut existing_files: Vec<PathBuf> = Vec::new();
-        collect_files(&cache_dir, &mut existing_files)?;
-        for f in existing_files {
-            if !expected_files.contains(&f) {
-                let _ = fs::remove_file(&f);
-            }
-        }
-
-        // Remove empty directories under .peisar_cache
-        fn remove_empty(dir: &Path) -> io::Result<()> {
-            for entry in fs::read_dir(dir)? {
-                let entry = entry?;
-                let p = entry.path();
-                if p.is_dir() {
-                    remove_empty(&p)?;
-                    if fs::read_dir(&p)?.next().is_none() {
-                        let _ = fs::remove_dir(&p);
-                    }
-                }
-            }
-            Ok(())
-        }
-        let _ = remove_empty(&cache_dir);
-    }
-
-    // Ensure .peisar_cache is in .gitignore
-    let gitignore_path = cwd.join(".gitignore");
-    if gitignore_path.exists() {
-        let existing = fs::read_to_string(&gitignore_path)?;
-        let mut has_entry = false;
-        for line in existing.lines() {
-            if line.trim() == ".peisar_cache" {
-                has_entry = true;
-                break;
-            }
-        }
-        if !has_entry {
-            let mut file = OpenOptions::new().append(true).open(&gitignore_path)?;
-            if !existing.ends_with('\n') {
-                file.write_all(b"\n")?;
-            }
-            file.write_all(b".peisar_cache\n")?;
-        }
-    } else {
-        fs::write(gitignore_path, ".peisar_cache\n")?;
-    }
-
-    Ok(())
-}
-
-/// In-memory cache of the Markdown and asset files under a directory tree.
+/// In-memory + archive-backed cache of the Markdown and asset files under a
+/// directory tree.
 ///
-/// The cache maps absolute source paths to [`CachedContent`] entries, is
-/// mirrored to a `.peisar_cache` directory on disk, and — after
-/// [`PeisarCache::start_watching`] — tracks the source directories with a
-/// recursive file watcher.
-///
-/// Rust consumers read the cache with [`PeisarCache::get`] and
-/// [`PeisarCache::all`]; JavaScript consumers use the N-API methods below
-/// (`getText`, `getBinary`, `listFiles`, `markdownFiles`, `assetFiles`, …).
+/// Memory is the source of truth for hot content; a background worker
+/// flushes a binary shard archive to `.peisar-cache` for cold/large
+/// entries, front-ended by the `map.json` search index. Watchers keep the
+/// memory tier in sync with the filesystem.
 #[cfg_attr(feature = "npm", napi)]
 pub struct PeisarCache {
-    // cache maps source path -> cached content (text or binary)
-    cache: Arc<RwLock<HashMap<PathBuf, CachedContent>>>,
+    /// LRU memory tier: absolute source path → raw content. Clone-shared
+    /// with the watcher thread.
+    memory: LruCache,
+    /// Disk-archive tier handle (shards + map.json index). Clone-shared
+    /// with the watcher thread.
+    archive: ArchiveHandle,
+    /// Registered visitors (JS or Rust adapters), applied to every render.
+    visitors: Arc<Mutex<Vec<RegisteredVisitor>>>,
+    /// Registered parser hooks, applied to every render.
+    parsers: Arc<Mutex<Vec<RegisteredParser>>>,
+    /// Resolved markdown AST options (GFM/Kramdown, file name).
+    ast_opts: AstOptions,
+    /// Resolved markdown render options (fragment, title, …).
+    render_opts: RenderOptions,
     watcher: Option<RecommendedWatcher>,
     entry_dir: PathBuf,
     assets_dir: Option<PathBuf>,
-    // Sender for persistence commands — None until worker is started in new()
-    persist_tx: Option<mpsc::Sender<PersistCommand>>,
-    // Background worker handle to join on drop
-    worker_handle: Option<thread::JoinHandle<()>>,
-    // JS onChange subscriptions fed by the watcher
     change_callbacks: ChangeCallbacks,
+    /// Hosting/baseUrl configuration.
+    hosting: BaseDirInfo,
+    /// Build output directory (for `outFilePath` fields).
+    out_dir: String,
+}
+
+/// Render one markdown document into HTML using the resolved options and
+/// the registered visitors/parsers (if any).
+fn render_markdown(
+    raw_md: &str,
+    ast_opts: &AstOptions,
+    render_opts: &RenderOptions,
+    visitors: &Arc<Mutex<Vec<RegisteredVisitor>>>,
+    parsers: &Arc<Mutex<Vec<RegisteredParser>>>,
+    file_name: Option<String>,
+) -> String {
+    // Front matter never reaches the renderer.
+    let (md_body, _fm) = match frontmatter(raw_md.to_string()) {
+        Ok(parsed) => parsed.into_parts(),
+        Err(_) => (raw_md.to_string(), None),
+    };
+    let hooks_lock = parsers.lock().unwrap();
+    let mut hooks = ParseHooks::empty();
+    for p in hooks_lock.iter() {
+        hooks.push(p);
+    }
+    let opts = AstOptions {
+        gfm: ast_opts.gfm,
+        kramdown: ast_opts.kramdown,
+        file_name,
+    };
+    let mut doc = md_to_ast_with_hooks(&md_body, &opts, opts.file_name.clone(), &hooks);
+    let mut visitors_lock = visitors.lock().unwrap();
+    for v in visitors_lock.iter_mut() {
+        visit_document_mut(&mut doc, v);
+    }
+    render_document_html(&doc, Some(render_opts.clone()))
+}
+
+/// Extract a page title: front matter `title` first, else the first `#`
+/// heading before any other block content.
+fn extract_title(fm: Option<&serde_json::Value>, md_body: &str) -> Option<String> {
+    if let Some(title) = fm.and_then(|fm| fm.get("title")).and_then(|t| t.as_str()) {
+        return Some(title.to_string());
+    }
+    for line in md_body.lines() {
+        let trimmed = line.trim_start();
+        if let Some(rest) = trimmed.strip_prefix("# ") {
+            return Some(rest.trim().to_string());
+        } else if !trimmed.is_empty() {
+            // First non-empty, non-heading line ends the search.
+            return None;
+        }
+    }
+    None
+}
+
+/// Front-matter field helpers (string / string-array flattening).
+fn fm_string(fm: Option<&serde_json::Value>, keys: &[&str]) -> Option<String> {
+    let fm = fm?;
+    for key in keys {
+        if let Some(v) = fm.get(*key) {
+            return Some(match v {
+                serde_json::Value::String(s) => s.clone(),
+                other => other.to_string(),
+            });
+        }
+    }
+    None
+}
+
+fn fm_string_list(fm: Option<&serde_json::Value>, key: &str) -> Option<Vec<String>> {
+    let fm = fm?;
+    let arr = fm.get(key)?.as_array()?;
+    Some(
+        arr.iter()
+            .map(|v| match v {
+                serde_json::Value::String(s) => s.clone(),
+                other => other.to_string(),
+            })
+            .collect(),
+    )
+}
+
+/// Base64 encode bytes (standard alphabet with padding) without a
+/// dependency — used for `AssetsObject.raw` of binary assets.
+fn binary_to_base64(bytes: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = *chunk.get(1).unwrap_or(&0) as u32;
+        let b2 = *chunk.get(2).unwrap_or(&0) as u32;
+        let triple = (b0 << 16) | (b1 << 8) | b2;
+        out.push(TABLE[((triple >> 18) & 63) as usize] as char);
+        out.push(TABLE[((triple >> 12) & 63) as usize] as char);
+        out.push(if chunk.len() > 1 {
+            TABLE[((triple >> 6) & 63) as usize] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            TABLE[(triple & 63) as usize] as char
+        } else {
+            '='
+        });
+    }
+    out
 }
 
 #[cfg_attr(feature = "npm", napi)]
 impl PeisarCache {
-    /// Construct a new PeisarCache using the default discovery behavior.
+    /// JS: `new PeisarCache(entryDir, assetsDir?, options?)`.
     ///
-    /// JS: `new PeisarCache(entryDir, assetsDir?)` — both plain strings.
+    /// `options` configures markdown parsing (`fragment`, GFM, …), archive
+    /// thresholds, hosting resolution, and the output directory. Custom
+    /// visitors/parsers register afterwards via `useVisitor` /
+    /// `useParser`.
     #[cfg(feature = "npm")]
     #[napi(constructor)]
-    pub fn new_js(entry_dir: String, assets_dir: Option<String>) -> Result<Self> {
-        Self::with_config_js(entry_dir, assets_dir)
+    pub fn new_js(
+        entry_dir: String,
+        assets_dir: Option<String>,
+        options: Option<PeisarCacheJsOptions>,
+    ) -> Result<Self> {
+        let mut cache = PeisarCache::with_config(PeisarCacheConfig {
+            entry_dir,
+            assets_dir,
+            markdown: options.as_ref().and_then(|o| o.markdown.clone()),
+            archive: options.as_ref().and_then(|o| o.archive),
+            hosting: options.as_ref().and_then(|o| o.hosting.clone()),
+            out_dir: options.as_ref().and_then(|o| o.out_dir.clone()),
+            memory: None,
+        })
+        .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{e}")))?;
+        let _ = &mut cache; // silence unused-assignment lint paths
+        Ok(cache)
     }
 
-    /// JS: same as the constructor, for callers that prefer a factory shape.
-    /// Kept non-generic so NAPI can export it.
+    /// JS: `PeisarCache.withConfigJs(config)` — full configuration form,
+    /// including memory-tier budgets.
     #[cfg(feature = "npm")]
     #[napi(factory)]
-    pub fn with_config_js(entry_dir: String, assets_dir: Option<String>) -> Result<Self> {
-        PeisarCache::with_config(entry_dir, assets_dir)
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{}", e)))
+    pub fn with_config_js(config: PeisarCacheConfig) -> Result<Self> {
+        PeisarCache::with_config(config)
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{e}")))
     }
 
-    /// Construct a [`PeisarCache`] over `entry_dir` with the default
-    /// discovery behavior — equivalent to `with_config(entry_dir, None)`.
+    /// Construct a cache from a full configuration (Rust entry point).
     ///
-    /// `entry_dir` may be absolute or relative (resolved against the
-    /// current working directory); it is normalized to an absolute path so
-    /// watcher events match the cache keys. Assets default to the `public`
-    /// directory of the current working directory when present.
-    /// Construction snapshots every discovered file into memory and
-    /// persists the snapshot to `.peisar_cache` before returning; see the
-    /// [module documentation](crate::cache) for a full example.
-    ///
-    /// Rust-only constructor kept for the crate's internal users and tests
-    /// (generic signatures cannot cross the NAPI boundary).
-    pub fn new<P: AsRef<Path>>(entry_dir: P) -> io::Result<Self> {
-        PeisarCache::with_config(entry_dir, None::<&Path>)
-    }
-
-    /// Construct a [`PeisarCache`] with an optional custom assets directory.
-    ///
-    /// If `assets_dir` is `Some(path)`, that path (absolute or relative to
-    /// the current working directory) is used to discover assets. If
-    /// `assets_dir` is `None`, the default behavior is to use the `public`
-    /// directory at project root when present.
-    ///
-    /// Construction loads all markdown files under `entry_dir` (and the
-    /// assets) into the in-memory cache, persists the cache to the
-    /// `.peisar_cache` directory, and ensures `.gitignore` contains an
-    /// entry for `.peisar_cache`.
-    ///
-    /// Rust-only constructor (generic signatures cannot cross the NAPI
-    /// boundary); JavaScript uses the `PeisarCache` constructor or the
-    /// `withConfigJs` factory.
-    pub fn with_config<P: AsRef<Path>, Q: AsRef<Path>>(
-        entry_dir: P,
-        assets_dir: Option<Q>,
-    ) -> io::Result<Self> {
-        // Resolve the entry dir to an absolute path: notify watcher events
-        // carry absolute paths, so the `is_markdown` prefix check below needs
-        // an absolute `entry_dir` even when JS passes a relative directory.
+    /// Construction loads all markdown (and optionally assets) into the
+    /// memory tier; disk writes happen later on the archive worker's
+    /// size/interval flush (or explicitly via [`Self::flush`]).
+    pub fn with_config(config: PeisarCacheConfig) -> io::Result<Self> {
         let cwd = env::current_dir()?;
+        // Resolve the entry dir to an absolute path: watcher events carry
+        // absolute paths, so the `is_markdown` prefix check needs an
+        // absolute entry_dir even when JS passes a relative one.
         let entry_dir = {
-            let d = entry_dir.as_ref();
+            let d = Path::new(&config.entry_dir);
             if d.is_absolute() {
                 d.to_path_buf()
             } else {
@@ -511,28 +516,15 @@ impl PeisarCache {
             }
         };
 
-        // Build initial in-memory cache with markdown files (text) and
-        // optionally assets under the provided assets_dir (binary/text
-        // depending on extension).
-        let mut cache_map: HashMap<PathBuf, CachedContent> = HashMap::new();
-
-        let files = collect_markdown_files(&entry_dir)?;
-        for f in files {
-            if let Ok(text) = fs::read_to_string(&f) {
-                cache_map.insert(f, CachedContent::Text(text));
-            }
-        }
-
-        // Resolve assets_dir: use provided path when given; otherwise fall
-        // back to "public" at project root if present.
-        let resolved_assets: Option<PathBuf> = match assets_dir {
+        // Assets default to `public` under the cwd when omitted.
+        let resolved_assets: Option<PathBuf> = match &config.assets_dir {
             Some(p) => {
-                let pbuf = p.as_ref().to_path_buf();
-                if pbuf.is_absolute() {
-                    Some(pbuf)
+                let pbuf = PathBuf::from(p);
+                Some(if pbuf.is_absolute() {
+                    pbuf
                 } else {
-                    Some(cwd.join(pbuf))
-                }
+                    cwd.join(pbuf)
+                })
             }
             None => {
                 let p = cwd.join("public");
@@ -544,366 +536,115 @@ impl PeisarCache {
             }
         };
 
-        if let Some(ref a_dir) = resolved_assets {
-            if let Ok(asset_files) = collect_asset_files(a_dir) {
-                for f in asset_files {
-                    // determine if binary by extension
-                    let is_binary = f
-                        .extension()
-                        .and_then(|e| e.to_str())
-                        .map(|s| ASSET_BINARY_EXTENSIONS.contains(&s.to_lowercase().as_str()))
-                        .unwrap_or(false);
+        // Markdown options for every page render.
+        let resolved = get_options(config.markdown.clone());
+        let ast_opts = resolved.ast_opts;
+        let render_opts = resolved.render_opts;
 
-                    if is_binary {
-                        if let Ok(bytes) = fs::read(&f) {
-                            cache_map.insert(f, CachedContent::Binary(bytes));
-                        }
-                    } else {
-                        if let Ok(text) = fs::read_to_string(&f) {
-                            cache_map.insert(f, CachedContent::Text(text));
-                        }
+        // Memory tier.
+        let mem_cfg = config.memory.unwrap_or_default();
+        let memory = LruCache::new(mem_cfg.byte_budget(), mem_cfg.entry_budget());
+
+        // Archive tier.
+        let archive_cfg = config.archive.unwrap_or_default();
+        let archive = ArchiveHandle::new(
+            cwd.clone(),
+            archive_cfg.shard_bytes(),
+            archive_cfg.flush_interval(),
+        );
+
+        // Hosting resolution.
+        let hosting = config
+            .hosting
+            .as_ref()
+            .map(HostingConfig::resolve)
+            .unwrap_or_default();
+
+        // Discover and load markdown + assets into the memory tier.
+        let mut cache_map: HashMap<PathBuf, CachedContent> = HashMap::new();
+        for f in collect_markdown_files(&entry_dir)? {
+            if let Ok(text) = fs::read_to_string(&f) {
+                cache_map.insert(f, CachedContent::Text(text));
+            }
+        }
+        if let Some(ref a_dir) = resolved_assets
+            && let Ok(asset_files) = collect_asset_files(a_dir)
+        {
+            for f in asset_files {
+                let is_binary = f
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|s| ASSET_BINARY_EXTENSIONS.contains(&s.to_lowercase().as_str()))
+                    .unwrap_or(false);
+                if is_binary {
+                    if let Ok(bytes) = fs::read(&f) {
+                        cache_map.insert(f, CachedContent::Binary(bytes));
                     }
+                } else if let Ok(text) = fs::read_to_string(&f) {
+                    cache_map.insert(f, CachedContent::Text(text));
                 }
             }
         }
+        memory.replace_all(cache_map.clone());
 
-        // Persist the initial cache to disk synchronously so callers observe
-        // cache files immediately after construction.
-        persist_cache_map(&cache_map)?;
+        // Enqueue the initial snapshot to the archive tier (flushed by
+        // size/interval later — no blocking disk writes at construction).
+        archive.sync_all(cache_map);
 
-        // Prepare background persistence worker that accepts incremental
-        // commands so the watcher callback can remain non-blocking for large
-        // repositories. Seed the worker's hash map with the current contents
-        // to enable content-hash-based de-duplication.
-        let (tx, rx) = mpsc::channel::<PersistCommand>();
+        // Make sure the archive dir is ignored by git.
+        archive::ensure_gitignore_entry(&cwd)?;
 
-        let mut last_hashes: HashMap<PathBuf, String> = HashMap::new();
-        for (src, content) in &cache_map {
-            let (target, _rel) =
-                compute_target_for_source(src, &cwd, matches!(content, CachedContent::Binary(_)));
-            let hash = match content {
-                CachedContent::Text(s) => blake3::hash(s.as_bytes()).to_hex().to_string(),
-                CachedContent::Binary(b) => blake3::hash(b).to_hex().to_string(),
-            };
-            last_hashes.insert(target, hash);
-        }
-
-        let handle = thread::spawn(move || {
-            let cache_dir = cwd.join(".peisar_cache");
-
-            // helper to collect all files under cache_dir
-            fn collect_files(dir: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
-                for entry in fs::read_dir(dir)? {
-                    let entry = entry?;
-                    let p = entry.path();
-                    if p.is_dir() {
-                        collect_files(&p, out)?;
-                    } else if p.is_file() {
-                        out.push(p);
-                    }
-                }
-                Ok(())
-            }
-
-            let mut hashes = last_hashes;
-
-            while let Ok(cmd) = rx.recv() {
-                match cmd {
-                    PersistCommand::Update(src, content) => {
-                        let is_binary = matches!(content, CachedContent::Binary(_));
-                        let (target, rel_path) = compute_target_for_source(&src, &cwd, is_binary);
-                        let target_dir = target
-                            .parent()
-                            .map(|p| p.to_path_buf())
-                            .unwrap_or(cache_dir.clone());
-                        if let Err(e) = fs::create_dir_all(&target_dir) {
-                            eprintln!("persist mkdir error: {:?}", e);
-                            continue;
-                        }
-
-                        let hash = match &content {
-                            CachedContent::Text(s) => {
-                                blake3::hash(s.as_bytes()).to_hex().to_string()
-                            }
-                            CachedContent::Binary(b) => blake3::hash(b).to_hex().to_string(),
-                        };
-                        if let Some(prev) = hashes.get(&target) {
-                            if prev == &hash {
-                                // nothing to do
-                                continue;
-                            }
-                        }
-
-                        if is_binary {
-                            if let CachedContent::Binary(bytes) = content {
-                                let fname = target
-                                    .file_name()
-                                    .map(|f| f.to_string_lossy().to_string())
-                                    .unwrap_or_default();
-                                let tmp_name = format!("{}.tmp", fname);
-                                let tmp_path = target_dir.join(&tmp_name);
-                                if let Err(e) = fs::write(&tmp_path, &bytes) {
-                                    eprintln!("persist write tmp error: {:?}", e);
-                                    continue;
-                                }
-                                if let Err(e) = fs::rename(&tmp_path, &target) {
-                                    eprintln!("persist rename error: {:?}", e);
-                                    let _ = fs::remove_file(&tmp_path);
-                                    continue;
-                                }
-                                hashes.insert(target, hash);
-                            }
-                        } else {
-                            if let CachedContent::Text(text) = content {
-                                let fm = parse_frontmatter(&text);
-                                let entry = CacheEntry {
-                                    file_path: rel_path.to_string_lossy().to_string(),
-                                    markdown_raw_content: text.clone(),
-                                    frontmatter_data: fm,
-                                    is_binary: false,
-                                };
-
-                                let fmt = env::var("PEISAR_CACHE_FORMAT")
-                                    .unwrap_or_else(|_| "json".to_string());
-                                if fmt.eq_ignore_ascii_case("bincode") {
-                                    match bincode::serialize(&entry) {
-                                        Ok(bytes) => {
-                                            let fname = target
-                                                .file_name()
-                                                .map(|f| f.to_string_lossy().to_string())
-                                                .unwrap_or_default();
-                                            let tmp_name = format!("{}.tmp", fname);
-                                            let tmp_path = target_dir.join(&tmp_name);
-                                            if let Err(e) = fs::write(&tmp_path, &bytes) {
-                                                eprintln!("persist write tmp error: {:?}", e);
-                                                continue;
-                                            }
-                                            if let Err(e) = fs::rename(&tmp_path, &target) {
-                                                eprintln!("persist rename error: {:?}", e);
-                                                let _ = fs::remove_file(&tmp_path);
-                                                continue;
-                                            }
-                                            hashes.insert(target, hash);
-                                        }
-                                        Err(e) => eprintln!("bincode serialize error: {:?}", e),
-                                    }
-                                } else {
-                                    match serde_json::to_string_pretty(&entry) {
-                                        Ok(json) => {
-                                            let fname = target
-                                                .file_name()
-                                                .map(|f| f.to_string_lossy().to_string())
-                                                .unwrap_or_default();
-                                            let tmp_name = format!("{}.tmp", fname);
-                                            let tmp_path = target_dir.join(&tmp_name);
-                                            if let Err(e) = fs::write(&tmp_path, json.as_bytes()) {
-                                                eprintln!("persist write tmp error: {:?}", e);
-                                                continue;
-                                            }
-                                            if let Err(e) = fs::rename(&tmp_path, &target) {
-                                                eprintln!("persist rename error: {:?}", e);
-                                                let _ = fs::remove_file(&tmp_path);
-                                                continue;
-                                            }
-                                            hashes.insert(target, hash);
-                                        }
-                                        Err(e) => eprintln!("serde_json error: {:?}", e),
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    PersistCommand::Remove(src) => {
-                        // Try removing both possible targets (text .json and mirrored binary file)
-                        let (target_text, _rel) = compute_target_for_source(&src, &cwd, false);
-                        if target_text.exists() {
-                            if let Err(e) = fs::remove_file(&target_text) {
-                                eprintln!("persist remove error: {:?}", e);
-                            }
-                        }
-                        hashes.remove(&target_text);
-
-                        let (target_bin, _rel2) = compute_target_for_source(&src, &cwd, true);
-                        if target_bin.exists() {
-                            if let Err(e) = fs::remove_file(&target_bin) {
-                                eprintln!("persist remove error: {:?}", e);
-                            }
-                        }
-                        hashes.remove(&target_bin);
-
-                        // clean up empty parent directories for both targets
-                        for target in &[target_text, target_bin] {
-                            if let Some(mut parent) = target.parent().map(|p| p.to_path_buf()) {
-                                while parent.starts_with(&cache_dir)
-                                    && fs::read_dir(&parent)
-                                        .map(|mut it| it.next().is_none())
-                                        .unwrap_or(false)
-                                {
-                                    let _ = fs::remove_dir(&parent);
-                                    if let Some(p) = parent.parent() {
-                                        parent = p.to_path_buf();
-                                    } else {
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    PersistCommand::SyncAll(map) => {
-                        let mut expected: HashSet<PathBuf> = HashSet::new();
-                        for (src, content) in map {
-                            let is_binary = matches!(content, CachedContent::Binary(_));
-                            let (target, rel_path) =
-                                compute_target_for_source(&src, &cwd, is_binary);
-                            expected.insert(target.clone());
-
-                            let target_dir = target
-                                .parent()
-                                .map(|p| p.to_path_buf())
-                                .unwrap_or(cache_dir.clone());
-                            if let Err(e) = fs::create_dir_all(&target_dir) {
-                                eprintln!("persist mkdir error: {:?}", e);
-                                continue;
-                            }
-
-                            let hash = match &content {
-                                CachedContent::Text(s) => {
-                                    blake3::hash(s.as_bytes()).to_hex().to_string()
-                                }
-                                CachedContent::Binary(b) => blake3::hash(b).to_hex().to_string(),
-                            };
-                            if let Some(prev) = hashes.get(&target) {
-                                if prev == &hash {
-                                    continue;
-                                }
-                            }
-
-                            if is_binary {
-                                if let CachedContent::Binary(bytes) = content {
-                                    let fname = target
-                                        .file_name()
-                                        .map(|f| f.to_string_lossy().to_string())
-                                        .unwrap_or_default();
-                                    let tmp_name = format!("{}.tmp", fname);
-                                    let tmp_path = target_dir.join(&tmp_name);
-                                    if let Err(e) = fs::write(&tmp_path, &bytes) {
-                                        eprintln!("persist write tmp error: {:?}", e);
-                                        continue;
-                                    }
-                                    if let Err(e) = fs::rename(&tmp_path, &target) {
-                                        eprintln!("persist rename error: {:?}", e);
-                                        let _ = fs::remove_file(&tmp_path);
-                                        continue;
-                                    }
-                                    hashes.insert(target, hash);
-                                }
-                            } else {
-                                if let CachedContent::Text(text) = content {
-                                    let fm = parse_frontmatter(&text);
-                                    let entry = CacheEntry {
-                                        file_path: rel_path.to_string_lossy().to_string(),
-                                        markdown_raw_content: text.clone(),
-                                        frontmatter_data: fm,
-                                        is_binary: false,
-                                    };
-
-                                    let fmt = env::var("PEISAR_CACHE_FORMAT")
-                                        .unwrap_or_else(|_| "json".to_string());
-                                    if fmt.eq_ignore_ascii_case("bincode") {
-                                        match bincode::serialize(&entry) {
-                                            Ok(bytes) => {
-                                                let fname = target
-                                                    .file_name()
-                                                    .map(|f| f.to_string_lossy().to_string())
-                                                    .unwrap_or_default();
-                                                let tmp_name = format!("{}.tmp", fname);
-                                                let tmp_path = target_dir.join(&tmp_name);
-                                                if let Err(e) = fs::write(&tmp_path, &bytes) {
-                                                    eprintln!("persist write tmp error: {:?}", e);
-                                                    continue;
-                                                }
-                                                if let Err(e) = fs::rename(&tmp_path, &target) {
-                                                    eprintln!("persist rename error: {:?}", e);
-                                                    let _ = fs::remove_file(&tmp_path);
-                                                    continue;
-                                                }
-                                                hashes.insert(target, hash);
-                                            }
-                                            Err(e) => eprintln!("bincode serialize error: {:?}", e),
-                                        }
-                                    } else {
-                                        match serde_json::to_string_pretty(&entry) {
-                                            Ok(json) => {
-                                                let fname = target
-                                                    .file_name()
-                                                    .map(|f| f.to_string_lossy().to_string())
-                                                    .unwrap_or_default();
-                                                let tmp_name = format!("{}.tmp", fname);
-                                                let tmp_path = target_dir.join(&tmp_name);
-                                                if let Err(e) =
-                                                    fs::write(&tmp_path, json.as_bytes())
-                                                {
-                                                    eprintln!("persist write tmp error: {:?}", e);
-                                                    continue;
-                                                }
-                                                if let Err(e) = fs::rename(&tmp_path, &target) {
-                                                    eprintln!("persist rename error: {:?}", e);
-                                                    let _ = fs::remove_file(&tmp_path);
-                                                    continue;
-                                                }
-                                                hashes.insert(target, hash);
-                                            }
-                                            Err(e) => eprintln!("serde_json error: {:?}", e),
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // remove stale
-                        if cache_dir.exists() {
-                            let mut existing: Vec<PathBuf> = Vec::new();
-                            if let Err(e) = collect_files(&cache_dir, &mut existing) {
-                                eprintln!("collect files error: {:?}", e);
-                            } else {
-                                for f in existing {
-                                    if !expected.contains(&f) {
-                                        let _ = fs::remove_file(&f);
-                                        hashes.remove(&f);
-                                    }
-                                }
-                            }
-
-                            // remove empty dirs
-                            fn remove_empty(dir: &Path) -> io::Result<()> {
-                                for entry in fs::read_dir(dir)? {
-                                    let entry = entry?;
-                                    let p = entry.path();
-                                    if p.is_dir() {
-                                        remove_empty(&p)?;
-                                        if fs::read_dir(&p)?.next().is_none() {
-                                            let _ = fs::remove_dir(&p);
-                                        }
-                                    }
-                                }
-                                Ok(())
-                            }
-                            let _ = remove_empty(&cache_dir);
-                        }
-                    }
-                }
-            }
-        });
-
+        // The visitor/parser registries are intentionally non-Send:
+        // they capture the napi `Env`, which must not cross threads.
+        // Rendering (the only code that touches them) runs on the JS main
+        // thread; the watcher thread shares only the `Send + Sync`
+        // `LruCache` / `ArchiveHandle`.
+        #[allow(clippy::arc_with_non_send_sync)]
+        let visitors: Arc<Mutex<Vec<RegisteredVisitor>>> = Arc::new(Mutex::new(Vec::new()));
+        #[allow(clippy::arc_with_non_send_sync)]
+        let parsers: Arc<Mutex<Vec<RegisteredParser>>> = Arc::new(Mutex::new(Vec::new()));
         Ok(PeisarCache {
-            cache: Arc::new(RwLock::new(cache_map)),
+            memory,
+            archive,
+            visitors,
+            parsers,
+            ast_opts,
+            render_opts,
             watcher: None,
             entry_dir,
             assets_dir: resolved_assets,
-            persist_tx: Some(tx),
-            worker_handle: Some(handle),
             change_callbacks: ChangeCallbacks::default(),
+            hosting,
+            out_dir: config
+                .out_dir
+                .unwrap_or_else(|| DEFAULT_OUT_DIR.to_string()),
         })
+    }
+
+    /// Construct a [`PeisarCache`] over `entry_dir` with the default
+    /// configuration — Rust convenience (generic signatures cannot cross
+    /// the NAPI boundary).
+    pub fn new<P: AsRef<Path>>(entry_dir: P) -> io::Result<Self> {
+        PeisarCache::with_config(PeisarCacheConfig {
+            entry_dir: entry_dir.as_ref().to_string_lossy().to_string(),
+            ..Default::default()
+        })
+    }
+
+    /// Register a JavaScript AST visitor applied to every page render
+    /// (JS: `cache.useVisitor({ visitBlock, visitInline })`).
+    #[cfg(feature = "npm")]
+    #[napi]
+    pub fn use_visitor(&mut self, env: napi::Env, visitor: Visitor) {
+        self.visitors.lock().unwrap().push(visitor.register(env));
+    }
+
+    /// Register a JavaScript parser hook applied to every page render
+    /// (JS: `cache.useParser({ parseBlock, parseInline })`).
+    #[cfg(feature = "npm")]
+    #[napi]
+    pub fn use_parser(&mut self, env: napi::Env, parser: Parser) {
+        self.parsers.lock().unwrap().push(parser.register(env));
     }
 
     /// JS: `cache.startWatchingJs()` — start watching the entry (and
@@ -912,46 +653,33 @@ impl PeisarCache {
     #[napi]
     pub fn start_watching_js(&mut self) -> Result<()> {
         self.start_watching()
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{}", e)))
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{e}")))
     }
 
     /// Start watching the entry (and assets) directories recursively.
     ///
-    /// From then on, create/modify/remove events for markdown files and
-    /// assets update the in-memory cache and enqueue a matching persistence
-    /// command; events on directories trigger a full rescan. Events are also
-    /// forwarded to JavaScript `onChange` subscribers (see
-    /// [`PeisarCache::on_change`]).
+    /// From then on, create/modify/remove events update the memory tier
+    /// first, then enqueue matching archive commands; directory events
+    /// trigger a full rescan. Events are also forwarded to `onChange`
+    /// subscribers (see [`PeisarCache::on_change`]).
     ///
     /// The returned [`io::Result`] covers watcher setup errors only; runtime
     /// errors are printed to stderr by the watch callback.
     pub fn start_watching(&mut self) -> io::Result<()> {
-        let cache = Arc::clone(&self.cache);
+        // The watcher thread shares the memory tier and archive handle
+        // through clone-shared Arcs.
+        let memory = self.memory.clone();
+        let archive = self.archive.clone();
         let entry_dir = self.entry_dir.clone();
         let assets_dir = self.assets_dir.clone();
-        // Shared with the watcher thread so JS onChange callbacks fire on
-        // every detected create/modify/remove event.
         let change_callbacks = self.change_callbacks.clone();
 
-        let tx = match &self.persist_tx {
-            Some(t) => t.clone(),
-            None => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "persistence worker not started",
-                ));
-            }
-        };
-
-        // recommended_watcher takes a closure that's invoked on file events.
         let mut watcher: RecommendedWatcher =
             notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
                 match res {
                     Ok(event) => {
-                        let kind = event.kind.clone();
+                        let kind = event.kind;
                         for path in event.paths {
-                            // Notify JS subscribers about this change first,
-                            // then update the in-memory cache below.
                             let is_markdown = path.starts_with(&entry_dir);
                             let kind_str = if matches!(kind, notify::EventKind::Create(_)) {
                                 "create"
@@ -967,10 +695,9 @@ impl PeisarCache {
                                 kind: kind_str.to_string(),
                                 is_markdown,
                             });
-                            // If the event targets a directory, rescan everything.
+                            // Directory events rescan everything.
                             if path.is_dir() {
                                 let mut new_map: HashMap<PathBuf, CachedContent> = HashMap::new();
-
                                 if let Ok(files) = collect_markdown_files(&entry_dir) {
                                     for f in files {
                                         if let Ok(text) = fs::read_to_string(&f) {
@@ -978,280 +705,364 @@ impl PeisarCache {
                                         }
                                     }
                                 }
-
-                                if let Some(ref a_dir) = assets_dir {
-                                    if let Ok(asset_files) = collect_asset_files(a_dir) {
-                                        for f in asset_files {
-                                            let ext_l = f
-                                                .extension()
-                                                .and_then(|e| e.to_str())
-                                                .map(|s| s.to_lowercase())
-                                                .unwrap_or_default();
-                                            if ASSET_EXTENSIONS.contains(&ext_l.as_str()) {
-                                                let is_binary = ASSET_BINARY_EXTENSIONS
-                                                    .contains(&ext_l.as_str());
-                                                if is_binary {
-                                                    if let Ok(bytes) = fs::read(&f) {
-                                                        new_map.insert(
-                                                            f,
-                                                            CachedContent::Binary(bytes),
-                                                        );
-                                                    }
-                                                } else if let Ok(text) = fs::read_to_string(&f) {
-                                                    new_map.insert(f, CachedContent::Text(text));
+                                if let Some(ref a_dir) = assets_dir
+                                    && let Ok(asset_files) = collect_asset_files(a_dir)
+                                {
+                                    for f in asset_files {
+                                        let ext_l = f
+                                            .extension()
+                                            .and_then(|e| e.to_str())
+                                            .map(|s| s.to_lowercase())
+                                            .unwrap_or_default();
+                                        if ASSET_EXTENSIONS.contains(&ext_l.as_str()) {
+                                            let is_binary =
+                                                ASSET_BINARY_EXTENSIONS.contains(&ext_l.as_str());
+                                            if is_binary {
+                                                if let Ok(bytes) = fs::read(&f) {
+                                                    new_map.insert(f, CachedContent::Binary(bytes));
                                                 }
+                                            } else if let Ok(text) = fs::read_to_string(&f) {
+                                                new_map.insert(f, CachedContent::Text(text));
                                             }
                                         }
                                     }
                                 }
-
-                                if let Ok(mut w) = cache.write() {
-                                    *w = new_map.clone();
-                                    if let Err(e) = tx.send(PersistCommand::SyncAll(new_map)) {
-                                        eprintln!("persist send error: {:?}", e);
-                                    }
-                                }
-
+                                memory.replace_all(new_map.clone());
+                                archive.sync_all(new_map);
                                 continue;
                             }
 
-                            if path.is_file() {
-                                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                                    let ext_l = ext.to_lowercase();
-
-                                    // Markdown file
-                                    if MARKDOWN_EXTENSIONS.contains(&ext_l.as_str()) {
-                                        match fs::read_to_string(&path) {
-                                            Ok(text) => {
-                                                if let Ok(mut w) = cache.write() {
-                                                    w.insert(
-                                                        path.clone(),
-                                                        CachedContent::Text(text.clone()),
-                                                    );
-                                                    if let Err(e) = tx.send(PersistCommand::Update(
-                                                        path.clone(),
-                                                        CachedContent::Text(text),
-                                                    )) {
-                                                        eprintln!("persist send error: {:?}", e);
-                                                    }
-                                                }
-                                            }
-                                            Err(_) => {
-                                                if let Ok(mut w) = cache.write() {
-                                                    w.remove(&path);
-                                                    if let Err(e) = tx
-                                                        .send(PersistCommand::Remove(path.clone()))
-                                                    {
-                                                        eprintln!("persist send error: {:?}", e);
-                                                    }
-                                                }
-                                            }
+                            if path.is_file()
+                                && let Some(ext) = path.extension().and_then(|e| e.to_str())
+                            {
+                                let ext_l = ext.to_lowercase();
+                                if MARKDOWN_EXTENSIONS.contains(&ext_l.as_str())
+                                    || ASSET_EXTENSIONS.contains(&ext_l.as_str())
+                                {
+                                    let is_binary =
+                                        ASSET_BINARY_EXTENSIONS.contains(&ext_l.as_str());
+                                    let content = if is_binary {
+                                        fs::read(&path).ok().map(CachedContent::Binary)
+                                    } else {
+                                        fs::read_to_string(&path).ok().map(CachedContent::Text)
+                                    };
+                                    match content {
+                                        Some(content) => {
+                                            memory.insert(path.clone(), content.clone());
+                                            archive.upsert(path, content);
                                         }
-                                    // Asset file
-                                    } else if ASSET_EXTENSIONS.contains(&ext_l.as_str()) {
-                                        let is_binary =
-                                            ASSET_BINARY_EXTENSIONS.contains(&ext_l.as_str());
-                                        if is_binary {
-                                            match fs::read(&path) {
-                                                Ok(bytes) => {
-                                                    if let Ok(mut w) = cache.write() {
-                                                        w.insert(
-                                                            path.clone(),
-                                                            CachedContent::Binary(bytes.clone()),
-                                                        );
-                                                        if let Err(e) =
-                                                            tx.send(PersistCommand::Update(
-                                                                path.clone(),
-                                                                CachedContent::Binary(bytes),
-                                                            ))
-                                                        {
-                                                            eprintln!(
-                                                                "persist send error: {:?}",
-                                                                e
-                                                            );
-                                                        }
-                                                    }
-                                                }
-                                                Err(_) => {
-                                                    if let Ok(mut w) = cache.write() {
-                                                        w.remove(&path);
-                                                        if let Err(e) = tx.send(
-                                                            PersistCommand::Remove(path.clone()),
-                                                        ) {
-                                                            eprintln!(
-                                                                "persist send error: {:?}",
-                                                                e
-                                                            );
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        } else {
-                                            match fs::read_to_string(&path) {
-                                                Ok(text) => {
-                                                    if let Ok(mut w) = cache.write() {
-                                                        w.insert(
-                                                            path.clone(),
-                                                            CachedContent::Text(text.clone()),
-                                                        );
-                                                        if let Err(e) =
-                                                            tx.send(PersistCommand::Update(
-                                                                path.clone(),
-                                                                CachedContent::Text(text),
-                                                            ))
-                                                        {
-                                                            eprintln!(
-                                                                "persist send error: {:?}",
-                                                                e
-                                                            );
-                                                        }
-                                                    }
-                                                }
-                                                Err(_) => {
-                                                    if let Ok(mut w) = cache.write() {
-                                                        w.remove(&path);
-                                                        if let Err(e) = tx.send(
-                                                            PersistCommand::Remove(path.clone()),
-                                                        ) {
-                                                            eprintln!(
-                                                                "persist send error: {:?}",
-                                                                e
-                                                            );
-                                                        }
-                                                    }
-                                                }
-                                            }
+                                        None => {
+                                            memory.remove(&path);
+                                            archive.remove(path);
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                    Err(e) => eprintln!("watch error: {:?}", e),
+                    Err(e) => eprintln!("watch error: {e:?}"),
                 }
             })
-            .map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("notify::recommended_watcher error: {}", e),
-                )
-            })?;
+            .map_err(|e| io::Error::other(format!("notify::recommended_watcher error: {e}")))?;
 
         watcher
             .watch(&self.entry_dir, RecursiveMode::Recursive)
-            .map_err(|e| {
-                io::Error::new(io::ErrorKind::Other, format!("notify::watch error: {}", e))
-            })?;
+            .map_err(|e| io::Error::other(format!("notify::watch error: {e}")))?;
 
         if let Some(a) = &self.assets_dir {
-            watcher.watch(a, RecursiveMode::Recursive).map_err(|e| {
-                io::Error::new(io::ErrorKind::Other, format!("notify::watch error: {}", e))
-            })?;
+            watcher
+                .watch(a, RecursiveMode::Recursive)
+                .map_err(|e| io::Error::other(format!("notify::watch error: {e}")))?;
         }
 
         self.watcher = Some(watcher);
         Ok(())
     }
 
-    /// Get a cached entry by source path, if present.
-    ///
-    /// The cache is keyed by absolute paths — the keys of [`PeisarCache::all`]
-    /// — so relative paths never match. The returned [`CachedContent`]
-    /// preserves the variant the file was cached as: `Text` for markdown and
-    /// textual assets, `Binary` for binary assets.
+    /// Read one entry: memory tier first, then the disk archive. Returns
+    /// `None` when the path is unknown to both tiers.
     pub fn get(&self, path: &Path) -> Option<CachedContent> {
-        match self.cache.read() {
-            Ok(r) => r.get(path).cloned(),
-            Err(_) => None,
+        if let Some(content) = self.memory.get(path) {
+            return Some(content);
         }
+        self.archive.read(path)
     }
 
-    /// Return a clone of the entire cache map for textual entries only:
-    /// absolute source path -> raw UTF-8 text. Binary assets are omitted;
-    /// use [`PeisarCache::get`] to read them.
+    /// Clone of every cached markdown entry: absolute path → raw text.
     pub fn all(&self) -> HashMap<PathBuf, String> {
-        match self.cache.read() {
-            Ok(r) => {
-                let mut out = HashMap::new();
-                for (k, v) in r.iter() {
-                    if let CachedContent::Text(s) = v {
-                        out.insert(k.clone(), s.clone());
-                    }
-                }
-                out
-            }
-            Err(_) => HashMap::new(),
-        }
+        self.memory
+            .iter_all()
+            .into_iter()
+            .filter_map(|(p, c)| match c {
+                CachedContent::Text(s) => Some((p, s)),
+                _ => None,
+            })
+            .collect()
     }
 
-    /// ----------------------------------------------------------------
-    /// JavaScript (NAPI) surface
-    /// ----------------------------------------------------------------
-    /// All JS methods take/return plain strings because `&Path`/`PathBuf`
-    /// do not cross the NAPI boundary.
+    /// Union of the memory-tier and archive-tier keys.
+    fn all_keys(&self) -> HashSet<PathBuf> {
+        let mut keys: HashSet<PathBuf> = HashSet::new();
+        for k in self.memory.keys() {
+            keys.insert(k);
+        }
+        for k in self.archive.keys() {
+            keys.insert(k);
+        }
+        keys
+    }
 
-    /// JS: `cache.getText(absPath)` — cached text of a file, or null.
+    /// JS: `cache.getText(absPath)` — cached text of a file, or `null`.
+    /// Reads fall through to the archive tier for evicted entries.
     #[cfg_attr(feature = "npm", napi)]
     pub fn get_text(&self, abs_path: String) -> Option<String> {
-        match self.cache.read() {
-            Ok(r) => match r.get(Path::new(&abs_path)) {
-                Some(CachedContent::Text(s)) => Some(s.clone()),
-                _ => None,
-            },
-            Err(_) => None,
-        }
+        self.get(Path::new(&abs_path)).and_then(|c| match c {
+            CachedContent::Text(s) => Some(s),
+            _ => None,
+        })
     }
 
-    /// JS: `cache.getBinary(absPath)` — cached bytes of a binary asset, or null.
+    /// JS: `cache.getBinary(absPath)` — cached bytes of a binary asset, or
+    /// `null`. Reads fall through to the archive tier.
     #[cfg_attr(feature = "npm", napi)]
     pub fn get_binary(&self, abs_path: String) -> Option<Vec<u8>> {
-        match self.cache.read() {
-            Ok(r) => match r.get(Path::new(&abs_path)) {
-                Some(CachedContent::Binary(b)) => Some(b.clone()),
-                _ => None,
-            },
-            Err(_) => None,
-        }
+        self.get(Path::new(&abs_path)).and_then(|c| match c {
+            CachedContent::Binary(b) => Some(b),
+            _ => None,
+        })
     }
 
-    /// JS: `cache.listFiles()` — absolute paths of everything cached.
+    /// JS: `cache.listFiles()` — absolute paths of everything cached
+    /// (memory + archive tiers).
     #[cfg_attr(feature = "npm", napi)]
     pub fn list_files(&self) -> Vec<String> {
-        match self.cache.read() {
-            Ok(r) => r.keys().map(|p| p.to_string_lossy().to_string()).collect(),
-            Err(_) => Vec::new(),
-        }
+        self.all_keys()
+            .into_iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect()
     }
 
-    /// JS: `cache.markdownFiles()` — absolute paths of cached markdown files.
+    /// JS: `cache.markdownFiles()` — absolute paths of cached markdown
+    /// files (either tier).
     #[cfg_attr(feature = "npm", napi)]
     pub fn markdown_files(&self) -> Vec<String> {
         self.filter_cached_files(|ext| MARKDOWN_EXTENSIONS.contains(&ext))
     }
 
-    /// JS: `cache.assetFiles()` — absolute paths of cached non-markdown files.
+    /// JS: `cache.assetFiles()` — absolute paths of cached non-markdown
+    /// files (either tier).
     #[cfg_attr(feature = "npm", napi)]
     pub fn asset_files(&self) -> Vec<String> {
         self.filter_cached_files(|ext| !MARKDOWN_EXTENSIONS.contains(&ext))
     }
 
-    /// Filter cached keys by extension predicate (helper shared by
-    /// `markdown_files` / `asset_files`).
+    /// Filter the union of memory + archive keys by extension predicate.
     fn filter_cached_files(&self, keep: fn(&str) -> bool) -> Vec<String> {
-        match self.cache.read() {
-            Ok(r) => r
-                .keys()
-                .filter(|p| {
-                    p.extension()
-                        .and_then(|e| e.to_str())
-                        .map(|e| keep(e))
-                        .unwrap_or(false)
-                })
-                .map(|p| p.to_string_lossy().to_string())
-                .collect(),
-            Err(_) => Vec::new(),
+        self.all_keys()
+            .into_iter()
+            .filter(|p| {
+                p.extension()
+                    .and_then(|e| e.to_str())
+                    .map(keep)
+                    .unwrap_or(false)
+            })
+            .map(|p| p.to_string_lossy().to_string())
+            .collect()
+    }
+    // ===== Derived page / asset objects (Liquid template shapes) =====
+
+    /// Rust: every page object, sorted by slug.
+    pub fn page_objects(&self) -> Vec<PageObject> {
+        let mut pages: Vec<PageObject> = Vec::new();
+        for path in self.all_keys() {
+            if path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| MARKDOWN_EXTENSIONS.contains(&e))
+                .unwrap_or(false)
+                && let Some(page) = self.page_object_for(&path)
+            {
+                pages.push(page);
+            }
+        }
+        pages.sort_by(|a, b| a.slug.cmp(&b.slug));
+        pages
+    }
+
+    /// JS: `cache.pages()` — every page object, for Liquid themes
+    /// (`{{ page.title }}`, `{{ page.layout }}`, …).
+    #[cfg_attr(feature = "npm", napi)]
+    pub fn pages(&self) -> Vec<PageObject> {
+        self.page_objects()
+    }
+
+    /// Build one [`PageObject`] for a markdown path (memory or archive
+    /// tier). Returns `None` when the entry is unknown or unreadable.
+    pub fn page_object_for(&self, path: &Path) -> Option<PageObject> {
+        let content = self.get(path)?;
+        let raw_md = match content {
+            CachedContent::Text(s) => s,
+            _ => return None,
+        };
+        let (md_body, fm) = match frontmatter(raw_md.to_string()) {
+            Ok(parsed) => parsed.into_parts(),
+            Err(_) => (raw_md.clone(), None),
+        };
+        let fm_ref = fm.as_ref();
+        let layout = fm_string(fm_ref, &["layout"]).unwrap_or_else(|| "default".to_string());
+        let title = extract_title(fm_ref, &md_body);
+        let fname = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let file_name = file_name_no_ext(&fname);
+        let base_url = self.hosting.base_url();
+        Some(PageObject {
+            layout,
+            file_name: file_name.clone(),
+            slug: markdown_slug(path, &self.entry_dir, &base_url),
+            html: render_markdown(
+                &raw_md,
+                &self.ast_opts,
+                &self.render_opts,
+                &self.visitors,
+                &self.parsers,
+                Some(file_name),
+            ),
+            out_file_path: page_out_file(path, &self.entry_dir, &self.out_dir),
+            input_file_path: path.to_string_lossy().to_string(),
+            title,
+            summary: fm_string(fm_ref, &["summary", "description"]),
+            tags: fm_string_list(fm_ref, "tags"),
+            publish_date: fm_string(fm_ref, &["date", "publishDate", "publish_date"]),
+            extra: fm_ref.and_then(extra_frontmatter_fields),
+        })
+    }
+
+    /// JS: `cache.getPage(inputPath)` — a single page object by absolute
+    /// input path, or `null`.
+    #[cfg_attr(feature = "npm", napi)]
+    pub fn get_page(&self, input_path: String) -> Option<PageObject> {
+        self.page_object_for(Path::new(&input_path))
+    }
+
+    /// Rust: every asset object, sorted by slug.
+    pub fn asset_objects(&self) -> Vec<AssetsObject> {
+        let mut assets: Vec<AssetsObject> = Vec::new();
+        for path in self.all_keys() {
+            if path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| !MARKDOWN_EXTENSIONS.contains(&e))
+                .unwrap_or(false)
+                && let Some(asset) = self.asset_object_for(&path)
+            {
+                assets.push(asset);
+            }
+        }
+        assets.sort_by(|a, b| a.slug.cmp(&b.slug));
+        assets
+    }
+
+    /// JS: `cache.assets()` — every asset object.
+    #[cfg_attr(feature = "npm", napi)]
+    pub fn assets(&self) -> Vec<AssetsObject> {
+        self.asset_objects()
+    }
+
+    /// Build one [`AssetsObject`] for an asset path (either tier).
+    pub fn asset_object_for(&self, path: &Path) -> Option<AssetsObject> {
+        let content = self.get(path)?;
+        let base_dir = self.assets_dir.as_deref().unwrap_or(&self.entry_dir);
+        let fname = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_lowercase())
+            .unwrap_or_default();
+        let raw = match &content {
+            CachedContent::Text(s) => s.clone(),
+            CachedContent::Binary(b) => binary_to_base64(b),
+        };
+        let base_url = self.hosting.base_url();
+        Some(AssetsObject {
+            file_name: file_name_no_ext(&fname),
+            slug: asset_slug(path, base_dir, &base_url),
+            raw,
+            out_file_path: asset_out_file(path, base_dir, &self.out_dir),
+            input_file_path: path.to_string_lossy().to_string(),
+            ext: ext.clone(),
+            file_type: asset_file_type(&ext).to_string(),
+        })
+    }
+
+    /// JS: `cache.getAsset(inputPath)` — a single asset object by absolute
+    /// input path, or `null`.
+    #[cfg_attr(feature = "npm", napi)]
+    pub fn get_asset(&self, input_path: String) -> Option<AssetsObject> {
+        self.asset_object_for(Path::new(&input_path))
+    }
+
+    // ===== Archive-tier introspection =====
+
+    /// JS: `cache.archived()` — absolute paths flushed to the disk
+    /// archive. Everything not listed still lives in memory only.
+    #[cfg_attr(feature = "npm", napi)]
+    pub fn archived(&self) -> Vec<String> {
+        self.archive
+            .keys()
+            .into_iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect()
+    }
+
+    /// JS: `cache.mapJson()` — the current `map.json` document (path →
+    /// shard location + metadata, including front matter for search).
+    #[cfg_attr(feature = "npm", napi)]
+    pub fn map_json(&self) -> String {
+        self.archive.map_json()
+    }
+
+    /// JS: `cache.flush()` — write all pending archive entries now,
+    /// blocking until the worker is done.
+    #[cfg_attr(feature = "npm", napi)]
+    pub fn flush(&self) {
+        self.archive.flush();
+    }
+
+    // ===== Hosting / baseUrl =====
+
+    /// JS: `cache.baseUrl()` — the resolved base URL path prefix for the
+    /// configured hosting (e.g. `/repo/` for a GitHub Pages project site).
+    #[cfg_attr(feature = "npm", napi)]
+    pub fn base_url(&self) -> String {
+        self.hosting.base_url()
+    }
+
+    /// JS: `cache.resolveUrl(path)` — prefix a site-relative path with the
+    /// resolved base URL: `resolveUrl("docs/intro")` → `/repo/docs/intro`.
+    #[cfg_attr(feature = "npm", napi)]
+    pub fn resolve_url(&self, path: String) -> String {
+        let base = self.hosting.base_url();
+        let path = path.trim_start_matches('/');
+        if path.is_empty() {
+            base
+        } else {
+            format!("{}/{}", base.trim_end_matches('/'), path)
         }
     }
+
+    /// JS: `cache.siteUrl()` — absolute origin URL for canonical URLs, or
+    /// `null` when not configured.
+    #[cfg_attr(feature = "npm", napi)]
+    pub fn site_url(&self) -> Option<String> {
+        self.hosting.site_url()
+    }
+
+    // ===== Subscriptions and disposal =====
 
     /// JS: `cache.onChange(cb)` — invoke `cb(event)` on every file change the
     /// watcher detects while watching is active. Returns a subscription id
@@ -1269,8 +1080,6 @@ impl PeisarCache {
             Unknown<'static>,
         >,
     ) -> Result<u32> {
-        // `ThreadsafeFunction` is required: notify events fire on the watcher
-        // thread, not the JS main thread.
         use napi::threadsafe_function::ThreadsafeFunctionCallMode;
 
         // Weak TSFN: the subscription must not keep the Node event loop
@@ -1306,56 +1115,92 @@ impl PeisarCache {
         self.change_callbacks.remove(id);
     }
 
-    /// JS: `cache.dispose()` — stop the watcher and drop JS change callbacks.
-    /// Safe to call more than once.
+    /// JS: `cache.dispose()` — stop the watcher, flush pending archive
+    /// writes, and drop JS change callbacks. Safe to call more than once.
     ///
     /// Rust consumers do not need this: dropping the [`PeisarCache`] stops
-    /// the watcher, closes the persistence channel, and joins the worker.
+    /// the watcher, flushes the archive, and joins the workers.
     #[cfg_attr(feature = "npm", napi)]
     pub fn dispose(&mut self) {
         self.watcher = None;
         self.change_callbacks.clear();
+        self.archive.flush();
     }
 }
 
+/// JS-side options accepted by the `PeisarCache` constructor (a flattened
+/// subset of [`PeisarCacheConfig`]; memory budgets only apply through the
+/// `withConfig` factory).
+#[cfg(feature = "npm")]
+#[napi(object)]
+pub struct PeisarCacheJsOptions {
+    /// Markdown parsing/rendering options (`fragment`, GFM, …).
+    pub markdown: Option<PeisarOptions>,
+    /// Disk-archive thresholds (shard size / flush interval).
+    pub archive: Option<ArchiveConfig>,
+    /// Static-hosting baseUrl resolution.
+    pub hosting: Option<HostingConfig>,
+    /// Build output directory.
+    pub out_dir: Option<String>,
+}
+
 // Dropping a `PeisarCache` is the Rust equivalent of the JS `dispose()`:
-// the watcher is released with the struct, closing the channel exits the
-// persistence worker, and joining it guarantees queued writes land before
-// the value goes away.
+// the watcher is released with the struct, the archive worker flushes its
+// pending buffer and exits, and the memory tier goes away with it.
 impl Drop for PeisarCache {
     fn drop(&mut self) {
-        // Closing the sender will cause the worker thread to exit.
-        self.persist_tx.take();
-        if let Some(handle) = self.worker_handle.take() {
-            let _ = handle.join();
-        }
+        self.watcher = None;
+        self.change_callbacks.clear();
+        self.archive.close();
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::{self, File};
+    use std::fs::File;
     use std::io::Write;
-    use std::sync::Mutex;
 
     static TEST_CWD_LOCK: Mutex<()> = Mutex::new(());
+
+    fn make_tmp(tag: &str) -> io::Result<(PathBuf, PathBuf)> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| io::Error::other(format!("time error: {e}")))?
+            .as_nanos();
+        let tmp = env::temp_dir().join(format!("peisar_test_{tag}_{now}"));
+        if tmp.exists() {
+            fs::remove_dir_all(&tmp)?;
+        }
+        fs::create_dir_all(&tmp)?;
+        let orig = env::current_dir()?;
+        Ok((tmp, orig))
+    }
+
+    fn write_md(dir: &Path, rel: &str, content: &str) {
+        let p = dir.join(rel);
+        if let Some(parent) = p.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        let mut f = File::create(p).unwrap();
+        f.write_all(content.as_bytes()).unwrap();
+        f.sync_all().unwrap();
+    }
+
+    fn restore(orig: PathBuf, tmp: PathBuf) {
+        let _ = env::set_current_dir(orig);
+        let _ = fs::remove_dir_all(tmp);
+    }
 
     #[cfg(not(feature = "npm"))]
     #[test]
     fn on_change_registers_a_rust_callback() -> io::Result<()> {
         let _guard = TEST_CWD_LOCK.lock().unwrap();
-        let tmp = env::temp_dir().join(format!(
-            "peisar_change_callback_test_{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_err(|e| io::Error::other(format!("time error: {e}")))?
-                .as_millis()
-        ));
-        fs::create_dir_all(&tmp)?;
+        let (tmp, orig) = make_tmp("change")?;
+        env::set_current_dir(&tmp)?;
 
         let cache = PeisarCache::new(&tmp)?;
-        let received = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let received = Arc::new(Mutex::new(Vec::new()));
         let received_callback = Arc::clone(&received);
         let subscription = cache.on_change(move |event| {
             received_callback.lock().unwrap().push(event);
@@ -1369,187 +1214,256 @@ mod tests {
         cache.off_change(subscription);
 
         assert_eq!(received.lock().unwrap().len(), 1);
-        fs::remove_dir_all(&tmp)?;
+        restore(orig, tmp);
         Ok(())
     }
 
     #[test]
-    fn test_persist_cache_and_gitignore_created() -> io::Result<()> {
+    fn memory_first_no_disk_at_construction() -> io::Result<()> {
         let _guard = TEST_CWD_LOCK.lock().unwrap();
-        let orig = env::current_dir()?;
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("time error: {}", e)))?
-            .as_millis();
-        let tmp = env::temp_dir().join(format!("peisar_test_{}", now));
-        if tmp.exists() {
-            fs::remove_dir_all(&tmp)?;
-        }
-        fs::create_dir_all(&tmp)?;
+        let (tmp, orig) = make_tmp("memfirst")?;
         env::set_current_dir(&tmp)?;
+        write_md(&tmp, "docs/doc1.md", "---\ntitle: Test\n---\n# Hello\n");
 
-        fs::create_dir_all("docs")?;
-        let md_path = tmp.join("docs").join("doc1.md");
-        let mut f = File::create(&md_path)?;
-        f.write_all(b"---\ntitle: Test\ntags:\n  - a\n  - b\n---\n# Hello\n")?;
-        f.sync_all()?;
+        let cache = PeisarCache::new("docs")?;
 
-        let _cache = PeisarCache::new("docs")?;
+        // Memory tier has the content immediately.
+        let all = cache.all();
+        assert_eq!(all.len(), 1);
+        let content = cache.get(&tmp.join("docs").join("doc1.md")).unwrap();
+        assert!(matches!(content, CachedContent::Text(ref s) if s.contains("# Hello")));
 
-        let cache_file = tmp.join(".peisar_cache").join("docs").join("doc1.md.json");
-        assert!(cache_file.exists());
-        let s = fs::read_to_string(&cache_file)?;
-        let entry: CacheEntry = serde_json::from_str(&s).unwrap();
-        assert!(
-            entry.file_path.ends_with("docs/doc1.md") || entry.file_path.ends_with("docs\\doc1.md")
+        // Nothing flushed yet: the archive worker only flushes on
+        // size/interval/drop — and the default interval is 2 s.
+        assert_eq!(cache.archived().len(), 0);
+        let archive_dir = tmp.join(ARCHIVE_DIR_NAME);
+        assert!(!archive_dir.join("map.json").exists());
+
+        restore(orig, tmp);
+        Ok(())
+    }
+
+    #[test]
+    fn flush_writes_map_and_shards() -> io::Result<()> {
+        let _guard = TEST_CWD_LOCK.lock().unwrap();
+        let (tmp, orig) = make_tmp("flush")?;
+        env::set_current_dir(&tmp)?;
+        write_md(&tmp, "docs/a.md", "# A\n");
+
+        let cache = PeisarCache::new("docs")?;
+        cache.flush();
+
+        let archive_dir = tmp.join(ARCHIVE_DIR_NAME);
+        let map_str = fs::read_to_string(archive_dir.join("map.json"))?;
+        let map: serde_json::Value = serde_json::from_str(&map_str).unwrap();
+        assert_eq!(map["version"], 1);
+        assert!(map["files"]["docs/a.md"]["frontmatter"].is_null());
+
+        assert_eq!(cache.archived().len(), 1);
+        assert!(archive_dir.join("shard-000001.bin").exists());
+
+        restore(orig, tmp);
+        Ok(())
+    }
+
+    #[test]
+    fn page_objects_liquid_shape() -> io::Result<()> {
+        let _guard = TEST_CWD_LOCK.lock().unwrap();
+        let (tmp, orig) = make_tmp("pages")?;
+        env::set_current_dir(&tmp)?;
+        write_md(
+            &tmp,
+            "contents/index.md",
+            "---\ntitle: Home Page\nlayout: custom\nsummary: hi there\ntags:\n  - a\n  - b\ndate: 2026-01-01\nauthor: someone\n---\n# Not the title\n\nBody\n",
         );
-        assert!(entry.frontmatter_data.is_some());
+        write_md(&tmp, "contents/docs/intro.md", "# Intro\n");
 
-        let gitignore = tmp.join(".gitignore");
-        assert!(gitignore.exists());
-        let git = fs::read_to_string(&gitignore)?;
-        assert!(git.lines().any(|l| l.trim() == ".peisar_cache"));
+        let cache = PeisarCache::with_config(PeisarCacheConfig {
+            entry_dir: "contents".into(),
+            markdown: Some(PeisarOptions {
+                fragment: Some(true),
+                ..Default::default()
+            }),
+            hosting: Some(HostingConfig {
+                provider: Some(HostingProvider::GithubPages),
+                repo: Some("my-repo".into()),
+                ..Default::default()
+            }),
+            out_dir: Some("dist".into()),
+            ..Default::default()
+        })?;
 
-        env::set_current_dir(orig)?;
-        fs::remove_dir_all(&tmp)?;
+        let pages = cache.page_objects();
+        assert_eq!(pages.len(), 2);
+
+        let home = pages
+            .iter()
+            .find(|p| p.input_file_path.ends_with("index.md"))
+            .unwrap();
+        assert_eq!(home.layout, "custom");
+        assert_eq!(home.title.as_deref(), Some("Home Page"));
+        assert_eq!(home.summary.as_deref(), Some("hi there"));
+        assert_eq!(home.tags, Some(vec!["a".to_string(), "b".to_string()]));
+        assert_eq!(home.publish_date.as_deref(), Some("2026-01-01"));
+        // extra fields are flattened and stringified
+        assert_eq!(home.extra.as_ref().unwrap()["author"], "someone");
+        // baseUrl applied
+        assert_eq!(home.slug, "/my-repo/");
+        assert_eq!(home.out_file_path, "dist/index.html");
+        assert!(home.html.contains("Body"));
+
+        let intro = pages
+            .iter()
+            .find(|p| p.input_file_path.ends_with("intro.md"))
+            .unwrap();
+        // Title falls back to the first heading
+        assert_eq!(intro.title.as_deref(), Some("Intro"));
+        assert_eq!(intro.slug, "/my-repo/docs/intro");
+        assert_eq!(intro.out_file_path, "dist/docs/intro/index.html");
+        // layout defaults
+        assert_eq!(intro.layout, "default");
+
+        restore(orig, tmp);
         Ok(())
     }
 
     #[test]
-    fn test_gitignore_not_duplicated() -> io::Result<()> {
+    fn asset_objects_shape() -> io::Result<()> {
         let _guard = TEST_CWD_LOCK.lock().unwrap();
-        let orig = env::current_dir()?;
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("time error: {}", e)))?
-            .as_millis();
-        let tmp = env::temp_dir().join(format!("peisar_test_{}", now));
-        if tmp.exists() {
-            fs::remove_dir_all(&tmp)?;
-        }
-        fs::create_dir_all(&tmp)?;
+        let (tmp, orig) = make_tmp("assets")?;
         env::set_current_dir(&tmp)?;
+        write_md(&tmp, "contents/index.md", "# Home\n");
+        fs::create_dir_all(tmp.join("public").join("img"))?;
+        fs::write(
+            tmp.join("public").join("img").join("logo.png"),
+            vec![1u8, 2, 3],
+        )?;
 
-        // pre-create .gitignore with entry
-        fs::write(".gitignore", ".peisar_cache\n")?;
+        let cache = PeisarCache::with_config(PeisarCacheConfig {
+            entry_dir: "contents".into(),
+            assets_dir: Some("public".into()),
+            ..Default::default()
+        })?;
 
-        fs::create_dir_all("docs")?;
-        let md_path = tmp.join("docs").join("doc2.md");
-        let mut f = File::create(&md_path)?;
-        f.write_all(b"# No frontmatter\nContent\n")?;
-        f.sync_all()?;
+        let assets = cache.asset_objects();
+        assert_eq!(assets.len(), 1);
+        let logo = &assets[0];
+        assert_eq!(logo.file_name, "logo");
+        assert_eq!(logo.ext, "png");
+        assert_eq!(logo.file_type, "Image");
+        assert_eq!(logo.slug, "/img/logo.png");
+        assert_eq!(logo.out_file_path, "out/img/logo.png");
+        // binary raw is base64
+        assert_eq!(logo.raw, binary_to_base64(&[1u8, 2, 3]));
+
+        restore(orig, tmp);
+        Ok(())
+    }
+
+    #[test]
+    fn lru_eviction_falls_through_to_archive() -> io::Result<()> {
+        let _guard = TEST_CWD_LOCK.lock().unwrap();
+        let (tmp, orig) = make_tmp("evict")?;
+        env::set_current_dir(&tmp)?;
+        write_md(&tmp, "docs/small.md", "# Small\n");
+        write_md(
+            &tmp,
+            "docs/big.md",
+            "# Big\nBody padding to exceed the budget.\n",
+        );
+
+        let cache = PeisarCache::with_config(PeisarCacheConfig {
+            entry_dir: "docs".into(),
+            memory: Some(MemoryConfig {
+                byte_budget: Some(10),
+                entry_budget: None,
+            }),
+            // Tiny thresholds so the flush happens quickly.
+            archive: Some(ArchiveConfig {
+                shard_bytes: Some(1),
+                flush_interval_ms: Some(100),
+            }),
+            ..Default::default()
+        })?;
+        cache.flush();
+
+        // The LRU evicted entries, but they are still readable (archive).
+        let files = cache.markdown_files();
+        assert_eq!(files.len(), 2, "both files still resolvable");
+        for f in &files {
+            assert!(cache.get_text(f.clone()).is_some(), "{} readable", f);
+        }
+
+        restore(orig, tmp);
+        Ok(())
+    }
+
+    #[test]
+    fn resolve_url_uses_hosting_config() -> io::Result<()> {
+        let _guard = TEST_CWD_LOCK.lock().unwrap();
+        let (tmp, orig) = make_tmp("resolve")?;
+        env::set_current_dir(&tmp)?;
+        write_md(&tmp, "contents/index.md", "# Home\n");
+
+        let cache = PeisarCache::with_config(PeisarCacheConfig {
+            entry_dir: "contents".into(),
+            hosting: Some(HostingConfig {
+                provider: Some(HostingProvider::GithubPages),
+                repo: Some("my-repo".into()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })?;
+        assert_eq!(cache.base_url(), "/my-repo/");
+        assert_eq!(
+            cache.resolve_url("docs/intro".into()),
+            "/my-repo/docs/intro"
+        );
+
+        restore(orig, tmp);
+        Ok(())
+    }
+
+    #[test]
+    fn gitignore_entry_not_duplicated() -> io::Result<()> {
+        let _guard = TEST_CWD_LOCK.lock().unwrap();
+        let (tmp, orig) = make_tmp("gitignore")?;
+        env::set_current_dir(&tmp)?;
+        fs::write(".gitignore", format!("{ARCHIVE_DIR_NAME}\n"))?;
+        write_md(&tmp, "docs/doc2.md", "# No frontmatter\nContent\n");
 
         let _cache = PeisarCache::new("docs")?;
 
         let git = fs::read_to_string(".gitignore")?;
-        let occurrences = git.lines().filter(|l| l.trim() == ".peisar_cache").count();
+        let occurrences = git.lines().filter(|l| l.trim() == ARCHIVE_DIR_NAME).count();
         assert_eq!(occurrences, 1);
 
-        env::set_current_dir(orig)?;
-        fs::remove_dir_all(&tmp)?;
+        restore(orig, tmp);
         Ok(())
     }
 
     #[test]
-    fn test_stale_cache_removal_on_remove_command() -> io::Result<()> {
+    fn map_json_contains_frontmatter() -> io::Result<()> {
         let _guard = TEST_CWD_LOCK.lock().unwrap();
-        let orig = env::current_dir()?;
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("time error: {}", e)))?
-            .as_millis();
-        let tmp = env::temp_dir().join(format!("peisar_test_{}", now));
-        if tmp.exists() {
-            fs::remove_dir_all(&tmp)?;
-        }
-        fs::create_dir_all(&tmp)?;
+        let (tmp, orig) = make_tmp("mapjson")?;
         env::set_current_dir(&tmp)?;
-
-        fs::create_dir_all("docs")?;
-        let md1 = tmp.join("docs").join("a.md");
-        let md2 = tmp.join("docs").join("b.md");
-        {
-            let mut f1 = File::create(&md1)?;
-            f1.write_all(b"# A\n")?;
-            f1.sync_all()?;
-            let mut f2 = File::create(&md2)?;
-            f2.write_all(b"# B\n")?;
-            f2.sync_all()?;
-        }
+        write_md(
+            &tmp,
+            "docs/tagged.md",
+            "---\ntitle: Tagged\ntags:\n  - x\n---\n# Tagged\n",
+        );
 
         let cache = PeisarCache::new("docs")?;
+        cache.flush();
 
-        let cache_a = tmp.join(".peisar_cache").join("docs").join("a.md.json");
-        let cache_b = tmp.join(".peisar_cache").join("docs").join("b.md.json");
-        assert!(cache_a.exists());
-        assert!(cache_b.exists());
+        let map: serde_json::Value = serde_json::from_str(&cache.map_json()).unwrap();
+        let entry = &map["files"]["docs/tagged.md"];
+        assert_eq!(entry["frontmatter"]["title"], "Tagged");
+        assert_eq!(entry["frontmatter"]["tags"][0], "x");
+        assert_eq!(entry["kind"], "text");
+        assert!(entry["hash"].as_str().unwrap().len() == 64);
 
-        // Remove source file and send Remove command to worker
-        fs::remove_file(&md1)?;
-        if let Some(tx) = &cache.persist_tx {
-            tx.send(PersistCommand::Remove(md1.clone())).unwrap();
-        }
-
-        // Wait for worker to process
-        let mut waited = 0u32;
-        while cache_a.exists() && waited < 50 {
-            std::thread::sleep(std::time::Duration::from_millis(20));
-            waited += 1;
-        }
-
-        assert!(!cache_a.exists());
-
-        env::set_current_dir(orig)?;
-        fs::remove_dir_all(&tmp)?;
-        Ok(())
-    }
-
-    #[test]
-    fn test_hashing_avoids_rewrite() -> io::Result<()> {
-        let _guard = TEST_CWD_LOCK.lock().unwrap();
-        let orig = env::current_dir()?;
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("time error: {}", e)))?
-            .as_millis();
-        let tmp = env::temp_dir().join(format!("peisar_test_{}", now));
-        if tmp.exists() {
-            fs::remove_dir_all(&tmp)?;
-        }
-        fs::create_dir_all(&tmp)?;
-        env::set_current_dir(&tmp)?;
-
-        fs::create_dir_all("docs")?;
-        let md = tmp.join("docs").join("doc.md");
-        let content = b"# Title\nContent\n";
-        {
-            let mut f = File::create(&md)?;
-            f.write_all(content)?;
-            f.sync_all()?;
-        }
-
-        let cache = PeisarCache::new("docs")?;
-        let cache_file = tmp.join(".peisar_cache").join("docs").join("doc.md.json");
-        assert!(cache_file.exists());
-
-        let meta1 = fs::metadata(&cache_file)?.modified()?;
-        // send update with same content
-        if let Some(tx) = &cache.persist_tx {
-            tx.send(PersistCommand::Update(
-                md.clone(),
-                CachedContent::Text(String::from_utf8_lossy(content).to_string()),
-            ))
-            .unwrap();
-        }
-
-        // Wait briefly to let worker run
-        std::thread::sleep(std::time::Duration::from_millis(200));
-        let meta2 = fs::metadata(&cache_file)?.modified()?;
-
-        assert_eq!(meta1, meta2, "file was rewritten despite identical content");
-
-        env::set_current_dir(orig)?;
-        fs::remove_dir_all(&tmp)?;
+        restore(orig, tmp);
         Ok(())
     }
 }

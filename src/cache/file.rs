@@ -10,13 +10,13 @@ use std::path::{Path, PathBuf};
 /// File extensions recognized as Markdown, mirroring the
 /// [`markdown-extensions`](https://github.com/sindresorhus/markdown-extensions)
 /// list. Files with one of these extensions are cached as UTF-8 text.
-pub const MARKDOWN_EXTENSIONS: &'static [&str] = &[
+pub const MARKDOWN_EXTENSIONS: &[&str] = &[
     "md", "markdown", "mdown", "mkdn", "mkd", "mdwn", "mkdown", "ron",
 ];
 
 /// Asset extensions discovered under the assets directory: images,
 /// scripts, styles, fonts, and audio/video files.
-pub const ASSET_EXTENSIONS: &'static [&str] = &[
+pub const ASSET_EXTENSIONS: &[&str] = &[
     // images
     "png", "jpg", "jpeg", "gif", "svg", "webp", "avif", "ico", "bmp", "tiff",
     // scripts & styles
@@ -28,7 +28,7 @@ pub const ASSET_EXTENSIONS: &'static [&str] = &[
 /// Subset of [`ASSET_EXTENSIONS`] considered binary: such files are cached
 /// as raw bytes and never read as UTF-8. Asset extensions not listed here
 /// (`js`, `css`, `map`, `svg`) are cached as text.
-pub const ASSET_BINARY_EXTENSIONS: &'static [&str] = &[
+pub const ASSET_BINARY_EXTENSIONS: &[&str] = &[
     "png", "jpg", "jpeg", "gif", "webp", "avif", "ico", "bmp", "tiff", "woff", "woff2", "ttf",
     "eot", "mp3", "wav", "ogg", "mp4", "webm",
 ];
@@ -52,12 +52,11 @@ pub fn collect_markdown_files<P: AsRef<Path>>(entry_dir: P) -> io::Result<Vec<Pa
                 // Recurse into subdirectory; PathBuf implements AsRef<Path>
                 let nested = collect_markdown_files(path)?;
                 markdown_files.extend(nested);
-            } else if path.is_file() {
-                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                    if MARKDOWN_EXTENSIONS.contains(&ext) {
-                        markdown_files.push(path);
-                    }
-                }
+            } else if path.is_file()
+                && let Some(ext) = path.extension().and_then(|e| e.to_str())
+                && MARKDOWN_EXTENSIONS.contains(&ext)
+            {
+                markdown_files.push(path);
             }
         }
     }
@@ -85,12 +84,11 @@ pub fn collect_asset_files<P: AsRef<Path>>(entry_dir: P) -> io::Result<Vec<PathB
                 // Recurse
                 let nested = collect_asset_files(path)?;
                 asset_files.extend(nested);
-            } else if path.is_file() {
-                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                    if ASSET_EXTENSIONS.contains(&ext) {
-                        asset_files.push(path);
-                    }
-                }
+            } else if path.is_file()
+                && let Some(ext) = path.extension().and_then(|e| e.to_str())
+                && ASSET_EXTENSIONS.contains(&ext)
+            {
+                asset_files.push(path);
             }
         }
     }

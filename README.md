@@ -300,25 +300,49 @@ placeholder `pos` is sufficient.
 
 ### File cache
 
-`PeisarCache` collects every Markdown file under an entry directory (plus
-optional assets) into memory, mirrors them to a `.peisar_cache` directory on
-disk, and keeps both in sync with recursive file-watching once
-`startWatchingJs()` is called. This is the engine behind
+`PeisarCache` keeps a site's Markdown and asset files in a size-bounded LRU
+in memory, flushes content into binary shards under `.peisar-cache` (with a
+`map.json` search index), derives Liquid-ready page and asset objects, and
+resolves hosting `baseUrl` for deployments like GitHub Pages or Vercel.
+This is the engine behind
 [`peisar-ssg`](https://github.com/phothinmg/peisar)'s dev server and build
 pipeline.
 
 ```js
 const { PeisarCache } = require("peisar");
 
-// new PeisarCache(entryDir, assetsDir?)
-const cache = new PeisarCache("contents", "public");
+// new PeisarCache(entryDir, assetsDir?, options?)
+const cache = new PeisarCache("contents", "public", {
+  markdown: { fragment: true }, // PeisarOptions for every page render
+  hosting: { provider: "githubPages", repo: "my-repo" },
+  outDir: "out",
+});
 
 cache.markdownFiles(); // absolute paths of cached markdown files
 cache.assetFiles(); // absolute paths of cached assets
-cache.listFiles(); // everything cached
+cache.listFiles(); // everything cached (memory + disk archive)
 
 const raw = cache.getText(cache.markdownFiles()[0]); // cached file text, or null
 const bytes = cache.getBinary(cache.assetFiles()[0]); // cached bytes, or null
+
+// Liquid template shapes: every page's layout/title/tags/html/… flattened
+const pages = cache.pages(); // PageObject[] sorted by slug
+const page = cache.getPage(pages[0].inputFilePath); // single page object
+cache.assets(); // AssetsObject[] (fileType: "Image" | "Js" | "Css" | …)
+
+// Disk archive: binary shards + map.json (path → location + frontmatter)
+cache.archived(); // paths flushed to the archive tier
+cache.mapJson(); // the map.json document as a JSON string
+cache.flush(); // write pending archive entries now
+
+// Hosting-aware URLs for GitHub Pages/Vercel/Netlify/Cloudflare/custom
+cache.baseUrl(); // e.g. "/my-repo/"
+cache.resolveUrl("docs/intro"); // "/my-repo/docs/intro"
+cache.siteUrl(); // e.g. "https://user.github.io", or null
+
+// Custom markdown rendering: register JS visitors/parsers like on `Peisar`
+cache.useVisitor({ visitBlock([block]) { return { recurse: true }; } });
+cache.useParser({ parseBlock([{ line }]) { /* … */ } });
 
 cache.startWatchingJs(); // keep the cache in sync with the filesystem
 const id = cache.onChange((event) => {
@@ -329,9 +353,13 @@ cache.dispose(); // stop the watcher and release worker threads
 ```
 
 Paths are absolute on both sides: `markdownFiles()` returns absolute paths,
-so consumers pass them straight back to `getText()` / `getBinary()`. Always
-call `dispose()` when done so the watcher and persistence threads do not keep
-the Node process alive.
+so consumers pass them straight back to `getText()` / `getBinary()`.
+`pages()` / `assets()` derive template objects on demand — pass
+`{ archive: { shardBytes, flushIntervalMs } }` to control when content is
+written to disk, and `{ memory: { byteBudget, entryBudget } }` (via
+`PeisarCache.withConfig(config)`) to bound the hot set; entries evicted from
+memory stay readable through the archive. Always call `dispose()` when done
+so the watcher and archive threads do not keep the Node process alive.
 
 
 
@@ -414,16 +442,21 @@ Use `useParser` from Node.js for registered custom syntax today.
 
 The JavaScript `PeisarCache` class has a Rust equivalent,
 `peisar::cache::PeisarCache`. It loads every Markdown file under an entry
-directory (plus optional assets) into memory, mirrors them to a
-`.peisar_cache` directory on disk, and keeps both in sync with recursive
-file-watching once `start_watching()` is called.
+directory (plus optional assets) into a size-bounded LRU in memory, flushes
+cold content into binary shards under `.peisar-cache` (with a `map.json`
+search index) on a background worker, and keeps everything in sync with
+recursive file-watching once `start_watching()` is called.
 
 ```rust
-use peisar::cache::{CachedContent, PeisarCache};
+use peisar::cache::{CachedContent, PeisarCache, PeisarCacheConfig, MemoryConfig};
 
-// Markdown from "contents", assets from "public". Relative paths are
-// resolved against the current working directory.
-let mut cache = PeisarCache::with_config("contents", Some("public"))?;
+// Markdown from "contents", assets from "public", a 16 MiB hot set.
+let mut cache = PeisarCache::with_config(PeisarCacheConfig {
+    entry_dir: "contents".into(),
+    assets_dir: Some("public".into()),
+    memory: Some(MemoryConfig { byte_budget: Some(16 * 1024 * 1024), ..Default::default() }),
+    ..Default::default()
+})?;
 
 // Every cached Markdown file: absolute path -> raw text.
 for (path, text) in cache.all() {
@@ -431,7 +464,8 @@ for (path, text) in cache.all() {
 }
 
 // Single entries keep their variant: Markdown is `Text`, binary assets
-// are `Binary`.
+// are `Binary`. Reads hit memory first and fall through to the disk
+// archive for entries the LRU evicted.
 let index = std::env::current_dir()?.join("contents").join("index.md");
 match cache.get(&index) {
     Some(CachedContent::Text(md)) => println!("{md}"),
@@ -439,18 +473,22 @@ match cache.get(&index) {
     None => println!("not cached"),
 }
 
-// Keep memory and disk in sync with the filesystem.
+// Liquid-ready page objects: layout/title/tags/html flattened per page.
+for page in cache.page_objects() {
+    println!("{} -> {}", page.slug, page.out_file_path);
+}
+
+// Keep memory, derived objects, and the archive in sync with the filesystem.
 cache.start_watching()?;
-// Dropping the cache stops the watcher and joins the persistence
-// worker; Rust consumers need no explicit dispose.
+// Dropping the cache stops the watcher, flushes the archive, and joins
+// the workers; Rust consumers need no explicit dispose.
 ```
 
 The cache is keyed by absolute paths, so keys from `all()` can be passed
 straight back to `get()`. `all()` returns only text entries; use `get()` to
-read binary assets. Construction persists the snapshot to `.peisar_cache`
-and appends that directory to `.gitignore` when one exists; set
-`PEISAR_CACHE_FORMAT=bincode` for compact `.bin` entries instead of the
-default `.json`.
+read binary assets. Construction enqueues the snapshot to the archive worker
+(no blocking disk writes) and appends `.peisar-cache` to `.gitignore` when
+one exists; call `cache.flush()` to force shards to disk immediately.
 
 
 ## Development

@@ -9,10 +9,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Memory-first `PeisarCache` architecture: a size-aware LRU in-memory tier
+  (bounded by `byteBudget`/`entryBudget`), backed by a background archive
+  worker that flushes binary shard files to `.peisar-cache` with a `map.json`
+  search index (per-entry shard location, kind, size, BLAKE3 hash, and
+  parsed front matter). Reads hit memory first and fall through to the
+  archive for evicted entries.
+- `PeisarCache` constructor now accepts an options object — `markdown`
+  (`PeisarOptions` like `fragment`), `archive` (`shardBytes`,
+  `flushIntervalMs`), `hosting`, `outDir` — plus a full-config factory
+  `PeisarCache.withConfig(config)` for memory budgets.
+- `cache.useVisitor()` / `cache.useParser()`: custom JS visitors and parser
+  hooks applied to every page render.
+- Liquid-ready derived objects: `cache.pages()` / `cache.getPage()` return
+  `PageObject`s (layout, fileName, slug, html, outFilePath,
+  inputFilePath, title, summary, tags, publishDate, extra front-matter
+  fields flattened) and `cache.assets()` / `cache.getAsset()` return
+  `AssetsObject`s (fileName, slug, raw text/base64, outFilePath,
+  inputFilePath, ext, fileType).
+- Hosting-aware baseUrl resolution for GitHub Pages, Vercel, Netlify,
+  Cloudflare Pages, and custom deployments: `cache.baseUrl()`,
+  `cache.resolveUrl(path)`, `cache.siteUrl()`, plus
+  `BaseDirInfo::detect(url)` on the Rust side.
+- Archive introspection from JS: `cache.archived()`, `cache.mapJson()`, and
+  `cache.flush()`.
+- `PeisarCache::with_config` now takes a `PeisarCacheConfig` struct
+  (entry/assets dirs, markdown options, memory/archive tiers, hosting,
+  outDir); the old two-path constructor form is available via
+  `PeisarCacheConfig::default()` field updates.
+
+### Changed
+
+- `src/cache` now uses the shared `frontmatter()` function from
+  `src/frontmatter/mod.rs` instead of its local `parse_frontmatter`
+  duplicate (single YAML parsing path; results are `serde_json::Value`s).
+- Disk persistence is no longer write-through at construction: content
+  lives in the LRU, and shards are written by threshold/interval/flush.
 - Rustdoc for the `peisar::cache` module (module-level overview with a Rust
-  usage example, discovery/disk-format/threading sections, and doc comments
-  for `PeisarCache`, `CachedContent`, `start_watching`, `get`, `all`, and the
-  file-discovery helpers in `cache::file`)
+  usage example, discovery/tiering/threading sections, and doc comments
+  for `PeisarCache`, `CachedContent`, and the file-discovery helpers in
+  `cache::file`)
 - A "File cache" subsection in the README's Rust section covering
   `PeisarCache::with_config`, `all()`, `get()`, `start_watching()`, and the
   drop-based cleanup, compile-checked by a new `cache_paths` test in

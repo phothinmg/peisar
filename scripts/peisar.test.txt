@@ -220,6 +220,113 @@ test("PeisarCache collects markdown and asset files", () => {
 
     assert.strictEqual(cache.getText("/no/such/file.md"), null);
 
+    // Memory-first: nothing is written to disk at construction.
+    assert.equal(cache.archived().length, 0);
+    assert.equal(
+      fs.existsSync(path.join(root, ".peisar-cache", "map.json")),
+      false,
+    );
+
+    cache.dispose();
+  } finally {
+    process.chdir(origCwd);
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("PeisarCache derives Liquid-ready page and asset objects", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const os = require("node:os");
+
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "peisar-pages-"));
+  const origCwd = process.cwd();
+  try {
+    fs.mkdirSync(path.join(root, "contents", "docs"), { recursive: true });
+    fs.mkdirSync(path.join(root, "public", "img"), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, "contents", "index.md"),
+      "---\n" +
+        "title: Home Page\n" +
+        "layout: custom\n" +
+        "summary: hi there\n" +
+        "tags:\n" +
+        "  - a\n" +
+        "  - b\n" +
+        "date: 2026-01-01\n" +
+        "author: someone\n" +
+        "---\n" +
+        "# Not the title\n\n" +
+        "Body\n",
+    );
+    fs.writeFileSync(
+      path.join(root, "contents", "docs", "intro.md"),
+      "# Intro\n",
+    );
+    fs.writeFileSync(
+      path.join(root, "public", "img", "logo.png"),
+      Buffer.from([1, 2, 3]),
+    );
+
+    process.chdir(root);
+    const cache = new PeisarCache("contents", "public", {
+      markdown: { fragment: true },
+      hosting: { provider: "GithubPages", repo: "my-repo" },
+      outDir: "dist",
+    });
+
+    const pages = cache.pages();
+    assert.equal(pages.length, 2);
+
+    const home = pages.find((p) => p.fileName === "index");
+    assert.ok(home, "index page exists");
+    assert.equal(home.layout, "custom");
+    assert.equal(home.title, "Home Page");
+    assert.equal(home.summary, "hi there");
+    assert.deepEqual(home.tags, ["a", "b"]);
+    assert.equal(home.publishDate, "2026-01-01");
+    assert.equal(home.extra.author, "someone");
+    assert.equal(home.slug, "/my-repo/");
+    assert.equal(home.outFilePath, "dist/index.html");
+    assert.ok(home.html.includes("Body"));
+
+    const intro = pages.find((p) => p.fileName === "intro");
+    assert.equal(intro.title, "Intro"); // falls back to the first heading
+    assert.equal(intro.layout, "default");
+    assert.equal(intro.slug, "/my-repo/docs/intro");
+    assert.equal(intro.outFilePath, "dist/docs/intro/index.html");
+
+    // single-page lookup by input path
+    const single = cache.getPage(intro.inputFilePath);
+    assert.equal(single.slug, intro.slug);
+    assert.strictEqual(cache.getPage("/no/such.md"), null);
+
+    // assets
+    const assets = cache.assets();
+    assert.equal(assets.length, 1);
+    const logo = assets[0];
+    assert.equal(logo.fileName, "logo");
+    assert.equal(logo.ext, "png");
+    assert.equal(logo.fileType, "Image");
+    assert.equal(logo.slug, "/my-repo/img/logo.png");
+    assert.equal(logo.outFilePath, "dist/img/logo.png");
+
+    // hosting URL helpers
+    assert.equal(cache.baseUrl(), "/my-repo/");
+    assert.equal(cache.resolveUrl("docs/intro"), "/my-repo/docs/intro");
+    assert.strictEqual(cache.siteUrl(), null);
+
+    // flush writes the map.json search index with front matter
+    cache.flush();
+    const map = JSON.parse(cache.mapJson());
+    assert.equal(map.version, 1);
+    const entry = map.files["contents/index.md"];
+    assert.ok(entry, "index.md is in the map");
+    assert.equal(entry.frontmatter.title, "Home Page");
+    assert.equal(entry.kind, "text");
+    assert.equal(entry.hash.length, 64);
+    assert.equal(cache.archived().length, 3);
+
     cache.dispose();
   } finally {
     process.chdir(origCwd);

@@ -7,14 +7,14 @@ pub mod tokens;
 
 use crate::frontmatter::frontmatter;
 pub use control::{Parser, Visitor};
-use control::{RegisteredParser, RegisteredVisitor};
+pub(crate) use control::{RegisteredParser, RegisteredVisitor};
 #[cfg(feature = "npm")]
 use napi::Env;
 pub use options::AstOptions;
 pub use parsers::Document;
 pub use parsers::hooks::{AstParser, BlockParseContext, InlineParseContext, ParseHooks};
 pub use parsers::inline::{LinkRefMap, parse_inline, parse_inline_with_refs};
-use parsers::md_to_ast_with_hooks;
+pub use parsers::md_to_ast_with_hooks;
 use parsers::visitor::visit_document_mut;
 pub use parsers::visitor::{self, AstVisitor};
 use serde_json::Value;

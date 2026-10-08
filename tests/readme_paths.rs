@@ -174,40 +174,55 @@ fn frontmatter_paths() {
     assert!(yaml.is_some());
 }
 
-// #[test]
-// fn cache_paths() {
-//     use peisar::cache::{CachedContent, PeisarCache};
-//     use std::fs;
-//     use std::path::Path;
+#[test]
+fn cache_paths() {
+    use peisar::cache::{CachedContent, MemoryConfig, PeisarCache, PeisarCacheConfig};
+    use std::fs;
+    use std::path::PathBuf;
 
-//     // PeisarCache persists to `.peisar_cache` under the current working
-//     // directory, so run the check from a throwaway directory.
-//     let tmp = std::env::temp_dir().join(format!("peisar_readme_cache_{}", std::process::id()));
-//     fs::create_dir_all(tmp.join("contents")).unwrap();
-//     let index = tmp.join("contents").join("index.md");
-//     fs::write(&index, "# Hello\n").unwrap();
+    // PeisarCache archives under `.peisar-cache` in the current working
+    // directory, so run the check from a throwaway directory.
+    let tmp = std::env::temp_dir().join(format!("peisar_readme_cache_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&tmp);
+    fs::create_dir_all(tmp.join("contents")).unwrap();
+    let index = tmp.join("contents").join("index.md");
+    fs::write(&index, "# Hello\n").unwrap();
 
-//     let orig = std::env::current_dir().unwrap();
-//     std::env::set_current_dir(&tmp).unwrap();
+    let orig = std::env::current_dir().unwrap();
+    std::env::set_current_dir(&tmp).unwrap();
 
-//     // with_config(entry_dir, assets_dir) from the README
-//     let mut cache = PeisarCache::with_config("contents", None::<&Path>).unwrap();
+    // with_config(PeisarCacheConfig { .. }) from the README
+    let mut cache = PeisarCache::with_config(PeisarCacheConfig {
+        entry_dir: "contents".into(),
+        memory: Some(MemoryConfig {
+            byte_budget: Some(16 * 1024 * 1024),
+            ..Default::default()
+        }),
+        ..Default::default()
+    })
+    .unwrap();
 
-//     // all(): absolute path -> raw text for every cached markdown file
-//     let all = cache.all();
-//     assert_eq!(all.len(), 1);
-//     assert_eq!(all[&index], "# Hello\n");
+    // all(): absolute path -> raw text for every cached markdown file
+    let all: std::collections::HashMap<PathBuf, String> = cache.all();
+    assert_eq!(all.len(), 1);
+    assert_eq!(all[&index], "# Hello\n");
 
-//     // get(): variant-preserving lookup by absolute path
-//     match cache.get(&index) {
-//         Some(CachedContent::Text(md)) => assert_eq!(md, "# Hello\n"),
-//         other => panic!("expected cached text, got {:?}", other),
-//     }
+    // get(): variant-preserving lookup by absolute path (memory tier first)
+    match cache.get(&index) {
+        Some(CachedContent::Text(md)) => assert_eq!(md, "# Hello\n"),
+        other => panic!("expected cached text, got {:?}", other),
+    }
 
-//     // start_watching() + Drop (the Rust equivalent of JS dispose())
-//     cache.start_watching().unwrap();
-//     drop(cache);
+    // page_objects(): Liquid-ready derived objects
+    let pages = cache.page_objects();
+    assert_eq!(pages.len(), 1);
+    assert_eq!(pages[0].title.as_deref(), Some("Hello"));
+    assert_eq!(pages[0].out_file_path, "out/index.html");
 
-//     std::env::set_current_dir(orig).unwrap();
-//     let _ = fs::remove_dir_all(&tmp);
-// }
+    // start_watching() + Drop (the Rust equivalent of JS dispose())
+    cache.start_watching().unwrap();
+    drop(cache);
+
+    std::env::set_current_dir(orig).unwrap();
+    let _ = fs::remove_dir_all(&tmp);
+}

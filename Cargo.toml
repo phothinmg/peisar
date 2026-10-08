@@ -33,3 +33,7 @@ crate-type = ["rlib", "cdylib"]
 default = []
 # When this feature is active, it pulls in napi-rs dependencies
 npm = ["dep:napi", "dep:napi-derive"]
+
+[[example]]
+name = "cache_example"
+path = "examples/cache/main.rs"

@@ -1,8 +1,8 @@
 /target
 node_modules
 npm
-contents
-.peisar_cache
-test.md
-local_build
 js_tests_temp
+.notes
+dist
+
+.peisar-cache
