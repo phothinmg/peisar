@@ -1,46 +1,7 @@
-//! Callback-based wrapper layer for JavaScript (napi-rs) interop.
-//!
-//! The Rust [`AstVisitor`](crate::AstVisitor) trait cannot be exported
-//! directly through napi-rs (traits and generics are not supported).
-//! This module provides a parallel, callback-based API that JS consumers
-//! use instead:
-//!
-//! 1. [`VisitControlJs`] / [`InlineVisitControlJs`] — napi-exported
-//!    mirror structs that JS returns from its callback functions.
-//! 2. [`BlockCallback`] / [`InlineCallback`] — type-erased napi callbacks
-//!    (`ThreadsafeFunction` wrappers).
-//! 3. [`JsVisitor`] — napi-exported object shape for the JS callbacks;
-//!    the internal adapter forwards them to [`AstVisitor`].
-//! 4. [`PeisarAstJs`] — napi-exported high-level struct mirroring
-//!    [`PeisarAst`](crate::PeisarAst) but accepting JS callbacks instead of
-//!    Rust visitor types.
-//!
-//! ## JS usage example
-//!
-//! ```js
-//! const { PeisarAstJs } = require("@peisar/ast");
-//!
-//! const ast = new PeisarAstJs("# Hello\n\nA paragraph.", undefined);
-//!
-//! // addVisitor takes a single visitor object with two optional
-//! // callback functions (a "plugin"):
-//! ast.addVisitor({
-//!   visitBlock(block) {
-//!     if (block.type === "heading") console.log("heading:", block.level);
-//!     return { recurse: true };
-//!   },
-//!   visitInline(inline) {
-//!     return {}; // keep, no recurse
-//!   },
-//! });
-//!
-//! ast.visitAll();
-//! console.log(ast.ast);         // real JS object tree
-//! console.log(ast.frontmatter); // real JS object (or null)
-//! ```
+use crate::markdown::ast::parsers::plugin::{
+    BlockParserContext, InlineParserContext, InlineVisitControl, PluginFactory, VisitControl,
+};
 
-use crate::markdown::ast::parsers::hooks::{AstParser, BlockParseContext, InlineParseContext};
-use crate::markdown::ast::parsers::visitor::{AstVisitor, InlineVisitControl, VisitControl};
 use crate::markdown::ast::tokens::token::{Block, Inline};
 
 #[cfg(feature = "npm")]
@@ -48,9 +9,11 @@ use napi::bindgen_prelude::{Env, Function, FunctionRef};
 #[cfg(feature = "npm")]
 use napi_derive::napi;
 
-// ---------------------------------------------------------------------------
-// napi-exported control mirrors
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------------//
+
+// 1. Napi mirrors
+
+// 1.1 Napi-exported control
 
 /// JS-facing mirror of [`VisitControl`].
 ///
@@ -112,158 +75,7 @@ impl From<InlineVisitorControl> for InlineVisitControl {
         }
     }
 }
-// ---------------------------------------------------------------------------
-// Synchronous JS callbacks (napi FunctionRef wrappers)
-// ---------------------------------------------------------------------------
-//
-// `napi::bindgen_prelude::Function` can only live within the scope of a single
-// napi call — it becomes invalid once the call returns.  To store a JS function
-// across calls (as a visitor callback), we use `FunctionRef`, which is `Sync`
-// and explicitly designed to outlive the original call scope.  When we need to
-// invoke it, we call `borrow_back(&env)` to obtain a short-lived `Function`
-// bound to the current `Env`, then call it synchronously.
-//
-// This avoids the deadlock that `ThreadsafeFunction` would cause: visitor
-// callbacks run synchronously on the JS main thread (invoked from napi getters
-// like `peisar.ast`), so a `ThreadsafeFunction` would queue onto the libuv
-// event loop — the same thread we'd be blocking on while waiting for the return
-// value.
-
-/// Synchronous block-visitor callback. Receives a `Block`, returns
-/// `VisitControlJs` (or `undefined` for no changes).
-
-#[cfg(feature = "npm")]
-#[napi]
-pub type BlockCallback = FunctionRef<(Block,), Option<VisitorControl>>;
-#[cfg(not(feature = "npm"))]
-pub type BlockCallback = Box<dyn Fn(Block) -> Option<VisitorControl> + Send + 'static>;
-/// Synchronous inline-visitor callback. Receives an `Inline`, returns
-/// `InlineVisitControlJs` (or `undefined` for no changes).
-#[cfg(feature = "npm")]
-#[napi]
-pub type InlineCallback = FunctionRef<(Inline,), Option<InlineVisitorControl>>;
-#[cfg(not(feature = "npm"))]
-pub type InlineCallback = Box<dyn Fn(Inline) -> Option<InlineVisitorControl> + Send + 'static>;
-// ---------------------------------------------------------------------------
-// JsVisitor object shape and registered AstVisitor adapter
-// ---------------------------------------------------------------------------
-/// JavaScript object shape for a visitor callback pair.
-///
-/// On the JS side it is a plain object with two optional
-/// function properties:
-///
-/// ```js
-/// const myPlugin = {
-///   visitBlock(block)  { return { recurse: true }; },
-///   visitInline(inline) { return {}; },
-/// };
-/// ast.addVisitor(myPlugin);
-/// ```
-///
-/// Either property may be omitted / `null` to skip that node kind.
-#[cfg_attr(feature = "npm", napi(object, object_to_js = false))]
-#[derive(Default)]
-pub struct Visitor {
-    /// Optional JS callback for block nodes (JS: `visitBlock`).
-    pub visit_block: Option<BlockCallback>,
-    /// Optional JS callback for inline nodes (JS: `visitInline`).
-    pub visit_inline: Option<InlineCallback>,
-}
-
-impl Visitor {
-    #[cfg(feature = "npm")]
-    pub(crate) fn register(self, env: Env) -> RegisteredVisitorJs {
-        RegisteredVisitorJs {
-            visit_block: self.visit_block,
-            visit_inline: self.visit_inline,
-            env,
-        }
-    }
-    #[cfg(not(feature = "npm"))]
-    pub(crate) fn register(self) -> RegisteredVisitorRs {
-        RegisteredVisitorRs {
-            visit_block: self.visit_block,
-            visit_inline: self.visit_inline,
-        }
-    }
-}
-
-/// Internal adapter that keeps the environment required by callback references.
-#[cfg(feature = "npm")]
-pub(crate) struct RegisteredVisitorJs {
-    pub visit_block: Option<BlockCallback>,
-    pub visit_inline: Option<InlineCallback>,
-    /// The napi `Env` captured at registration time, used to `borrow_back`
-    /// the `FunctionRef`s when calling them.
-    pub env: Env,
-}
-#[cfg(feature = "npm")]
-pub type RegisteredVisitor = RegisteredVisitorJs;
-#[cfg(feature = "npm")]
-impl AstVisitor for RegisteredVisitorJs {
-    #[cfg(feature = "npm")]
-    fn visit_block(&mut self, block: &mut Block) -> VisitControl {
-        let cb = match &self.visit_block {
-            Some(cb) => cb,
-            _ => return VisitControl::default(),
-        };
-        // `borrow_back` creates a short-lived `Function` bound to `env`;
-        // calling it runs the JS function inline on this (main) thread.
-        let func: Function<(Block,), Option<VisitorControl>> = match cb.borrow_back(&self.env) {
-            Ok(f) => f,
-            Err(_) => return VisitControl::default(),
-        };
-        let snapshot = block.clone();
-        // `undefined` (no result) means "keep, no changes".
-        let js_ctrl = func.call((snapshot,)).unwrap_or(None).unwrap_or_default();
-        js_ctrl.into()
-    }
-    #[cfg(feature = "npm")]
-    fn visit_inline(&mut self, inline: &mut Inline) -> InlineVisitControl {
-        let cb = match &self.visit_inline {
-            Some(cb) => cb,
-            _ => return InlineVisitControl::default(),
-        };
-        let func: Function<(Inline,), Option<InlineVisitorControl>> =
-            match cb.borrow_back(&self.env) {
-                Ok(f) => f,
-                Err(_) => return InlineVisitControl::default(),
-            };
-        let snapshot = inline.clone();
-        // `undefined` (no result) means "keep, no changes".
-        let js_ctrl = func.call((snapshot,)).unwrap_or(None).unwrap_or_default();
-        js_ctrl.into()
-    }
-}
-#[cfg(not(feature = "npm"))]
-pub(crate) struct RegisteredVisitorRs {
-    pub visit_block: Option<BlockCallback>,
-    pub visit_inline: Option<InlineCallback>,
-}
-#[cfg(not(feature = "npm"))]
-pub(crate) type RegisteredVisitor = RegisteredVisitorRs;
-#[cfg(not(feature = "npm"))]
-impl AstVisitor for RegisteredVisitorRs {
-    fn visit_block(&mut self, block: &mut Block) -> VisitControl {
-        let cb = match &self.visit_block {
-            Some(cb) => cb,
-            _ => return VisitControl::default(),
-        };
-        let snapshot = block.clone();
-        cb(snapshot).unwrap_or_default().into()
-    }
-    fn visit_inline(&mut self, inline: &mut Inline) -> InlineVisitControl {
-        let cb = match &self.visit_inline {
-            Some(cb) => cb,
-            _ => return InlineVisitControl::default(),
-        };
-        let snapshot = inline.clone();
-        cb(snapshot).unwrap_or_default().into()
-    }
-}
-// ---------------------------------------------------------------------------
-// Custom parser hooks (JS interop)
-// ---------------------------------------------------------------------------
+// 1.1 Custom parser hooks (JS interop)
 //
 // Mirrors the visitor pattern above: the JS-side `Parser` object holds two
 // optional sync callbacks (`parseBlock` / `parseInline`), each receiving a
@@ -298,68 +110,153 @@ pub struct InlineParseResult {
     pub consumed: Option<u32>,
 }
 
+// 2. Callback
+
+// 2.1 Synchronous JS callbacks (napi FunctionRef wrappers)
+//
+// `napi::bindgen_prelude::Function` can only live within the scope of a single
+// napi call — it becomes invalid once the call returns.  To store a JS function
+// across calls (as a visitor callback), we use `FunctionRef`, which is `Sync`
+// and explicitly designed to outlive the original call scope.  When we need to
+// invoke it, we call `borrow_back(&env)` to obtain a short-lived `Function`
+// bound to the current `Env`, then call it synchronously.
+//
+// This avoids the deadlock that `ThreadsafeFunction` would cause: visitor
+// callbacks run synchronously on the JS main thread (invoked from napi getters
+// like `peisar.ast`), so a `ThreadsafeFunction` would queue onto the libuv
+// event loop — the same thread we'd be blocking on while waiting for the return
+// value.
+
+/// Synchronous block-visitor callback. Receives a `Block`, returns
+/// `VisitControlJs` (or `undefined` for no changes).
+#[cfg(feature = "npm")]
+#[napi]
+pub type BlockCallback = FunctionRef<(Block,), Option<VisitorControl>>;
+#[cfg(feature = "npm")]
+#[napi]
+/// Synchronous inline-visitor callback. Receives an `Inline`, returns
+/// `InlineVisitControlJs` (or `undefined` for no changes).
+pub type InlineCallback = FunctionRef<(Inline,), Option<InlineVisitorControl>>;
+
 /// Synchronous block parser hook. Receives a [`BlockParseContext`], returns
 /// a [`BlockParseResultJs`] (or `undefined` to decline).
 #[cfg(feature = "npm")]
 #[napi]
-pub type BlockParseCallback = FunctionRef<(BlockParseContext,), Option<BlockParseResult>>;
-#[cfg(not(feature = "npm"))]
-pub type BlockParseCallback =
-    Box<dyn Fn(BlockParseContext) -> Option<BlockParseResult> + Send + 'static>;
+pub type BlockParseCallback = FunctionRef<(BlockParserContext,), Option<BlockParseResult>>;
 /// Synchronous inline parser hook. Receives an [`InlineParseContext`],
 /// returns an [`InlineParseResultJs`] (or `undefined` to decline).
 #[cfg(feature = "npm")]
 #[napi]
-pub type InlineParseCallback = FunctionRef<(InlineParseContext,), Option<InlineParseResult>>;
+pub type InlineParseCallback = FunctionRef<(InlineParserContext,), Option<InlineParseResult>>;
+
+// 2.2 Callback for rust side
+
+#[cfg(not(feature = "npm"))]
+pub type BlockCallback = Box<dyn Fn(Block) -> Option<VisitorControl> + Send + 'static>;
+#[cfg(not(feature = "npm"))]
+pub type InlineCallback = Box<dyn Fn(Inline) -> Option<InlineVisitorControl> + Send + 'static>;
+#[cfg(not(feature = "npm"))]
+pub type BlockParseCallback =
+    Box<dyn Fn(BlockParserContext) -> Option<BlockParseResult> + Send + 'static>;
 #[cfg(not(feature = "npm"))]
 pub type InlineParseCallback =
-    Box<dyn Fn(InlineParseContext) -> Option<InlineParseResult> + Send + 'static>;
-/// Either property may be omitted / `null` to skip that phase.
+    Box<dyn Fn(InlineParserContext) -> Option<InlineParseResult> + Send + 'static>;
+
+// 3. Plugins Control
+
+// 3.1 Callback for Registered Plugins
+// New API since 1.0.1
+
 #[cfg_attr(feature = "npm", napi(object, object_to_js = false))]
 #[derive(Default)]
-pub struct Parser {
+pub struct Plugin {
+    /// Optional JS callback for block nodes (JS: `visitBlock`).
+    pub visit_block: Option<BlockCallback>,
+    /// Optional JS callback for inline nodes (JS: `visitInline`).
+    pub visit_inline: Option<InlineCallback>,
     /// Optional JS block parser hook (JS: `parseBlock`).
     pub parse_block: Option<BlockParseCallback>,
     /// Optional JS inline parser hook (JS: `parseInline`).
     pub parse_inline: Option<InlineParseCallback>,
 }
 
-impl Parser {
+impl Plugin {
     #[cfg(feature = "npm")]
-    pub(crate) fn register(self, env: Env) -> RegisteredParserJs {
-        RegisteredParserJs {
+    pub(crate) fn register(self, env: Env) -> RegisteredPlugin {
+        RegisteredPlugin {
+            visit_block: self.visit_block,
+            visit_inline: self.visit_inline,
             parse_block: self.parse_block,
             parse_inline: self.parse_inline,
             env,
         }
     }
-
     #[cfg(not(feature = "npm"))]
-    pub(crate) fn register(self) -> RegisteredParserRs {
-        RegisteredParserRs {
+    pub(crate) fn register(self) -> RegisteredPlugin {
+        RegisteredPlugin {
+            visit_block: self.visit_block,
+            visit_inline: self.visit_inline,
             parse_block: self.parse_block,
             parse_inline: self.parse_inline,
         }
     }
 }
 
-/// Internal adapter that keeps the environment required by callback
-/// references, implementing the Rust [`AstParser`] trait.
+// 3.2 Register plugins for napi-rs
+
 #[cfg(feature = "npm")]
-pub(crate) struct RegisteredParserJs {
+pub(crate) struct RegisteredPlugin {
+    pub visit_block: Option<BlockCallback>,
+    pub visit_inline: Option<InlineCallback>,
     pub parse_block: Option<BlockParseCallback>,
     pub parse_inline: Option<InlineParseCallback>,
     /// The napi `Env` captured at registration time, used to `borrow_back`
     /// the `FunctionRef`s when calling them.
     pub env: Env,
 }
+
 #[cfg(feature = "npm")]
-pub(crate) type RegisteredParser = RegisteredParserJs;
-#[cfg(feature = "npm")]
-impl AstParser for RegisteredParserJs {
-    fn try_parse_block(&self, ctx: &BlockParseContext) -> Option<(Block, usize)> {
+impl PluginFactory for RegisteredPlugin {
+    #[cfg(feature = "npm")]
+    fn has_parse_hooks(&self) -> bool {
+        self.parse_block.is_some() || self.parse_inline.is_some()
+    }
+    #[cfg(feature = "npm")]
+    fn visit_block(&mut self, block: &mut Block) -> VisitControl {
+        let cb = match &self.visit_block {
+            Some(cb) => cb,
+            _ => return VisitControl::default(),
+        };
+        // `borrow_back` creates a short-lived `Function` bound to `env`;
+        // calling it runs the JS function inline on this (main) thread.
+        let func: Function<(Block,), Option<VisitorControl>> = match cb.borrow_back(&self.env) {
+            Ok(f) => f,
+            Err(_) => return VisitControl::default(),
+        };
+        let snapshot = block.clone();
+        // `undefined` (no result) means "keep, no changes".
+        let js_ctrl = func.call((snapshot,)).unwrap_or(None).unwrap_or_default();
+        js_ctrl.into()
+    }
+    #[cfg(feature = "npm")]
+    fn visit_inline(&mut self, inline: &mut Inline) -> InlineVisitControl {
+        let cb = match &self.visit_inline {
+            Some(cb) => cb,
+            _ => return InlineVisitControl::default(),
+        };
+        let func: Function<(Inline,), Option<InlineVisitorControl>> =
+            match cb.borrow_back(&self.env) {
+                Ok(f) => f,
+                Err(_) => return InlineVisitControl::default(),
+            };
+        let snapshot = inline.clone();
+        // `undefined` (no result) means "keep, no changes".
+        let js_ctrl = func.call((snapshot,)).unwrap_or(None).unwrap_or_default();
+        js_ctrl.into()
+    }
+    fn try_parse_block(&self, ctx: &BlockParserContext) -> Option<(Block, usize)> {
         let cb = self.parse_block.as_ref()?;
-        let func: Function<(BlockParseContext,), Option<BlockParseResult>> =
+        let func: Function<(BlockParserContext,), Option<BlockParseResult>> =
             match cb.borrow_back(&self.env) {
                 Ok(f) => f,
                 Err(e) => {
@@ -387,9 +284,9 @@ impl AstParser for RegisteredParserJs {
         Some((block, consumed))
     }
 
-    fn try_parse_inline(&self, ctx: &InlineParseContext) -> Option<(Inline, usize)> {
+    fn try_parse_inline(&self, ctx: &InlineParserContext) -> Option<(Inline, usize)> {
         let cb = self.parse_inline.as_ref()?;
-        let func: Function<(InlineParseContext,), Option<InlineParseResult>> =
+        let func: Function<(InlineParserContext,), Option<InlineParseResult>> =
             match cb.borrow_back(&self.env) {
                 Ok(f) => f,
                 Err(e) => {
@@ -414,23 +311,45 @@ impl AstParser for RegisteredParserJs {
         (consumed > 0).then_some((inline, consumed))
     }
 }
+
+// 3.3 Register plugins for rust side
+
 #[cfg(not(feature = "npm"))]
-pub(crate) struct RegisteredParserRs {
+pub(crate) struct RegisteredPlugin {
+    pub visit_block: Option<BlockCallback>,
+    pub visit_inline: Option<InlineCallback>,
     pub parse_block: Option<BlockParseCallback>,
     pub parse_inline: Option<InlineParseCallback>,
 }
 #[cfg(not(feature = "npm"))]
-pub(crate) type RegisteredParser = RegisteredParserRs;
-#[cfg(not(feature = "npm"))]
-impl AstParser for RegisteredParserRs {
-    fn try_parse_block(&self, ctx: &BlockParseContext) -> Option<(Block, usize)> {
+impl PluginFactory for RegisteredPlugin {
+    fn has_parse_hooks(&self) -> bool {
+        self.parse_block.is_some() || self.parse_inline.is_some()
+    }
+    fn visit_block(&mut self, block: &mut Block) -> VisitControl {
+        let cb = match &self.visit_block {
+            Some(cb) => cb,
+            _ => return VisitControl::default(),
+        };
+        let snapshot = block.clone();
+        cb(snapshot).unwrap_or_default().into()
+    }
+    fn visit_inline(&mut self, inline: &mut Inline) -> InlineVisitControl {
+        let cb = match &self.visit_inline {
+            Some(cb) => cb,
+            _ => return InlineVisitControl::default(),
+        };
+        let snapshot = inline.clone();
+        cb(snapshot).unwrap_or_default().into()
+    }
+    fn try_parse_block(&self, ctx: &BlockParserContext) -> Option<(Block, usize)> {
         let cb = self.parse_block.as_ref()?;
         let result = cb(ctx.clone())?;
         let block = result.block?;
         let consumed = result.consumed.unwrap_or(1).max(1) as usize;
         Some((block, consumed))
     }
-    fn try_parse_inline(&self, ctx: &InlineParseContext) -> Option<(Inline, usize)> {
+    fn try_parse_inline(&self, ctx: &InlineParserContext) -> Option<(Inline, usize)> {
         let cb = self.parse_inline.as_ref()?;
         let result = cb(ctx.clone())?;
         let inline = result.inline?;
@@ -438,3 +357,117 @@ impl AstParser for RegisteredParserRs {
         (consumed > 0).then_some((inline, consumed))
     }
 }
+
+// 4. Deprecated API since v1.3.0 (`AstVisitor` and `AstParser`)
+//
+// The deprecated `Visitor` / `Parser` objects are thin shims: converting one
+// produces the equivalent [`Plugin`], so both old and new registrations flow
+// through the exact same adapter + traversal code path.
+//
+// The module-level `allow` below is load-bearing: the napi and Default
+// derive macros generate impls that reference these deprecated structs at
+// the definition span, where an item-level `#[allow(deprecated)]` cannot
+// reach them.
+#[allow(deprecated)]
+mod deprecated_js {
+    #[cfg(feature = "npm")]
+    use super::Env;
+    use super::{
+        BlockCallback, BlockParseCallback, InlineCallback, InlineParseCallback, Plugin,
+        RegisteredPlugin,
+    };
+    #[cfg(feature = "npm")]
+    use napi_derive::napi;
+
+    // 4.1 Visitor — pre-1.3.0 shape (visitBlock / visitInline only)
+
+    /// JavaScript object shape for a visitor callback pair.
+    ///
+    /// On the JS side it is a plain object with two optional
+    /// function properties:
+    ///
+    /// ```js
+    /// const myPlugin = {
+    ///   visitBlock(block)  { return { recurse: true }; },
+    ///   visitInline(inline) { return {}; },
+    /// };
+    /// ast.addVisitor(myPlugin);
+    /// ```
+    ///
+    /// Either property may be omitted / `null` to skip that node kind.
+    #[cfg_attr(feature = "npm", napi(object, object_to_js = false))]
+    #[derive(Default)]
+    #[deprecated(since = "1.3.0", note = "Use `Plugin` instead")]
+    pub struct Visitor {
+        /// Optional JS callback for block nodes (JS: `visitBlock`).
+        pub visit_block: Option<BlockCallback>,
+        /// Optional JS callback for inline nodes (JS: `visitInline`).
+        pub visit_inline: Option<InlineCallback>,
+    }
+    #[allow(deprecated)]
+    impl Visitor {
+        /// Convert into the equivalent [`Plugin`] (no callbacks lost).
+        #[cfg(feature = "npm")]
+        pub(crate) fn into_plugin(self, env: Env) -> RegisteredPlugin {
+            Plugin {
+                visit_block: self.visit_block,
+                visit_inline: self.visit_inline,
+                parse_block: None,
+                parse_inline: None,
+            }
+            .register(env)
+        }
+
+        #[cfg(not(feature = "npm"))]
+        pub(crate) fn into_plugin(self) -> RegisteredPlugin {
+            Plugin {
+                visit_block: self.visit_block,
+                visit_inline: self.visit_inline,
+                parse_block: None,
+                parse_inline: None,
+            }
+            .register()
+        }
+    }
+
+    // 4.2 Parser — pre-1.3.0 shape (parseBlock / parseInline only)
+
+    /// Either property may be omitted / `null` to skip that phase.
+    #[cfg_attr(feature = "npm", napi(object, object_to_js = false))]
+    #[derive(Default)]
+    #[deprecated(since = "1.3.0", note = "Use `Plugin` instead")]
+    pub struct Parser {
+        /// Optional JS block parser hook (JS: `parseBlock`).
+        pub parse_block: Option<BlockParseCallback>,
+        /// Optional JS inline parser hook (JS: `parseInline`).
+        pub parse_inline: Option<InlineParseCallback>,
+    }
+    #[allow(deprecated)]
+    impl Parser {
+        /// Convert into the equivalent [`Plugin`] (no callbacks lost).
+        #[cfg(feature = "npm")]
+        pub(crate) fn into_plugin(self, env: Env) -> RegisteredPlugin {
+            Plugin {
+                visit_block: None,
+                visit_inline: None,
+                parse_block: self.parse_block,
+                parse_inline: self.parse_inline,
+            }
+            .register(env)
+        }
+
+        #[cfg(not(feature = "npm"))]
+        pub(crate) fn into_plugin(self) -> RegisteredPlugin {
+            Plugin {
+                visit_block: None,
+                visit_inline: None,
+                parse_block: self.parse_block,
+                parse_inline: self.parse_inline,
+            }
+            .register()
+        }
+    }
+}
+
+#[allow(deprecated)]
+pub use deprecated_js::{Parser, Visitor};

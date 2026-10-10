@@ -16,13 +16,12 @@
 
 mod atters;
 pub mod block;
-pub mod hooks;
 pub mod inline;
+pub mod plugin;
 mod table;
-pub mod visitor;
 
 use crate::markdown::ast::options::AstOptions;
-use crate::markdown::ast::parsers::hooks::ParseHooks;
+use crate::markdown::ast::parsers::plugin::ParserHooks;
 use crate::markdown::ast::tokens::{span::Span, token::Block};
 use inline::LinkRefMap;
 #[cfg(feature = "npm")]
@@ -91,7 +90,7 @@ impl Document {
 /// - `file_name` — optional file name to attach to the resulting [`Document`].
 ///
 pub fn md_to_ast(input: &str, opts: &AstOptions, file_name: Option<String>) -> Document {
-    md_to_ast_with_hooks(input, opts, file_name, &ParseHooks::empty())
+    md_to_ast_with_hooks(input, opts, file_name, &ParserHooks::empty())
 }
 
 /// Like [`md_to_ast`] but with custom parser hooks (see
@@ -103,7 +102,7 @@ pub fn md_to_ast_with_hooks(
     input: &str,
     opts: &AstOptions,
     file_name: Option<String>,
-    hooks: &ParseHooks,
+    hooks: &ParserHooks,
 ) -> Document {
     let line_starts = block::compute_line_starts(input);
     let lines: Vec<&str> = input.lines().collect();

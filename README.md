@@ -9,7 +9,9 @@
 
 [![NPM](https://nodei.co/npm/peisar.svg)](https://nodei.co/npm/peisar/)
 
-[![Documentation][docs_img]][docs]
+[![Documentation][docs_img]][docs] ![NPM Downloads](https://img.shields.io/npm/dm/peisar?logo=npm&logoColor=%23CB3837) ![Crates.io Total Downloads](https://img.shields.io/crates/d/peisar?logo=rust)
+
+
 
 
 Peisar parses CommonMark Markdown with GitHub Flavored Markdown (GFM),

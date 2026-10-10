@@ -1,5 +1,5 @@
-use super::hooks::ParseHooks;
 use super::inline;
+use super::plugin::ParserHooks;
 use crate::markdown::ast::options::AstOptions;
 use crate::markdown::ast::tokens::span::Span;
 use crate::markdown::ast::tokens::token::{Block, Table, TableCell, TableCellAlignment, TableRow};
@@ -86,7 +86,7 @@ pub fn build_table(
     alignments: Vec<TableCellAlignment>,
     body_lines: &[&str],
     options: Option<&AstOptions>,
-    hooks: &ParseHooks,
+    hooks: &ParserHooks,
 ) -> Block {
     let header_cells: Vec<String> = split_table_row(header_line);
     let header = TableRow {
@@ -191,7 +191,7 @@ mod tests {
             vec![TableCellAlignment::Default, TableCellAlignment::Default],
             &["| peisar | yes |"],
             None,
-            &crate::markdown::ast::parsers::hooks::ParseHooks::empty(),
+            &crate::markdown::ast::parsers::plugin::ParserHooks::empty(),
         );
         match block {
             Block::Table { table, .. } => {

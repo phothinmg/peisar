@@ -19,6 +19,7 @@
   },
   "scripts": {
     "build": "bash scripts/build.sh",
+    "local:build": "bash scripts/local_build.sh",
     "hooks:install": "bash scripts/install-hooks.sh",
     "commit": "bash scripts/commit.sh",
     "js:test": "bash scripts/js_tests.sh"

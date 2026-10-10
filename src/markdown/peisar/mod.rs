@@ -4,8 +4,9 @@
 //! optional [`PeisarOptions`], then read its `ast`, `html`, `frontmatter`, or
 //! `astJson` properties.
 
+#[allow(deprecated)]
 use crate::markdown::{
-    ast::{Document, Parser, PeisarAst, Visitor},
+    ast::{Document, Parser, PeisarAst, Plugin, Visitor},
     config::{PeisarOptions, get_options},
     html::{RenderOptions, render_document_html},
 };
@@ -52,21 +53,40 @@ impl Peisar {
         self.peisar_ast.get_ast()
     }
 
-    /// Registers a JavaScript AST visitor.
+    /// Registers a unified JavaScript plugin.
+    ///
+    /// The plugin can provide `visitBlock` / `visitInline` visitor callbacks
+    /// and `parseBlock` / `parseInline` parser hooks, all in one object.
+    #[cfg(feature = "npm")]
+    #[napi]
+    pub fn use_plugin(&mut self, env: Env, plugin: Plugin) {
+        self.peisar_ast.add_plugin(env, plugin);
+    }
+    #[cfg(not(feature = "npm"))]
+    pub fn use_plugin(&mut self, plugin: Plugin) {
+        self.peisar_ast.add_plugin(plugin);
+    }
+
+    /// Registers a JavaScript AST visitor (deprecated since 1.3.0 — use
+    /// [`usePlugin`](Self::use_plugin) instead).
     ///
     /// The visitor can provide `visitBlock` and/or `visitInline` callbacks.
     /// Each callback receives a one-item node tuple and may return a control object that
     /// changes the node or determines whether its children are visited.
     #[cfg(feature = "npm")]
     #[napi]
+    #[allow(deprecated)]
     pub fn use_visitor(&mut self, env: Env, visitor: Visitor) {
         self.peisar_ast.add_visitor(env, visitor);
     }
     #[cfg(not(feature = "npm"))]
+    #[allow(deprecated)]
     pub fn use_visitor(&mut self, visitor: Visitor) {
         self.peisar_ast.add_visitor(visitor);
     }
-    /// Registers a JavaScript custom parser hook.
+
+    /// Registers a JavaScript custom parser hook (deprecated since 1.3.0 —
+    /// use [`usePlugin`](Self::use_plugin) instead).
     ///
     /// The parser can provide `parseBlock` and/or `parseInline` callbacks.
     /// `parseBlock` receives `{ line, lineIndex, lines }` and returns
@@ -79,10 +99,12 @@ impl Peisar {
     /// re-parses the original Markdown so hook syntax is recognized.
     #[cfg(feature = "npm")]
     #[napi]
+    #[allow(deprecated)]
     pub fn use_parser(&mut self, env: Env, parser: Parser) {
         self.peisar_ast.add_parser(env, parser);
     }
     #[cfg(not(feature = "npm"))]
+    #[allow(deprecated)]
     pub fn use_parser(&mut self, parser: Parser) {
         self.peisar_ast.add_parser(parser);
     }

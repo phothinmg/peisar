@@ -18,8 +18,8 @@
 //! `ParserState` and drives it to completion.
 
 use super::atters::parse_attrs;
-use super::hooks::{BlockParseContext, ParseHooks, finalize_hook_block};
 use super::inline::{LinkRefMap, parse_inline_with_hooks};
+use super::plugin::{BlockParserContext, ParserHooks, finalize_hook_block};
 use super::table::{build_table, is_table_start, parse_delimiter_alignments};
 use crate::markdown::ast::options::AstOptions;
 use crate::markdown::ast::tokens::token::TaskState;
@@ -65,7 +65,7 @@ pub struct ParserState<'a> {
     /// Link reference definitions collected in the pre-pass.
     pub refs: &'a LinkRefMap,
     /// Custom parser hooks (empty when none registered).
-    pub hooks: &'a ParseHooks<'a>,
+    pub hooks: &'a ParserHooks<'a>,
 }
 impl<'a> ParserState<'a> {
     /// Create a new `ParserState` from the given source and options.
@@ -77,7 +77,7 @@ impl<'a> ParserState<'a> {
         opts: &'a AstOptions,
         file_name: Option<String>,
         refs: &'a LinkRefMap,
-        hooks: &'a ParseHooks<'a>,
+        hooks: &'a ParserHooks<'a>,
     ) -> Self {
         Self {
             input,
@@ -216,7 +216,7 @@ impl<'a> ParserState<'a> {
     /// trailing Kramdown attribute block applied, or `None` when every
     /// hook declined (in which case the built-in matchers proceed).
     fn try_hook_block(&mut self) -> Option<Block> {
-        let ctx = BlockParseContext {
+        let ctx = BlockParserContext {
             line: self.current()?.to_string(),
             line_index: self.pos as u32,
             lines: self.lines[self.pos..]
