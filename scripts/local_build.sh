@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
-DES_DIR="peisarloc"
+DES_DIR="bench/peisar"
 DTS_FILE="types.d.ts"
 MJS_FILE="$DES_DIR/index.mjs"
 

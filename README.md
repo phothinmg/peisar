@@ -11,9 +11,6 @@
 
 [![Documentation][docs_img]][docs] ![NPM Downloads](https://img.shields.io/npm/dm/peisar?logo=npm&logoColor=%23CB3837) ![Crates.io Total Downloads](https://img.shields.io/crates/d/peisar?logo=rust)
 
-
-
-
 Peisar parses CommonMark Markdown with GitHub Flavored Markdown (GFM),
 Kramdown block attributes, YAML front matter, source spans, AST visitors, and
 custom parser hooks.
@@ -30,6 +27,19 @@ custom parser hooks.
 - A Rust library (`rlib`) with public module paths for the parser, renderer,
   and high-level document APIs
 
+## Benchmarking
+
+The repository includes a repeatable Node.js parse-and-render benchmark for
+Peisar and the JavaScript parsers used for comparison: markdown-it, marked,
+and Showdown.
+
+```sh
+npm run benchmark
+```
+
+It uses Tinybench and reports each library's operations per second, latency,
+and sample variance while rendering the same representative GFM document.
+
 ## Node.js
 
 Install the package:
@@ -38,7 +48,7 @@ Install the package:
 npm i peisar
 ```
 
-### Next.js 
+### Next.js
 
 **Example App :** <https://github.com/phothinmg/peisar/tree/main/examples/next>
 
@@ -51,14 +61,13 @@ Add `peisar` to `serverExternalPackages` in your configuration file:
 For `next.config.ts` (TypeScript)
 
 ```ts
-import type { NextConfig } from 'next'
+import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["peisar"],
-}
+};
 
-export default nextConfig
-
+export default nextConfig;
 ```
 
 For `next.config.js` or `next.config.mjs` (JavaScript)
@@ -67,10 +76,9 @@ For `next.config.js` or `next.config.mjs` (JavaScript)
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   serverExternalPackages: ["peisar"],
-}
+};
 
-module.exports = nextConfig // or export default nextConfig if using .mjs
-
+module.exports = nextConfig; // or export default nextConfig if using .mjs
 ```
 
 ### Vite
@@ -169,7 +177,6 @@ variable:
 - `NAPI_RS_FORCE_WASI=error` — require the WebAssembly build and fail when it
   is missing
 
-
 ### Use
 
 Create a `Peisar` document, then read its AST, rendered HTML, front matter, or
@@ -220,13 +227,16 @@ Leading YAML front matter is removed before Markdown parsing and exposed as a
 JavaScript object:
 
 ```js
-const document = new Peisar(`---
+const document = new Peisar(
+  `---
 title: Hello
 tags:
   - docs
 ---
 
-# Hello`, { fragment: true });
+# Hello`,
+  { fragment: true },
+);
 
 console.log(document.frontmatter); // { title: "Hello", tags: ["docs"] }
 console.log(document.html); // <h1>Hello</h1>\n
@@ -277,7 +287,9 @@ document.useParser({
     return {
       inline: {
         type: "Link",
-        text: [{ type: "Text", value: target, pos: { start: zero, end: zero } }],
+        text: [
+          { type: "Text", value: target, pos: { start: zero, end: zero } },
+        ],
         url: `/wiki/${target.replaceAll(" ", "_")}`,
         autolink: false,
         pos: { start: zero, end: zero },
@@ -338,8 +350,16 @@ cache.resolveUrl("docs/intro"); // "/my-repo/docs/intro"
 cache.siteUrl(); // e.g. "https://user.github.io", or null
 
 // Custom markdown rendering: register JS visitors/parsers like on `Peisar`
-cache.useVisitor({ visitBlock([block]) { return { recurse: true }; } });
-cache.useParser({ parseBlock([{ line }]) { /* … */ } });
+cache.useVisitor({
+  visitBlock([block]) {
+    return { recurse: true };
+  },
+});
+cache.useParser({
+  parseBlock([{ line }]) {
+    /* … */
+  },
+});
 
 cache.startWatchingJs(); // keep the cache in sync with the filesystem
 // every change is logged to stderr, e.g. `created docs/intro.md`
@@ -358,8 +378,6 @@ written to disk, and `{ memory: { byteBudget, entryBudget } }` (via
 `PeisarCache.withConfig(config)`) to bound the hot set; entries evicted from
 memory stay readable through the archive. Always call `dispose()` when done
 so the watcher and archive threads do not keep the Node process alive.
-
-
 
 ## Rust
 
@@ -492,6 +510,43 @@ read binary assets. Construction enqueues the snapshot to the archive worker
 (no blocking disk writes) and appends `.peisar-cache` to `.gitignore` when
 one exists; call `cache.flush()` to force shards to disk immediately.
 
+## Benchmark Results
+
+The benchmark compares **peisar**, **marked**, **markdown-it**, and **showdown** on the same Markdown inputs across three document sizes. It measures end-to-end Markdown-to-HTML rendering and validates renderer output before collecting performance results.
+
+### Throughput
+
+| **Scenario**     | **peisar**   | **marked**  | **markdown-it** | **showdown** |
+| ---------------- | ------------ | ----------- | --------------- | ------------ |
+| Base (528 B)     | 21,041 ops/s | 8,692 ops/s | 7,800 ops/s     | 2,192 ops/s  |
+| Medium (4,542 B) | 2,661 ops/s  | 1,295 ops/s | 1,037 ops/s     | 347 ops/s    |
+| Large (18,220 B) | 664 ops/s    | 350 ops/s   | 264 ops/s       | 82 ops/s     |
+
+### Peak heap usage
+
+| **Scenario** | **peisar** | **marked** | **markdown-it** | **showdown** |
+| ------------ | ---------- | ---------- | --------------- | ------------ |
+| Base         | 4.68 MiB   | 9.95 MiB   | 8.15 MiB        | 16.06 MiB    |
+| Medium       | 6.70 MiB   | 31.59 MiB  | 26.90 MiB       | 29.71 MiB    |
+| Large        | 5.35 MiB   | 51.65 MiB  | 61.22 MiB       | 57.54 MiB    |
+
+### Summary
+
+In this benchmark, Peisar had the highest measured throughput and the lowest measured peak heap usage across the tested scenarios.
+
+### Notes
+
+- The benchmark measures **end-to-end Markdown-to-HTML rendering**
+- Renderer output is **validated before benchmarking**
+- Results reflect the workload and configuration used in [bench/src/index.js](bench/src/index.js)
+- Benchmark results may vary depending on runtime, hardware, input characteristics, and parser configuration
+
+### Running Benchmark
+
+```sh
+cd bench
+npm run bench
+```
 
 ## Development
 
@@ -532,11 +587,13 @@ src/
 ```
 
 ## LICENSE
+
 [Apache-2.0][license] © [Pho Thin Maung][ptm]
 
 Security policy: [SECURITY.md](SECURITY.md)
 
 <!-- Links and Badges -->
+
 [license]: LICENSE
 [ptm]: https://github.com/phothinmg
 [docs]: https://docs.rs/peisar "Documentation"
