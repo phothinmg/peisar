@@ -235,7 +235,13 @@ impl PluginFactory for RegisteredPlugin {
         };
         let snapshot = block.clone();
         // `undefined` (no result) means "keep, no changes".
-        let js_ctrl = func.call((snapshot,)).unwrap_or(None).unwrap_or_default();
+        let js_ctrl = match func.call((snapshot,)) {
+            Ok(control) => control.unwrap_or_default(),
+            Err(e) => {
+                eprintln!("visitBlock callback failed: {e}");
+                VisitorControl::default()
+            }
+        };
         js_ctrl.into()
     }
     #[cfg(feature = "npm")]
@@ -251,7 +257,13 @@ impl PluginFactory for RegisteredPlugin {
             };
         let snapshot = inline.clone();
         // `undefined` (no result) means "keep, no changes".
-        let js_ctrl = func.call((snapshot,)).unwrap_or(None).unwrap_or_default();
+        let js_ctrl = match func.call((snapshot,)) {
+            Ok(control) => control.unwrap_or_default(),
+            Err(e) => {
+                eprintln!("visitInline callback failed: {e}");
+                InlineVisitorControl::default()
+            }
+        };
         js_ctrl.into()
     }
     fn try_parse_block(&self, ctx: &BlockParserContext) -> Option<(Block, usize)> {

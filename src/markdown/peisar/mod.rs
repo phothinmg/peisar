@@ -57,6 +57,8 @@ impl Peisar {
     ///
     /// The plugin can provide `visitBlock` / `visitInline` visitor callbacks
     /// and `parseBlock` / `parseInline` parser hooks, all in one object.
+    /// Visitor callbacks receive their node as a one-item tuple: for example,
+    /// `visitBlock([block]) { return { recurse: true }; }`.
     #[cfg(feature = "npm")]
     #[napi]
     pub fn use_plugin(&mut self, env: Env, plugin: Plugin) {
