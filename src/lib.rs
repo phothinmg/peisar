@@ -8,6 +8,8 @@
 //! ## Layout
 //!
 //! - [`frontmatter`] — YAML front-matter extraction (`--- … ---` blocks).
+//! - [`yaml`] — YAML parsing helpers for standalone config files and dynamic
+//!   values, backed by a maintained YAML 1.2 parser.
 //! - [`cache`] — the memory-first [`PeisarCache`](cache::PeisarCache): an
 //!   LRU in-memory store backed by a binary shard archive
 //!   (`.peisar-cache` + `map.json`), Liquid-ready page/asset objects,
@@ -50,6 +52,22 @@
 //! assert_eq!(parsed.yaml_data().unwrap()["title"], "Hello");
 //! ```
 //!
+//! Parse YAML config into a typed Rust struct:
+//!
+//! ```
+//! use peisar::yaml::parse_yaml_config;
+//!
+//! #[derive(serde::Deserialize)]
+//! struct SiteConfig {
+//!     title: String,
+//!     port: u16,
+//! }
+//!
+//! let config: SiteConfig = parse_yaml_config("title: Hello\nport: 3000\n").unwrap();
+//! assert_eq!(config.title, "Hello");
+//! assert_eq!(config.port, 3000);
+//! ```
+//!
 //!
 //! ## JavaScript surface
 //!
@@ -69,3 +87,4 @@
 pub mod cache;
 pub mod frontmatter;
 pub mod markdown;
+pub mod yaml;

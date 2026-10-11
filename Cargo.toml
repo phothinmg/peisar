@@ -2,6 +2,7 @@
 name = "peisar"
 version = "1.0.0"
 edition = "2024"
+rust-version = "1.86"
 license = "Apache-2.0"
 repository = "https://github.com/phothinmg/peisar"
 readme = "README.md"
@@ -13,7 +14,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["preserve_order"] }
 napi = { version = "3", features = ["serde-json"], optional = true }
 napi-derive = { version = "3", optional = true }
-serde_yaml = "0.9"
+noyalib = "0.0.57"
 blake3 = "1.4"
 notify = "6"
 bincode = "1.3"

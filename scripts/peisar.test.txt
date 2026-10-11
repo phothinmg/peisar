@@ -343,6 +343,39 @@ test("PeisarCache derives Liquid-ready page and asset objects", () => {
   }
 });
 
+test("PeisarCache JS options forward cacheDir", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const os = require("node:os");
+
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "peisar-cache-dir-"));
+  const origCwd = process.cwd();
+  try {
+    fs.mkdirSync(path.join(root, "contents"), { recursive: true });
+    fs.writeFileSync(path.join(root, "contents", "index.md"), "# Home\n");
+
+    process.chdir(root);
+    const cache = new PeisarCache("contents", undefined, {
+      cacheDir: ".custom-cache",
+    });
+
+    cache.flush();
+    assert.equal(
+      fs.existsSync(path.join(root, ".custom-cache", "map.json")),
+      true,
+    );
+    assert.equal(
+      fs.existsSync(path.join(root, ".peisar-cache", "map.json")),
+      false,
+    );
+
+    cache.dispose();
+  } finally {
+    process.chdir(origCwd);
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("Plugin Test", () => {
   const txt = "# Hello";
   const doc = new Peisar(txt, { fragment: true });

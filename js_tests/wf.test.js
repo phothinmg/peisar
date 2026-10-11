@@ -1,0 +1,391 @@
+const assert = require("node:assert/strict");
+const test = require("node:test");
+
+const { Peisar, PeisarCache } = require("./peisarloc");
+
+test("parses Markdown into an AST and renders a fragment", () => {
+  const document = new Peisar("# Hello **world**", { fragment: true });
+
+  assert.equal(document.html, "<h1>Hello <strong>world</strong></h1>\n");
+  assert.deepEqual(document.ast.children[0], {
+    type: "Heading",
+    level: 1,
+    children: [
+      {
+        type: "Text",
+        value: "Hello ",
+        pos: {
+          start: { line: 0, column: 0, offset: 0 },
+          end: { line: 0, column: 6, offset: 6 },
+        },
+      },
+      {
+        type: "Emphasis",
+        level: "Bold",
+        children: [
+          {
+            type: "Text",
+            value: "world",
+            pos: {
+              start: { line: 0, column: 0, offset: 0 },
+              end: { line: 0, column: 5, offset: 5 },
+            },
+          },
+        ],
+        pos: {
+          start: { line: 0, column: 6, offset: 6 },
+          end: { line: 0, column: 15, offset: 15 },
+        },
+      },
+    ],
+    pos: {
+      start: { line: 0, column: 0, offset: 0 },
+      end: { line: 0, column: 0, offset: 0 },
+    },
+  });
+});
+
+test("extracts YAML front matter without rendering it", () => {
+  const document = new Peisar(
+    "---\ntitle: Hello\ntags:\n  - one\n---\n\n# Hello",
+    {
+      fragment: true,
+    },
+  );
+
+  assert.deepEqual(document.frontmatter, { title: "Hello", tags: ["one"] });
+  assert.equal(document.html, "<h1>Hello</h1>\n");
+});
+
+test("renders GFM task lists by default", () => {
+  const document = new Peisar("- [x] Done\n- [ ] Todo", { fragment: true });
+
+  assert.match(document.html, /data-checked="true"/);
+  assert.match(document.html, /checked disabled/);
+  assert.match(document.html, /task-list-item-checkbox/);
+});
+
+test("applies JavaScript AST visitors before rendering", () => {
+  const document = new Peisar("# Hello", { fragment: true });
+
+  document.useVisitor({
+    visitBlock([block]) {
+      if (block.type === "Heading") {
+        return { replaceWith: [{ ...block, level: 2 }] };
+      }
+      return { recurse: true };
+    },
+  });
+
+  assert.equal(document.html, "<h2>Hello</h2>\n");
+  assert.equal(document.ast.children[0].level, 2);
+});
+
+test("custom block parser hooks run before built-in parsers", () => {
+  const document = new Peisar(":::note\nsome content\n:::\n\n# After", {
+    fragment: true,
+  });
+  const zero = { line: 0, column: 0, offset: 0 };
+
+  document.useParser({
+    parseBlock([{ line, lines }]) {
+      if (!line.startsWith(":::")) return; // decline
+      const name = line.slice(3).trim();
+      const closeIndex = lines.findIndex((l, i) => i > 0 && l.trim() === ":::");
+      if (closeIndex === -1) return;
+      return {
+        block: {
+          type: "HtmlBlock",
+          html: `<div class="note" data-name="${name}"></div>`,
+          pos: { start: zero, end: zero },
+        },
+        consumed: closeIndex + 1,
+      };
+    },
+  });
+
+  assert.equal(
+    document.html,
+    '<div class="note" data-name="note"></div>\n<h1>After</h1>\n',
+  );
+  assert.equal(
+    document.ast.children[0].html,
+    '<div class="note" data-name="note"></div>',
+  );
+});
+
+test("custom inline parser hooks parse wikilinks", () => {
+  const document = new Peisar("See [[Some Page]] here.", { fragment: true });
+  const zero = { line: 0, column: 0, offset: 0 };
+
+  document.useParser({
+    parseInline([{ rest }]) {
+      if (!rest.startsWith("[[")) return; // decline
+      const close = rest.indexOf("]]");
+      if (close === -1) return;
+      const target = rest.slice(2, close);
+      return {
+        inline: {
+          type: "Link",
+          text: [
+            { type: "Text", value: target, pos: { start: zero, end: zero } },
+          ],
+          url: `https://wiki.example.com/${target.replace(/ /g, "_")}`,
+          autolink: false,
+          pos: { start: zero, end: zero },
+        },
+        consumed: close + 4,
+      };
+    },
+  });
+
+  assert.match(document.html, /href="https:\/\/wiki\.example\.com\/Some_Page"/);
+  assert.match(document.html, />Some Page<\/a>/);
+});
+
+test("parser hooks and visitors compose", () => {
+  const document = new Peisar("!\n\na lone bang becomes a break", {
+    fragment: true,
+  });
+  const zero = { line: 0, column: 0, offset: 0 };
+
+  document.useParser({
+    parseBlock([{ line }]) {
+      if (line.trim() !== "!") return; // decline
+      return {
+        block: { type: "ThematicBreak", pos: { start: zero, end: zero } },
+        consumed: 1,
+      };
+    },
+  });
+
+  document.useVisitor({
+    visitBlock([block]) {
+      if (block.type === "ThematicBreak") {
+        return {
+          replaceWith: [
+            {
+              type: "Paragraph",
+              children: [
+                {
+                  type: "Text",
+                  value: "replaced",
+                  pos: { start: zero, end: zero },
+                },
+              ],
+              pos: { start: zero, end: zero },
+            },
+          ],
+        };
+      }
+      return { recurse: true };
+    },
+  });
+
+  assert.equal(
+    document.html,
+    "<p>replaced</p>\n<p>a lone bang becomes a break</p>\n",
+  );
+});
+
+test("PeisarCache collects markdown and asset files", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const os = require("node:os");
+
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "peisar-cache-"));
+  const origCwd = process.cwd();
+  try {
+    fs.mkdirSync(path.join(root, "docs", "sub"), { recursive: true });
+    fs.mkdirSync(path.join(root, "assets"), { recursive: true });
+    fs.writeFileSync(path.join(root, "docs", "page.md"), "# Hello\n");
+    fs.writeFileSync(
+      path.join(root, "docs", "sub", "deep.markdown"),
+      "# Deep\n",
+    );
+    fs.writeFileSync(
+      path.join(root, "assets", "logo.png"),
+      Buffer.from([1, 2, 3]),
+    );
+
+    process.chdir(root);
+    const cache = new PeisarCache("docs", "assets");
+
+    const md = cache
+      .markdownFiles()
+      .map((p) => path.basename(p))
+      .sort();
+    assert.deepEqual(md, ["deep.markdown", "page.md"]);
+
+    const assets = cache.assetFiles();
+    assert.equal(assets.length, 1);
+    assert.equal(path.basename(assets[0]), "logo.png");
+
+    assert.equal(cache.listFiles().length, 3);
+
+    const raw = cache.getText(cache.markdownFiles()[0]);
+    assert.ok(raw === "# Hello\n" || raw === "# Deep\n");
+    assert.ok(cache.getBinary(assets[0]).length >= 3);
+
+    assert.strictEqual(cache.getText("/no/such/file.md"), null);
+
+    // Memory-first: nothing is written to disk at construction.
+    assert.equal(cache.archived().length, 0);
+    assert.equal(
+      fs.existsSync(path.join(root, ".peisar-cache", "map.json")),
+      false,
+    );
+
+    cache.dispose();
+  } finally {
+    process.chdir(origCwd);
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("PeisarCache derives Liquid-ready page and asset objects", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const os = require("node:os");
+
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "peisar-pages-"));
+  const origCwd = process.cwd();
+  try {
+    fs.mkdirSync(path.join(root, "contents", "docs"), { recursive: true });
+    fs.mkdirSync(path.join(root, "public", "img"), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, "contents", "index.md"),
+      "---\n" +
+        "title: Home Page\n" +
+        "layout: custom\n" +
+        "summary: hi there\n" +
+        "tags:\n" +
+        "  - a\n" +
+        "  - b\n" +
+        "date: 2026-01-01\n" +
+        "author: someone\n" +
+        "---\n" +
+        "# Not the title\n\n" +
+        "Body\n",
+    );
+    fs.writeFileSync(
+      path.join(root, "contents", "docs", "intro.md"),
+      "# Intro\n",
+    );
+    fs.writeFileSync(
+      path.join(root, "public", "img", "logo.png"),
+      Buffer.from([1, 2, 3]),
+    );
+
+    process.chdir(root);
+    const cache = new PeisarCache("contents", "public", {
+      markdown: { fragment: true },
+      hosting: { provider: "GithubPages", repo: "my-repo" },
+      outDir: "dist",
+    });
+
+    const pages = cache.pages();
+    assert.equal(pages.length, 2);
+
+    const home = pages.find((p) => p.fileName === "index");
+    assert.ok(home, "index page exists");
+    assert.equal(home.layout, "custom");
+    assert.equal(home.title, "Home Page");
+    assert.equal(home.summary, "hi there");
+    assert.deepEqual(home.tags, ["a", "b"]);
+    assert.equal(home.publishDate, "2026-01-01");
+    assert.equal(home.extra.author, "someone");
+    assert.equal(home.slug, "/my-repo/");
+    assert.equal(home.outFilePath, "dist/index.html");
+    assert.ok(home.html.includes("Body"));
+
+    const intro = pages.find((p) => p.fileName === "intro");
+    assert.equal(intro.title, "Intro"); // falls back to the first heading
+    assert.equal(intro.layout, "default");
+    assert.equal(intro.slug, "/my-repo/docs/intro");
+    assert.equal(intro.outFilePath, "dist/docs/intro/index.html");
+
+    // single-page lookup by input path
+    const single = cache.getPage(intro.inputFilePath);
+    assert.equal(single.slug, intro.slug);
+    assert.strictEqual(cache.getPage("/no/such.md"), null);
+
+    // assets
+    const assets = cache.assets();
+    assert.equal(assets.length, 1);
+    const logo = assets[0];
+    assert.equal(logo.fileName, "logo");
+    assert.equal(logo.ext, "png");
+    assert.equal(logo.fileType, "Image");
+    assert.equal(logo.slug, "/my-repo/img/logo.png");
+    assert.equal(logo.outFilePath, "dist/img/logo.png");
+
+    // hosting URL helpers
+    assert.equal(cache.baseUrl(), "/my-repo/");
+    assert.equal(cache.resolveUrl("docs/intro"), "/my-repo/docs/intro");
+    assert.strictEqual(cache.siteUrl(), null);
+
+    // flush writes the map.json search index with front matter
+    cache.flush();
+    const map = JSON.parse(cache.mapJson());
+    assert.equal(map.version, 1);
+    const entry = map.files["contents/index.md"];
+    assert.ok(entry, "index.md is in the map");
+    assert.equal(entry.frontmatter.title, "Home Page");
+    assert.equal(entry.kind, "text");
+    assert.equal(entry.hash.length, 64);
+    assert.equal(cache.archived().length, 3);
+
+    cache.dispose();
+  } finally {
+    process.chdir(origCwd);
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("PeisarCache JS options forward cacheDir", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const os = require("node:os");
+
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "peisar-cache-dir-"));
+  const origCwd = process.cwd();
+  try {
+    fs.mkdirSync(path.join(root, "contents"), { recursive: true });
+    fs.writeFileSync(path.join(root, "contents", "index.md"), "# Home\n");
+
+    process.chdir(root);
+    const cache = new PeisarCache("contents", undefined, {
+      cacheDir: ".custom-cache",
+    });
+
+    cache.flush();
+    assert.equal(
+      fs.existsSync(path.join(root, ".custom-cache", "map.json")),
+      true,
+    );
+    assert.equal(
+      fs.existsSync(path.join(root, ".peisar-cache", "map.json")),
+      false,
+    );
+
+    cache.dispose();
+  } finally {
+    process.chdir(origCwd);
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Plugin Test", () => {
+  const txt = "# Hello";
+  const doc = new Peisar(txt, { fragment: true });
+  doc.usePlugin({
+    visitBlock([block]) {
+      if (block.type === "Heading") {
+        return { replaceWith: [{ ...block, level: 2 }] };
+      }
+      return { recurse: true };
+    },
+  });
+  assert.deepEqual(doc.html, "<h2>Hello</h2>\n");
+});

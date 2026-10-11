@@ -31,6 +31,8 @@ use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::yaml::parse_yaml_value;
+
 /// The Markdown body and YAML metadata parsed from a front-matter document.
 #[cfg_attr(feature = "npm", napi(object))]
 #[derive(Debug, Deserialize, Serialize)]
@@ -59,20 +61,6 @@ impl FrontmatterResult {
     pub fn into_parts(self) -> (String, Option<Value>) {
         (self.pure_markdown_content, self.yaml_data)
     }
-}
-
-#[cfg(feature = "npm")]
-/// Parses a YAML document into a JSON-compatible value.
-///
-/// When consumed from Node.js, the result is exposed as a JavaScript object
-/// with the TypeScript type `Record<string, any>`.
-///
-/// # Panics
-///
-/// Panics when `yaml_str` is not valid YAML.
-#[napi(ts_return_type = "Record<string, any>")]
-pub fn yaml_parser(yaml_str: String) -> Value {
-    serde_yaml::from_str(&yaml_str).unwrap()
 }
 
 /// Parses leading YAML front matter from Markdown source.
@@ -107,9 +95,10 @@ fn parse_markdown_frontmatter(content: &str) -> Result<FrontmatterResult, String
         let md_start_offset = end_index + 4;
         pure_markdown_content = rest[md_start_offset..].trim_start().to_string();
 
-        // Parse into the generic type T
-        yaml_data = serde_yaml::from_str(yaml_str)
-            .map_err(|e| format!("Failed to parse YAML front matter: {}", e))?;
+        yaml_data = Some(
+            parse_yaml_value(yaml_str)
+                .map_err(|e| format!("Failed to parse YAML front matter: {e}"))?,
+        );
     }
     Ok(FrontmatterResult {
         yaml_data,

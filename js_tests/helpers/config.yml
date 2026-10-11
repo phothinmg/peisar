@@ -1,0 +1,4 @@
+name: config
+foo:
+  bar: 123
+  biz: foo

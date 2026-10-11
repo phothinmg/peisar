@@ -40,7 +40,7 @@ jobs:
         run: npm ci
 
       - name: Run JavaScript unit tests
-        run: npm run js:test
+        run: npm run wf:test
   # ── Native builds for every supported platform ─────────────────────────
   build:
     if: github.event_name == 'release'
