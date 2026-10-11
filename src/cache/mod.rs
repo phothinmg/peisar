@@ -91,7 +91,7 @@ mod file;
 mod lru;
 mod obj_cache;
 
-pub use archive::{ARCHIVE_DIR_NAME, ArchiveHandle};
+pub use archive::{ArchiveHandle, DEFAULT_ARCHIVE_DIR_NAME, DEFAULT_OUT_DIR};
 pub use base_url::{BaseDirInfo, HostingProvider};
 pub use lru::LruCache;
 pub use obj_cache::{
@@ -281,6 +281,7 @@ pub struct PeisarCacheConfig {
     /// Build output directory used for `outFilePath` fields (default
     /// `".peisar"`).
     pub out_dir: Option<String>,
+    pub cache_dir: Option<String>,
 }
 
 impl Default for PeisarCacheConfig {
@@ -293,6 +294,7 @@ impl Default for PeisarCacheConfig {
             archive: None,
             hosting: None,
             out_dir: None,
+            cache_dir: None,
         }
     }
 }
@@ -391,8 +393,6 @@ pub const DEFAULT_BYTE_BUDGET: u64 = 64 * 1024 * 1024;
 pub const DEFAULT_SHARD_BYTES: u64 = 8 * 1024 * 1024;
 /// Default archive flush interval: 2 seconds.
 pub const DEFAULT_FLUSH_INTERVAL_MS: u64 = 2_000;
-/// Default build output directory.
-pub const DEFAULT_OUT_DIR: &str = ".peisar";
 
 /// Boxed change callback held in the subscription registry.
 ///
@@ -590,6 +590,7 @@ impl PeisarCache {
             archive: options.as_ref().and_then(|o| o.archive),
             hosting: options.as_ref().and_then(|o| o.hosting.clone()),
             out_dir: options.as_ref().and_then(|o| o.out_dir.clone()),
+            cache_dir: options.as_ref().and_then(|o| o.cache_dir.clone()),
             memory: None,
         })
         .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{e}")))?;
@@ -654,12 +655,20 @@ impl PeisarCache {
         let mem_cfg = config.memory.unwrap_or_default();
         let memory = LruCache::new(mem_cfg.byte_budget(), mem_cfg.entry_budget());
 
+        let cache_dir = config
+            .cache_dir
+            .unwrap_or_else(|| DEFAULT_ARCHIVE_DIR_NAME.to_string());
+        let out_dir = config
+            .out_dir
+            .unwrap_or_else(|| DEFAULT_OUT_DIR.to_string());
+
         // Archive tier.
         let archive_cfg = config.archive.unwrap_or_default();
         let archive = ArchiveHandle::new(
             cwd.clone(),
             archive_cfg.shard_bytes(),
             archive_cfg.flush_interval(),
+            Some(cache_dir.clone()),
         );
 
         // Hosting resolution.
@@ -701,7 +710,7 @@ impl PeisarCache {
         archive.sync_all(cache_map);
 
         // Make sure the archive dir is ignored by git.
-        archive::ensure_gitignore_entry(&cwd)?;
+        archive::ensure_gitignore_entry(&cwd, Some(cache_dir.clone()), Some(out_dir.clone()))?;
 
         #[allow(clippy::arc_with_non_send_sync)]
         let plugins: Arc<Mutex<Vec<RegisteredPlugin>>> = Arc::new(Mutex::new(Vec::new()));
@@ -716,9 +725,7 @@ impl PeisarCache {
             assets_dir: resolved_assets,
             change_callbacks: ChangeCallbacks::default(),
             hosting,
-            out_dir: config
-                .out_dir
-                .unwrap_or_else(|| DEFAULT_OUT_DIR.to_string()),
+            out_dir,
         })
     }
 
@@ -1260,6 +1267,8 @@ pub struct PeisarCacheJsOptions {
     pub hosting: Option<HostingConfig>,
     /// Build output directory.
     pub out_dir: Option<String>,
+    /// Disk-archive directory.
+    pub cache_dir: Option<String>,
 }
 
 // Dropping a `PeisarCache` is the Rust equivalent of the JS `dispose()`:
@@ -1354,7 +1363,7 @@ mod tests {
         // Nothing flushed yet: the archive worker only flushes on
         // size/interval/drop — and the default interval is 2 s.
         assert_eq!(cache.archived().len(), 0);
-        let archive_dir = tmp.join(ARCHIVE_DIR_NAME);
+        let archive_dir = tmp.join(DEFAULT_ARCHIVE_DIR_NAME);
         assert!(!archive_dir.join("map.json").exists());
 
         restore(orig, tmp);
@@ -1371,7 +1380,7 @@ mod tests {
         let cache = PeisarCache::new("docs")?;
         cache.flush();
 
-        let archive_dir = tmp.join(ARCHIVE_DIR_NAME);
+        let archive_dir = tmp.join(DEFAULT_ARCHIVE_DIR_NAME);
         let map_str = fs::read_to_string(archive_dir.join("map.json"))?;
         let map: serde_json::Value = serde_json::from_str(&map_str).unwrap();
         assert_eq!(map["version"], 1);
@@ -1548,14 +1557,19 @@ mod tests {
         let _guard = TEST_CWD_LOCK.lock().unwrap();
         let (tmp, orig) = make_tmp("gitignore")?;
         env::set_current_dir(&tmp)?;
-        fs::write(".gitignore", format!("{ARCHIVE_DIR_NAME}\n"))?;
+        fs::write(".gitignore", format!("{DEFAULT_ARCHIVE_DIR_NAME}\n"))?;
         write_md(&tmp, "docs/doc2.md", "# No frontmatter\nContent\n");
 
         let _cache = PeisarCache::new("docs")?;
 
         let git = fs::read_to_string(".gitignore")?;
-        let occurrences = git.lines().filter(|l| l.trim() == ARCHIVE_DIR_NAME).count();
-        assert_eq!(occurrences, 1);
+        let cache_dir_occurrences = git
+            .lines()
+            .filter(|l| l.trim() == DEFAULT_ARCHIVE_DIR_NAME)
+            .count();
+        let out_dir_occurrences = git.lines().filter(|l| l.trim() == DEFAULT_OUT_DIR).count();
+        assert_eq!(cache_dir_occurrences, 1);
+        assert_eq!(out_dir_occurrences, 1);
 
         restore(orig, tmp);
         Ok(())

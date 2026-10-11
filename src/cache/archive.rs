@@ -41,7 +41,9 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 /// Directory name of the on-disk archive under the working directory.
-pub const ARCHIVE_DIR_NAME: &str = ".peisar-cache";
+pub const DEFAULT_ARCHIVE_DIR_NAME: &str = ".peisar-cache";
+/// Default build output directory.
+pub const DEFAULT_OUT_DIR: &str = ".peisar";
 
 /// Location + metadata of one archived entry.
 #[derive(Debug, Clone)]
@@ -98,8 +100,13 @@ impl ArchiveHandle {
     /// `shard_bytes` is the pending-content threshold that triggers a flush
     /// (`0` disables size-based flushing); `interval` is the maximum time
     /// pending entries may sit in memory before being flushed.
-    pub fn new(cwd: PathBuf, shard_bytes: u64, interval: Duration) -> Self {
-        let dir = cwd.join(ARCHIVE_DIR_NAME);
+    pub fn new(
+        cwd: PathBuf,
+        shard_bytes: u64,
+        interval: Duration,
+        cache_dir: Option<String>,
+    ) -> Self {
+        let dir = cwd.join(cache_dir.unwrap_or(DEFAULT_ARCHIVE_DIR_NAME.to_string()));
         let _ = fs::create_dir_all(&dir);
 
         let index: Arc<Mutex<ArchiveIndex>> = Arc::new(Mutex::new(HashMap::new()));
@@ -501,27 +508,43 @@ fn next_shard_seq(dir: &Path) -> u64 {
 
 /// Ensure `.peisar-cache` is present in `.gitignore` (creating the file
 /// when missing). Called synchronously at cache construction.
-pub(crate) fn ensure_gitignore_entry(cwd: &Path) -> io::Result<()> {
+pub(crate) fn ensure_gitignore_entry(
+    cwd: &Path,
+    cache_dir: Option<String>,
+    out_dir: Option<String>,
+) -> io::Result<()> {
     use std::fs::OpenOptions;
+    let cache_dir_name = cache_dir.unwrap_or(DEFAULT_ARCHIVE_DIR_NAME.to_string());
+    let out_dir_name = out_dir.unwrap_or(DEFAULT_OUT_DIR.to_string());
     let gitignore_path = cwd.join(".gitignore");
     if gitignore_path.exists() {
         let existing = fs::read_to_string(&gitignore_path)?;
-        let mut has_entry = false;
+        let mut has_cache_dir = false;
+        let mut has_out_dir = false;
         for line in existing.lines() {
-            if line.trim() == ARCHIVE_DIR_NAME {
-                has_entry = true;
-                break;
+            if line.trim() == &cache_dir_name {
+                has_cache_dir = true;
+            } else if line.trim() == &out_dir_name {
+                has_out_dir = true;
             }
         }
-        if !has_entry {
+        if !has_cache_dir || !has_out_dir {
             let mut file = OpenOptions::new().append(true).open(&gitignore_path)?;
             if !existing.ends_with('\n') {
                 file.write_all(b"\n")?;
             }
-            file.write_all(format!("{ARCHIVE_DIR_NAME}\n").as_bytes())?;
+            if !has_cache_dir {
+                file.write_all(format!("{cache_dir_name}\n").as_bytes())?;
+            }
+            if !has_out_dir {
+                file.write_all(format!("{out_dir_name}\n").as_bytes())?;
+            }
         }
     } else {
-        fs::write(gitignore_path, format!("{ARCHIVE_DIR_NAME}\n"))?;
+        fs::write(
+            gitignore_path,
+            format!("{cache_dir_name}\n{out_dir_name}\n"),
+        )?;
     }
     Ok(())
 }
@@ -547,7 +570,7 @@ mod tests {
     #[test]
     fn upsert_flush_and_read_back() {
         let cwd = tmp_dir("roundtrip");
-        let mut archive = ArchiveHandle::new(cwd.clone(), 1024, D::from_millis(60_000));
+        let mut archive = ArchiveHandle::new(cwd.clone(), 1024, D::from_millis(60_000), None);
         let md = cwd.join("docs").join("page.md");
         archive.upsert(
             md.clone(),
@@ -562,7 +585,7 @@ mod tests {
         }
 
         // map.json on disk, keyed by the relative path, with front matter.
-        let map = fs::read_to_string(cwd.join(ARCHIVE_DIR_NAME).join("map.json")).unwrap();
+        let map = fs::read_to_string(cwd.join(DEFAULT_ARCHIVE_DIR_NAME).join("map.json")).unwrap();
         let map: Value = serde_json::from_str(&map).unwrap();
         assert_eq!(map["version"], 1);
         let entry = &map["files"]["docs/page.md"];
@@ -577,7 +600,7 @@ mod tests {
     #[test]
     fn binary_entries_roundtrip() {
         let cwd = tmp_dir("binary");
-        let mut archive = ArchiveHandle::new(cwd.clone(), 0, D::from_millis(60_000));
+        let mut archive = ArchiveHandle::new(cwd.clone(), 0, D::from_millis(60_000), None);
         let png = cwd.join("logo.png");
         let bytes = vec![1u8, 2, 3, 4];
         archive.upsert(png.clone(), CachedContent::Binary(bytes.clone()));
@@ -593,7 +616,7 @@ mod tests {
     #[test]
     fn remove_drops_entry_and_gc_collects_orphan_shard() {
         let cwd = tmp_dir("remove");
-        let mut archive = ArchiveHandle::new(cwd.clone(), 0, D::from_millis(60_000));
+        let mut archive = ArchiveHandle::new(cwd.clone(), 0, D::from_millis(60_000), None);
         let a = cwd.join("a.md");
         archive.upsert(a.clone(), CachedContent::Text("A".to_string()));
         archive.flush();
@@ -605,12 +628,12 @@ mod tests {
         assert!(archive.read(&a).is_none());
 
         // map.json no longer references the file.
-        let map = fs::read_to_string(cwd.join(ARCHIVE_DIR_NAME).join("map.json")).unwrap();
+        let map = fs::read_to_string(cwd.join(DEFAULT_ARCHIVE_DIR_NAME).join("map.json")).unwrap();
         let map: Value = serde_json::from_str(&map).unwrap();
         assert!(map["files"].get("a.md").is_none());
 
         // The shard that held only `a` is garbage-collected.
-        let shards: Vec<_> = fs::read_dir(cwd.join(ARCHIVE_DIR_NAME))
+        let shards: Vec<_> = fs::read_dir(cwd.join(DEFAULT_ARCHIVE_DIR_NAME))
             .unwrap()
             .flatten()
             .filter(|e| {
@@ -628,7 +651,7 @@ mod tests {
     #[test]
     fn sync_all_replaces_everything() {
         let cwd = tmp_dir("sync");
-        let mut archive = ArchiveHandle::new(cwd.clone(), 0, D::from_millis(60_000));
+        let mut archive = ArchiveHandle::new(cwd.clone(), 0, D::from_millis(60_000), None);
         archive.upsert(cwd.join("old.md"), CachedContent::Text("old".to_string()));
         archive.flush();
         assert!(archive.entry_count() == 1);
@@ -648,7 +671,7 @@ mod tests {
     fn interval_flushes_without_size_threshold() {
         let cwd = tmp_dir("interval");
         // Zero shard threshold → only the interval flushes.
-        let mut archive = ArchiveHandle::new(cwd.clone(), 0, D::from_millis(50));
+        let mut archive = ArchiveHandle::new(cwd.clone(), 0, D::from_millis(50), None);
         archive.upsert(cwd.join("lazy.md"), CachedContent::Text("lazy".to_string()));
         // Not flushed yet.
         assert!(!archive.contains(&cwd.join("lazy.md")));
@@ -665,11 +688,11 @@ mod tests {
         let cwd = tmp_dir("drop");
         let md = cwd.join("gone.md");
         {
-            let archive = ArchiveHandle::new(cwd.clone(), 0, D::from_millis(60_000));
+            let archive = ArchiveHandle::new(cwd.clone(), 0, D::from_millis(60_000), None);
             archive.upsert(md.clone(), CachedContent::Text("bye".to_string()));
             // no explicit flush; Drop must persist it
         }
-        let map = fs::read_to_string(cwd.join(ARCHIVE_DIR_NAME).join("map.json")).unwrap();
+        let map = fs::read_to_string(cwd.join(DEFAULT_ARCHIVE_DIR_NAME).join("map.json")).unwrap();
         assert!(map.contains("gone.md"));
         let _ = fs::remove_dir_all(&cwd);
     }
@@ -678,19 +701,39 @@ mod tests {
     fn gitignore_entry_added_once() {
         let cwd = tmp_dir("gitignore");
         fs::write(cwd.join(".gitignore"), "target\n").unwrap();
-        ensure_gitignore_entry(&cwd).unwrap();
-        ensure_gitignore_entry(&cwd).unwrap();
+        ensure_gitignore_entry(
+            &cwd,
+            Some(DEFAULT_ARCHIVE_DIR_NAME.to_string()),
+            Some(DEFAULT_OUT_DIR.to_string()),
+        )
+        .unwrap();
+        ensure_gitignore_entry(
+            &cwd,
+            Some(DEFAULT_ARCHIVE_DIR_NAME.to_string()),
+            Some(DEFAULT_OUT_DIR.to_string()),
+        )
+        .unwrap();
         let git = fs::read_to_string(cwd.join(".gitignore")).unwrap();
         assert_eq!(
-            git.lines().filter(|l| l.trim() == ARCHIVE_DIR_NAME).count(),
+            git.lines()
+                .filter(|l| l.trim() == DEFAULT_ARCHIVE_DIR_NAME)
+                .count(),
             1
         );
 
         // missing file is created
         let fresh = tmp_dir("gitignore_fresh");
-        ensure_gitignore_entry(&fresh).unwrap();
+        ensure_gitignore_entry(
+            &fresh,
+            Some(DEFAULT_ARCHIVE_DIR_NAME.to_string()),
+            Some(DEFAULT_OUT_DIR.to_string()),
+        )
+        .unwrap();
         let git = fs::read_to_string(fresh.join(".gitignore")).unwrap();
-        assert_eq!(git.trim(), ARCHIVE_DIR_NAME);
+        assert_eq!(
+            git,
+            format!("{DEFAULT_ARCHIVE_DIR_NAME}\n{DEFAULT_OUT_DIR}\n")
+        );
         let _ = fs::remove_dir_all(&cwd);
         let _ = fs::remove_dir_all(&fresh);
     }

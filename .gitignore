@@ -4,5 +4,7 @@ npm
 js_tests_temp
 .notes
 dist
+js_tests/peisarloc
 
 .peisar-cache
+.peisar

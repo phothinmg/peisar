@@ -1,0 +1,7 @@
+{
+  "name": "js_tests",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test"
+  }
+}

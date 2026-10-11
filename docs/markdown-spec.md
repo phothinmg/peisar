@@ -46,12 +46,11 @@ Rules:
 - The block closes at the next line that starts with `---`.
 - Everything after the closing marker is the Markdown body (leading blank
   lines are stripped).
-- YAML is deserialized with full serde_yaml semantics: nested maps, lists,
-  scalars, quotes.
+- YAML is deserialized with a maintained YAML 1.2 parser through Serde, so
+  nested maps, lists, and scalars are preserved as JSON-compatible values.
 - An **unterminated** block is not front matter; the text is parsed as normal
   Markdown.
-- **Invalid YAML does not throw** — the front matter is discarded and the whole
-  input is parsed as Markdown body.
+- **Invalid YAML returns an error** from the front-matter parser.
 - `document.frontmatter` returns the deserialized YAML object, or `null`.
 
 ---
