@@ -21,7 +21,7 @@
 //! [`parse_inline_with_refs`] when you have a ref map, or [`parse_inline`]
 //! when you do not need reference resolution.
 
-use super::hooks::{InlineParseContext, ParseHooks, finalize_hook_inline};
+use super::plugin::{InlineParserContext, ParserHooks, finalize_hook_inline};
 use crate::markdown::ast::options::AstOptions;
 use crate::markdown::ast::tokens::{
     span::{Position, Span},
@@ -45,7 +45,7 @@ pub fn parse_inline_with_refs(
     options: Option<&AstOptions>,
     refs: Option<&LinkRefMap>,
 ) -> Vec<Inline> {
-    parse_inline_with_hooks(input, options, refs, &ParseHooks::empty())
+    parse_inline_with_hooks(input, options, refs, &ParserHooks::empty())
 }
 
 /// Parse inline markdown with custom parser hooks (see
@@ -57,7 +57,7 @@ pub fn parse_inline_with_hooks(
     input: &str,
     options: Option<&AstOptions>,
     refs: Option<&LinkRefMap>,
-    hooks: &ParseHooks,
+    hooks: &ParserHooks,
 ) -> Vec<Inline> {
     let binding = AstOptions::default();
     let opts = options.unwrap_or(&binding);
@@ -75,7 +75,7 @@ pub fn parse_inline_with_hooks(
         // extension can both introduce new syntax and override built-ins.
         if !hooks.is_empty() {
             let rest: String = chars[i..].iter().collect();
-            let hctx = InlineParseContext {
+            let hctx = InlineParserContext {
                 rest,
                 index: i as u32,
             };
@@ -313,7 +313,7 @@ fn match_strikethrough(
     start: usize,
     ctx: &InlineCtx,
     options: Option<&AstOptions>,
-    hooks: &ParseHooks,
+    hooks: &ParserHooks,
 ) -> Option<(Inline, usize)> {
     if chars[start] != '~' || start + 1 >= chars.len() || chars[start + 1] != '~' {
         return None;
@@ -421,7 +421,7 @@ fn match_reference_link(
     ctx: &InlineCtx,
     options: Option<&AstOptions>,
     refs: Option<&LinkRefMap>,
-    hooks: &ParseHooks,
+    hooks: &ParserHooks,
 ) -> Option<(Inline, usize)> {
     let refs = refs?;
     if chars.get(start)? != &'[' {
@@ -471,7 +471,7 @@ fn match_link(
     start: usize,
     ctx: &InlineCtx,
     options: Option<&AstOptions>,
-    hooks: &ParseHooks,
+    hooks: &ParserHooks,
 ) -> Option<(Inline, usize)> {
     let (text, after_text) = match_bracket(chars, start, '[')?;
     let (url, title, after_url) = match_paren(chars, after_text)?;
@@ -590,7 +590,7 @@ fn match_emphasis(
     marker: char,
     ctx: &InlineCtx,
     options: Option<&AstOptions>,
-    hooks: &ParseHooks,
+    hooks: &ParserHooks,
 ) -> Option<(Inline, usize)> {
     let run = chars[start..].iter().take_while(|&c| *c == marker).count();
     // Try bold first (double marker)

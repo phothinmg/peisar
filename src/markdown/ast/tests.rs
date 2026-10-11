@@ -12,16 +12,18 @@
 //!   `compute_line_starts`, `is_link_ref_def`, `is_thematic_break`,
 //!   `parse_task_marker`)
 
+use super::AstOptions;
 use super::parsers::block::{
     compute_line_starts, is_link_ref_def, is_list_marker, is_thematic_break, normalize_label,
     parse_link_ref_def_line, parse_link_title, parse_link_url, parse_task_marker,
 };
-use super::parsers::hooks::{AstParser, BlockParseContext, InlineParseContext, ParseHooks};
 use super::parsers::inline::{LinkRefMap, parse_inline, parse_inline_with_refs};
 use super::parsers::md_to_ast;
-use super::parsers::visitor::{InlineVisitControl, VisitControl, visit_document_mut};
+use super::parsers::plugin::{
+    BlockParserContext, InlineParserContext, InlineVisitControl, ParserHooks, PluginFactory,
+    VisitControl, visit_document_mut,
+};
 use super::tokens::token::{Block, Inline, TaskState};
-use super::{AstOptions, AstVisitor};
 
 // ---------------------------------------------------------------------------
 // Helper: count block variants in a document
@@ -291,7 +293,7 @@ fn test_nested_emphasis() {
 /// Removes every CodeBlock it visits.
 struct RemoveCodeBlocks;
 
-impl AstVisitor for RemoveCodeBlocks {
+impl PluginFactory for RemoveCodeBlocks {
     fn visit_block(&mut self, block: &mut Block) -> VisitControl {
         if matches!(block, Block::CodeBlock { .. }) {
             VisitControl::remove()
@@ -320,7 +322,7 @@ fn visitor_can_remove_nodes() {
 /// Inserts a ThematicBreak before each Heading.
 struct InsertBeforeHeadings;
 
-impl AstVisitor for InsertBeforeHeadings {
+impl PluginFactory for InsertBeforeHeadings {
     fn visit_block(&mut self, block: &mut Block) -> VisitControl {
         if matches!(block, Block::Heading { .. }) {
             VisitControl {
@@ -349,7 +351,7 @@ fn visitor_can_insert_before_nodes() {
 /// every Text node.
 struct UppercaseText;
 
-impl AstVisitor for UppercaseText {
+impl PluginFactory for UppercaseText {
     fn visit_block(&mut self, _block: &mut Block) -> VisitControl {
         VisitControl::keep_and_recurse()
     }
@@ -382,7 +384,7 @@ fn visitor_recurse_visits_inline_children() {
 #[test]
 fn visitor_without_recurse_skips_inline_children() {
     struct NoRecurse;
-    impl AstVisitor for NoRecurse {
+    impl PluginFactory for NoRecurse {
         fn visit_inline(&mut self, inline: &mut Inline) -> InlineVisitControl {
             if let Inline::Text { value, .. } = inline {
                 *value = value.to_uppercase();
@@ -984,7 +986,7 @@ struct ReplacingVisitor {
     calls: usize,
 }
 
-impl AstVisitor for ReplacingVisitor {
+impl PluginFactory for ReplacingVisitor {
     fn visit_block(&mut self, block: &mut Block) -> VisitControl {
         self.calls += 1;
         VisitControl::replace_with(vec![block.clone()])
@@ -1010,8 +1012,8 @@ fn replacing_a_node_does_not_revisit_its_replacement() {
 /// nodes (consuming all lines between the markers).
 struct DirectiveHook;
 
-impl AstParser for DirectiveHook {
-    fn try_parse_block(&self, ctx: &BlockParseContext) -> Option<(Block, usize)> {
+impl PluginFactory for DirectiveHook {
+    fn try_parse_block(&self, ctx: &BlockParserContext) -> Option<(Block, usize)> {
         let name = ctx.line.trim().strip_prefix(":::")?;
         if name.is_empty() {
             return None;
@@ -1033,7 +1035,7 @@ impl AstParser for DirectiveHook {
 #[test]
 fn block_hook_parses_custom_directive_syntax() {
     let hook = DirectiveHook;
-    let hooks = ParseHooks::empty().with(&hook);
+    let hooks = ParserHooks::empty().with(&hook);
     let doc = super::parsers::md_to_ast_with_hooks(
         ":::note\ncontent stays\n:::\n\n# After\n",
         &AstOptions::default(),
@@ -1058,8 +1060,8 @@ fn block_hook_parses_custom_directive_syntax() {
 /// ThematicBreak nodes instead of paragraphs.
 struct ExclamationHook;
 
-impl AstParser for ExclamationHook {
-    fn try_parse_block(&self, ctx: &BlockParseContext) -> Option<(Block, usize)> {
+impl PluginFactory for ExclamationHook {
+    fn try_parse_block(&self, ctx: &BlockParserContext) -> Option<(Block, usize)> {
         if ctx.line.trim() != "!" {
             return None;
         }
@@ -1075,7 +1077,7 @@ impl AstParser for ExclamationHook {
 #[test]
 fn block_hook_runs_before_builtin_matchers() {
     let hook = ExclamationHook;
-    let hooks = ParseHooks::empty().with(&hook);
+    let hooks = ParserHooks::empty().with(&hook);
     // A lone `!` line would normally parse as a paragraph; the hook must
     // claim it first.
     let doc = super::parsers::md_to_ast_with_hooks("!\n", &AstOptions::default(), None, &hooks);
@@ -1086,8 +1088,8 @@ fn block_hook_runs_before_builtin_matchers() {
 /// Inline hook that parses `[[wikilink]]` into a link node.
 struct WikiLinkHook;
 
-impl AstParser for WikiLinkHook {
-    fn try_parse_inline(&self, ctx: &InlineParseContext) -> Option<(Inline, usize)> {
+impl PluginFactory for WikiLinkHook {
+    fn try_parse_inline(&self, ctx: &InlineParserContext) -> Option<(Inline, usize)> {
         let rest = ctx.rest.strip_prefix("[[")?;
         let close = rest.find("]]")?;
         let target = &rest[..close];
@@ -1111,7 +1113,7 @@ impl AstParser for WikiLinkHook {
 #[test]
 fn inline_hook_parses_wikilinks() {
     let hook = WikiLinkHook;
-    let hooks = ParseHooks::empty().with(&hook);
+    let hooks = ParserHooks::empty().with(&hook);
     let doc = super::parsers::md_to_ast_with_hooks(
         "See [[Some Page]] here.\n",
         &AstOptions::default(),
@@ -1145,7 +1147,7 @@ fn inline_hook_parses_wikilinks() {
 #[test]
 fn inline_hook_applies_inside_emphasis_and_block_quotes() {
     let hook = WikiLinkHook;
-    let hooks = ParseHooks::empty().with(&hook);
+    let hooks = ParserHooks::empty().with(&hook);
     let doc = super::parsers::md_to_ast_with_hooks(
         "> quote with **[[Bold Link]]**\n",
         &AstOptions::default(),
@@ -1175,11 +1177,11 @@ fn inline_hook_applies_inside_emphasis_and_block_quotes() {
 
 /// First hook always declines; the second one must still get a chance.
 struct DecliningHook;
-impl AstParser for DecliningHook {
-    fn try_parse_block(&self, _ctx: &BlockParseContext) -> Option<(Block, usize)> {
+impl PluginFactory for DecliningHook {
+    fn try_parse_block(&self, _ctx: &BlockParserContext) -> Option<(Block, usize)> {
         None
     }
-    fn try_parse_inline(&self, _ctx: &InlineParseContext) -> Option<(Inline, usize)> {
+    fn try_parse_inline(&self, _ctx: &InlineParserContext) -> Option<(Inline, usize)> {
         None
     }
 }
@@ -1188,13 +1190,13 @@ impl AstParser for DecliningHook {
 fn multiple_hooks_tried_in_registration_order() {
     let declining = DecliningHook;
     let wikilink = WikiLinkHook;
-    let hooks = ParseHooks::empty().with(&declining).with(&wikilink);
+    let hooks = ParserHooks::empty().with(&declining).with(&wikilink);
     let doc =
         super::parsers::md_to_ast_with_hooks("plain text\n", &AstOptions::default(), None, &hooks);
     // Declining hooks must not disturb built-in parsing.
     assert!(matches!(doc.children[0], Block::Paragraph { .. }));
 
-    let hooks = ParseHooks::empty().with(&wikilink);
+    let hooks = ParserHooks::empty().with(&wikilink);
     let doc =
         super::parsers::md_to_ast_with_hooks("[[Link]]\n", &AstOptions::default(), None, &hooks);
     assert!(matches!(
@@ -1214,4 +1216,247 @@ fn hooks_do_not_run_when_none_registered() {
         }
         other => panic!("expected Paragraph, got {:?}", other),
     }
+}
+// ---------------------------------------------------------------------------
+// Unified Plugin API (1.3.0) + deprecated-compat regressions
+// ---------------------------------------------------------------------------
+
+#[test]
+fn unified_plugin_supports_all_four_callbacks() {
+    use super::parsers::md_to_ast_with_hooks;
+
+    struct FullPlugin;
+    impl PluginFactory for FullPlugin {
+        // parseBlock: turn a `!!!` line into a ThematicBreak.
+        fn try_parse_block(&self, ctx: &BlockParserContext) -> Option<(Block, usize)> {
+            if ctx.line.trim() != "!!!" {
+                return None;
+            }
+            Some((
+                Block::ThematicBreak {
+                    pos: Default::default(),
+                },
+                1,
+            ))
+        }
+        // visitBlock: recurse into every block so inlines get visited.
+        fn visit_block(&mut self, _block: &mut Block) -> VisitControl {
+            VisitControl::keep_and_recurse()
+        }
+        fn visit_inline(&mut self, inline: &mut Inline) -> InlineVisitControl {
+            if let Inline::Text { value, .. } = inline {
+                *value = value.to_uppercase();
+            }
+            InlineVisitControl::default()
+        }
+    }
+
+    let plugin = FullPlugin;
+    let mut hooks = ParserHooks::empty();
+    hooks.push(&plugin);
+    let mut doc = md_to_ast_with_hooks("!!!\n\nhello\n", &AstOptions::default(), None, &hooks);
+    // Parse hooks ran at parse time; now drive the visitor callbacks.
+    visit_document_mut(&mut doc, &mut FullPlugin);
+    // parseBlock hook produced a ThematicBreak; visit callbacks uppercased the text.
+    assert!(matches!(doc.children[0], Block::ThematicBreak { .. }));
+    match &doc.children[1] {
+        Block::Paragraph { children, .. } => assert!(
+            children
+                .iter()
+                .any(|c| matches!(c, Inline::Text { value, .. } if value == "HELLO"))
+        ),
+        other => panic!("expected Paragraph, got {:?}", other),
+    }
+}
+
+#[test]
+#[cfg(not(feature = "npm"))]
+fn plugins_apply_once_across_repeated_getter_calls() {
+    use super::control::VisitorControl;
+    use super::{PeisarAst, Plugin};
+
+    // Insert-after on headings: if getters re-applied plugins on every
+    // access, each subsequent read would add another ThematicBreak.
+    let plugin = Plugin {
+        visit_block: Some(Box::new(|block: Block| {
+            if matches!(block, Block::Heading { .. }) {
+                Some(VisitorControl {
+                    insert_after: Some(vec![Block::ThematicBreak {
+                        pos: Default::default(),
+                    }]),
+                    ..Default::default()
+                })
+            } else {
+                None
+            }
+        })),
+        ..Default::default()
+    };
+
+    let mut ast = PeisarAst::new("# Title\n\nBody.\n".to_string(), None);
+    ast.add_plugin(plugin);
+    let first = ast.get_ast();
+    assert_eq!(first.children.len(), 3); // Heading, inserted ThematicBreak, Paragraph
+    let second = ast.get_ast();
+    assert_eq!(
+        second.children.len(),
+        3,
+        "getter must not stack plugin mutations on repeated access"
+    );
+    // JSON path is stable too (serde tags are snake_case).
+    assert_eq!(ast.ast_json().matches("thematic_break").count(), 1);
+}
+
+#[test]
+#[cfg(not(feature = "npm"))]
+fn deprecated_add_visitor_and_add_parser_route_through_plugins() {
+    use super::control::{BlockParseResult, VisitorControl};
+    #[allow(deprecated)]
+    use super::{Parser as OldParser, PeisarAst, Visitor as OldVisitor};
+
+    let mut ast = PeisarAst::new(":::note\ncontent\n:::\n\n# Heading\n".to_string(), None);
+
+    // Old visitor API — callbacks receive an owned snapshot, so mutations go
+    // through `replaceWith` (the same rule as the JS side).
+    #[allow(deprecated)]
+    let old_visitor = OldVisitor {
+        visit_block: Some(Box::new(|mut block: Block| {
+            if matches!(block, Block::Heading { .. }) {
+                if let Block::Heading { children, .. } = &mut block {
+                    for c in children.iter_mut() {
+                        if let Inline::Text { value, .. } = c {
+                            *value = value.to_uppercase();
+                        }
+                    }
+                }
+                Some(VisitorControl {
+                    replace_with: Some(vec![block]),
+                    ..Default::default()
+                })
+            } else {
+                Some(VisitorControl {
+                    recurse: Some(true),
+                    ..Default::default()
+                })
+            }
+        })),
+        visit_inline: None,
+    };
+    #[allow(deprecated)]
+    ast.add_visitor(old_visitor);
+
+    // Old parser API — parses the :::note directive.
+    #[allow(deprecated)]
+    let old_parser = OldParser {
+        parse_block: Some(Box::new(|ctx: BlockParserContext| {
+            let name = ctx.line.trim().strip_prefix(":::")?;
+            if name.is_empty() {
+                return None;
+            }
+            let close = ctx.lines.iter().skip(1).position(|l| l.trim() == ":::")?;
+            Some(BlockParseResult {
+                block: Some(Block::HtmlBlock {
+                    html: format!("<div class=\"{name}\">"),
+                    pos: Default::default(),
+                    attrs: None,
+                }),
+                consumed: Some((close + 2) as u32),
+            })
+        })),
+        ..Default::default()
+    };
+    #[allow(deprecated)]
+    ast.add_parser(old_parser);
+
+    let doc = ast.get_ast();
+    // Parser hook ran (re-parse) and the visitor uppercased the heading text.
+    assert!(matches!(
+        &doc.children[0],
+        Block::HtmlBlock { html, .. } if html.contains("note")
+    ));
+    match &doc.children[1] {
+        Block::Heading { children, .. } => assert!(
+            matches!(children.as_slice(), [Inline::Text { value, .. }] if value == "HEADING")
+        ),
+        other => panic!("expected Heading, got {:?}", other),
+    }
+}
+
+#[test]
+fn deprecated_ast_visitor_adapter_still_traverses() {
+    #[allow(deprecated)]
+    use super::AstVisitor;
+    #[allow(deprecated)]
+    use super::AstVisitorAdapter;
+
+    struct OldVisitor;
+    #[allow(deprecated)]
+    impl AstVisitor for OldVisitor {
+        fn visit_block(&mut self, _block: &mut Block) -> VisitControl {
+            VisitControl::keep_and_recurse()
+        }
+        fn visit_inline(&mut self, inline: &mut Inline) -> InlineVisitControl {
+            if let Inline::Text { value, .. } = inline {
+                *value = value.to_uppercase();
+            }
+            InlineVisitControl::default()
+        }
+    }
+
+    let mut doc = md_to_ast("# hello\n", &AstOptions::default(), None);
+    let mut old = OldVisitor;
+    #[allow(deprecated)]
+    let mut adapter = AstVisitorAdapter::new(&mut old);
+    visit_document_mut(&mut doc, &mut adapter);
+    match &doc.children[0] {
+        Block::Heading { children, .. } => {
+            assert!(matches!(children.as_slice(), [Inline::Text { value, .. }] if value == "HELLO"))
+        }
+        other => panic!("expected Heading, got {:?}", other),
+    }
+}
+
+#[test]
+fn deprecated_ast_parser_adapter_still_parses() {
+    use super::parsers::md_to_ast_with_hooks;
+    #[allow(deprecated)]
+    use super::{AstParser, AstParserAdapter};
+
+    struct OldHook;
+    #[allow(deprecated)]
+    impl AstParser for OldHook {
+        fn try_parse_block(&self, ctx: &BlockParserContext) -> Option<(Block, usize)> {
+            if !ctx.line.starts_with("!!!") {
+                return None;
+            }
+            Some((
+                Block::ThematicBreak {
+                    pos: Default::default(),
+                },
+                1,
+            ))
+        }
+    }
+
+    let old = OldHook;
+    #[allow(deprecated)]
+    let adapter = AstParserAdapter::new(&old);
+    let hooks = ParserHooks::empty().with(&adapter);
+    let doc = md_to_ast_with_hooks("!!!\n\ntext\n", &AstOptions::default(), None, &hooks);
+    assert!(matches!(doc.children[0], Block::ThematicBreak { .. }));
+}
+
+#[test]
+fn deprecated_context_aliases_resolve() {
+    #[allow(deprecated)]
+    let _ctx: super::BlockParseContext = super::BlockParseContext {
+        line: String::new(),
+        line_index: 0,
+        lines: Vec::new(),
+    };
+    #[allow(deprecated)]
+    let _ictx: super::InlineParseContext = super::InlineParseContext {
+        rest: String::new(),
+        index: 0,
+    };
 }

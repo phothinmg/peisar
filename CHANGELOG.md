@@ -5,6 +5,35 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [unrelease]
+
+### Added
+
+- Unified JavaScript plugin registration through `Peisar.usePlugin()`:
+  a single plugin object can provide `visitBlock`, `visitInline`,
+  `parseBlock`, and `parseInline` callbacks. Plugins run automatically
+  before AST, HTML, front-matter, and JSON access; parser hooks re-parse the
+  original Markdown and visitor changes are applied once per registration.
+- Unified the Rust extension traits behind `PluginFactory`, so parser hooks
+  and AST visitors share one registration and traversal pipeline.
+- JavaScript integration coverage for visitor replacement, custom block and
+  inline parser hooks, and their composition.
+
+### Changed
+
+- `useVisitor()` and `useParser()` remain available as deprecated,
+  backward-compatible aliases for the visitor and parser portions of
+  `usePlugin()`.
+- Refreshed the Next.js and Vite examples to depend on Peisar 1.0.0.
+- Removed locally generated N-API build artifacts from the repository; the
+  local build script generates the CommonJS and ESM loaders when needed.
+
+### Fixed
+
+- JavaScript plugin visitor callbacks now use and document their one-item
+  tuple node argument (`visitBlock([block])`). Failures in `visitBlock` or
+  `visitInline` are reported instead of being silently treated as no-ops.
+
 ## [1.0.0] - 2026-10-09
 
 ### Added

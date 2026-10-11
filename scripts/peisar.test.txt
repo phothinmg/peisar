@@ -199,13 +199,22 @@ test("PeisarCache collects markdown and asset files", () => {
     fs.mkdirSync(path.join(root, "docs", "sub"), { recursive: true });
     fs.mkdirSync(path.join(root, "assets"), { recursive: true });
     fs.writeFileSync(path.join(root, "docs", "page.md"), "# Hello\n");
-    fs.writeFileSync(path.join(root, "docs", "sub", "deep.markdown"), "# Deep\n");
-    fs.writeFileSync(path.join(root, "assets", "logo.png"), Buffer.from([1, 2, 3]));
+    fs.writeFileSync(
+      path.join(root, "docs", "sub", "deep.markdown"),
+      "# Deep\n",
+    );
+    fs.writeFileSync(
+      path.join(root, "assets", "logo.png"),
+      Buffer.from([1, 2, 3]),
+    );
 
     process.chdir(root);
     const cache = new PeisarCache("docs", "assets");
 
-    const md = cache.markdownFiles().map((p) => path.basename(p)).sort();
+    const md = cache
+      .markdownFiles()
+      .map((p) => path.basename(p))
+      .sort();
     assert.deepEqual(md, ["deep.markdown", "page.md"]);
 
     const assets = cache.assetFiles();
@@ -332,4 +341,18 @@ test("PeisarCache derives Liquid-ready page and asset objects", () => {
     process.chdir(origCwd);
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("Plugin Test", () => {
+  const txt = "# Hello";
+  const doc = new Peisar(txt, { fragment: true });
+  doc.usePlugin({
+    visitBlock([block]) {
+      if (block.type === "Heading") {
+        return { replaceWith: [{ ...block, level: 2 }] };
+      }
+      return { recurse: true };
+    },
+  });
+  assert.deepEqual(doc.html, "<h2>Hello</h2>\n");
 });

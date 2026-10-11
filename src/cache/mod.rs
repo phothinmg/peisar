@@ -100,12 +100,11 @@ pub use obj_cache::{
 };
 
 use crate::frontmatter::frontmatter;
-use crate::markdown::ast::visitor::visit_document_mut;
-use crate::markdown::ast::{
-    AstOptions, ParseHooks, RegisteredParser, RegisteredVisitor, md_to_ast_with_hooks,
-};
 #[cfg(feature = "npm")]
-use crate::markdown::ast::{Parser, Visitor};
+use crate::markdown::ast::Plugin;
+use crate::markdown::ast::{
+    AstOptions, ParserHooks, RegisteredPlugin, md_to_ast_with_hooks, visit_document_mut,
+};
 use crate::markdown::config::{PeisarOptions, get_options};
 use crate::markdown::html::{RenderOptions, render_document_html};
 use file::{
@@ -450,10 +449,7 @@ pub struct PeisarCache {
     /// Disk-archive tier handle (shards + map.json index). Clone-shared
     /// with the watcher thread.
     archive: ArchiveHandle,
-    /// Registered visitors (JS or Rust adapters), applied to every render.
-    visitors: Arc<Mutex<Vec<RegisteredVisitor>>>,
-    /// Registered parser hooks, applied to every render.
-    parsers: Arc<Mutex<Vec<RegisteredParser>>>,
+    plugins: Arc<Mutex<Vec<RegisteredPlugin>>>,
     /// Resolved markdown AST options (GFM/Kramdown, file name).
     ast_opts: AstOptions,
     /// Resolved markdown render options (fragment, title, …).
@@ -474,8 +470,7 @@ fn render_markdown(
     raw_md: &str,
     ast_opts: &AstOptions,
     render_opts: &RenderOptions,
-    visitors: &Arc<Mutex<Vec<RegisteredVisitor>>>,
-    parsers: &Arc<Mutex<Vec<RegisteredParser>>>,
+    plugins: &Arc<Mutex<Vec<RegisteredPlugin>>>,
     file_name: Option<String>,
 ) -> String {
     // Front matter never reaches the renderer.
@@ -483,20 +478,21 @@ fn render_markdown(
         Ok(parsed) => parsed.into_parts(),
         Err(_) => (raw_md.to_string(), None),
     };
-    let hooks_lock = parsers.lock().unwrap();
-    let mut hooks = ParseHooks::empty();
-    for p in hooks_lock.iter() {
-        hooks.push(p);
-    }
+    let mut hooks_lock = plugins.lock().unwrap();
     let opts = AstOptions {
         gfm: ast_opts.gfm,
         kramdown: ast_opts.kramdown,
         file_name,
     };
-    let mut doc = md_to_ast_with_hooks(&md_body, &opts, opts.file_name.clone(), &hooks);
-    let mut visitors_lock = visitors.lock().unwrap();
-    for v in visitors_lock.iter_mut() {
-        visit_document_mut(&mut doc, v);
+    let mut doc = {
+        let mut hooks = ParserHooks::empty();
+        for p in hooks_lock.iter() {
+            hooks.push(p);
+        }
+        md_to_ast_with_hooks(&md_body, &opts, opts.file_name.clone(), &hooks)
+    };
+    for p in hooks_lock.iter_mut() {
+        visit_document_mut(&mut doc, p);
     }
     render_document_html(&doc, Some(render_opts.clone()))
 }
@@ -707,20 +703,12 @@ impl PeisarCache {
         // Make sure the archive dir is ignored by git.
         archive::ensure_gitignore_entry(&cwd)?;
 
-        // The visitor/parser registries are intentionally non-Send:
-        // they capture the napi `Env`, which must not cross threads.
-        // Rendering (the only code that touches them) runs on the JS main
-        // thread; the watcher thread shares only the `Send + Sync`
-        // `LruCache` / `ArchiveHandle`.
         #[allow(clippy::arc_with_non_send_sync)]
-        let visitors: Arc<Mutex<Vec<RegisteredVisitor>>> = Arc::new(Mutex::new(Vec::new()));
-        #[allow(clippy::arc_with_non_send_sync)]
-        let parsers: Arc<Mutex<Vec<RegisteredParser>>> = Arc::new(Mutex::new(Vec::new()));
+        let plugins: Arc<Mutex<Vec<RegisteredPlugin>>> = Arc::new(Mutex::new(Vec::new()));
         Ok(PeisarCache {
             memory,
             archive,
-            visitors,
-            parsers,
+            plugins,
             ast_opts,
             render_opts,
             watcher: None,
@@ -744,22 +732,13 @@ impl PeisarCache {
         })
     }
 
-    /// Register a JavaScript AST visitor applied to every page render
-    /// (JS: `cache.useVisitor({ visitBlock, visitInline })`).
+    /// Register a JavaScript plugin applied to every page render
+    /// (JS: `cache.usePlugin({ visitBlock, visitInline, parseBlock, parseInline })`).
     #[cfg(feature = "npm")]
     #[napi]
-    pub fn use_visitor(&mut self, env: napi::Env, visitor: Visitor) {
-        self.visitors.lock().unwrap().push(visitor.register(env));
+    pub fn use_plugin(&mut self, env: napi::Env, plugin: Plugin) {
+        self.plugins.lock().unwrap().push(plugin.register(env));
     }
-
-    /// Register a JavaScript parser hook applied to every page render
-    /// (JS: `cache.useParser({ parseBlock, parseInline })`).
-    #[cfg(feature = "npm")]
-    #[napi]
-    pub fn use_parser(&mut self, env: napi::Env, parser: Parser) {
-        self.parsers.lock().unwrap().push(parser.register(env));
-    }
-
     /// JS: `cache.startWatchingJs()` — start watching the entry (and
     /// assets) directories recursively; errors surface as JS exceptions.
     #[cfg(feature = "npm")]
@@ -1066,8 +1045,7 @@ impl PeisarCache {
                 &raw_md,
                 &self.ast_opts,
                 &self.render_opts,
-                &self.visitors,
-                &self.parsers,
+                &self.plugins,
                 Some(file_name),
             ),
             out_file_path: page_out_file(path, &self.entry_dir, &self.out_dir),
