@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed locally generated N-API build artifacts from the repository; the
   local build script generates the CommonJS and ESM loaders when needed.
 
-### Fixed
+### Changed
 
 - JavaScript plugin visitor callbacks now use and document their one-item
   tuple node argument (`visitBlock([block])`). Failures in `visitBlock` or
@@ -36,69 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.0] - 2026-10-09
 
-### Added
-
-- Pretty change logs from the `PeisarCache` watcher: every add/edit/
-  delete prints exactly one line to stderr — `created docs/intro.md`,
-  `modified public/style.css`, `removed contents/old.md` — with the path
-  relative to the project root. Labels derive from the actual filesystem
-  state (exists + cached → `modified`, exists + new → `created`, gone →
-  `removed`), so editor atomic saves and renames log the right word even
-  when the OS reports them as generic events. Events coalesce within a
-  1 s window per path, and files the cache never tracks (editor `.tmp` /
-  swap side files) are not logged. Labels are ANSI-colored on interactive
-  terminals (green/yellow/red) and plain in piped/CI output. `onChange`
-  subscribers still receive every raw event.
-- `PeisarCache::stop_watching()` — the Rust counterpart of the JS
-  `dispose()`: stops the watcher and flushes pending archive writes for a
-  graceful shutdown. Safe to call more than once (or without ever
-  watching). The `cache_example` example now blocks until `Ctrl+C` and
-  shuts down gracefully through it.
-
-- Memory-first `PeisarCache` architecture: a size-aware LRU in-memory tier
-  (bounded by `byteBudget`/`entryBudget`), backed by a background archive
-  worker that flushes binary shard files to `.peisar-cache` with a `map.json`
-  search index (per-entry shard location, kind, size, BLAKE3 hash, and
-  parsed front matter). Reads hit memory first and fall through to the
-  archive for evicted entries.
-- `PeisarCache` constructor now accepts an options object — `markdown`
-  (`PeisarOptions` like `fragment`), `archive` (`shardBytes`,
-  `flushIntervalMs`), `hosting`, `outDir` — plus a full-config factory
-  `PeisarCache.withConfig(config)` for memory budgets.
-- `cache.useVisitor()` / `cache.useParser()`: custom JS visitors and parser
-  hooks applied to every page render.
-- Liquid-ready derived objects: `cache.pages()` / `cache.getPage()` return
-  `PageObject`s (layout, fileName, slug, html, outFilePath,
-  inputFilePath, title, summary, tags, publishDate, extra front-matter
-  fields flattened) and `cache.assets()` / `cache.getAsset()` return
-  `AssetsObject`s (fileName, slug, raw text/base64, outFilePath,
-  inputFilePath, ext, fileType).
-- Hosting-aware baseUrl resolution for GitHub Pages, Vercel, Netlify,
-  Cloudflare Pages, and custom deployments: `cache.baseUrl()`,
-  `cache.resolveUrl(path)`, `cache.siteUrl()`, plus
-  `BaseDirInfo::detect(url)` on the Rust side.
-- Archive introspection from JS: `cache.archived()`, `cache.mapJson()`, and
-  `cache.flush()`.
-- `PeisarCache::with_config` now takes a `PeisarCacheConfig` struct
-  (entry/assets dirs, markdown options, memory/archive tiers, hosting,
-  outDir); the old two-path constructor form is available via
-  `PeisarCacheConfig::default()` field updates.
-
 ### Changed
 
-- `src/cache` now uses the shared `frontmatter()` function from
-  `src/frontmatter/mod.rs` instead of its local `parse_frontmatter`
-  duplicate (single YAML parsing path; results are `serde_json::Value`s).
-- Disk persistence is no longer write-through at construction: content
-  lives in the LRU, and shards are written by threshold/interval/flush.
-- Rustdoc for the `peisar::cache` module (module-level overview with a Rust
-  usage example, discovery/tiering/threading sections, and doc comments
-  for `PeisarCache`, `CachedContent`, and the file-discovery helpers in
-  `cache::file`)
-- A "File cache" subsection in the README's Rust section covering
-  `PeisarCache::with_config`, `all()`, `get()`, `start_watching()`, and the
-  drop-based cleanup, compile-checked by a new `cache_paths` test in
-  `tests/readme_paths.rs`
 - `PeisarEmphasisLevel`, `PeisarTaskState`, `PeisarTableCellAlignment`, and
   `PeisarTableCellAlignments` type unions in the generated TypeScript
   declarations (via the `dtsHeaderFile` in `napi.config.json`); in the
@@ -120,7 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Versions 0.3.1 through 0.3.13 were npm-only release iterations (npm's
   latest, 0.3.13, already ships these changes), while crates.io stayed at
   0.3.11. Version 1.0.0 realigns both registries and marks the public API
-  stable: the AST, renderer, front matter, cache, and N-API surfaces are
+  stable: the AST, renderer, front matter, and N-API surfaces are
   covered by the test suites and are not expected to change within the
   1.x series.
 
@@ -140,32 +79,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`^20.19.0 || ^22.13.0 || >=23.5.0 || ^24.21.0`) in the root and
   platform packages
 - A `license` field (`Apache-2.0`) in `package.json`
-- `PeisarCache` Node.js export: the in-memory Markdown/asset file cache with
-  `.peisar_cache` disk persistence and recursive file-watching, restored for
-  the `peisar-ssg` package:
-  - `new PeisarCache(entryDir, assetsDir?)` constructor and a
-    `PeisarCache.withConfigJs` factory
-  - `startWatchingJs()` to start the recursive watcher
-  - `getText(absPath)` / `getBinary(absPath)` cached-content accessors
-  - `listFiles()`, `markdownFiles()`, and `assetFiles()` path listings
-  - `onChange(cb) → id` / `offChange(id)` change subscriptions delivering
-    `{ path, kind, isMarkdown }` events
-  - `dispose()` to stop the watcher and release the persistence worker so the
-    Node process can exit
-- A `cache` module (`peisar::cache`) in the Rust crate powering the above,
-  along with the `blake3`, `notify`, and `bincode` dependencies it needs
 
 ### Fixed
-
-- Cache targets for paths outside the working directory no longer clobber the
-  original source file: `PathBuf::join` with an absolute path replaces the
-  buffer, so paths are now mirrored by their normal components
-  (e.g. `/elsewhere/b.png` → `.peisar_cache/elsewhere/b.png`)
-- Watcher events now carry `isMarkdown: true` correctly when `PeisarCache`
-  was constructed with a relative entry directory (notify delivers absolute
-  paths, so the entry dir is normalized to absolute at construction)
-
-### Changed
 
 - Updated the README: a new tagline ("A practical Markdown parser
   written in Rust"), a Next.js integration section documenting
@@ -206,9 +121,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `peisar-development`
 - Integration tests that compile-check every documented Rust and Node.js API
   path in `README.md` (`tests/readme_paths.rs`)
-- Security policy (`SECURITY.md`): supported versions, the removal notice for
-  the `PeisarCache` components that moved to `peisar-ssg`, the renderer's
-  trust model, and a private vulnerability reporting process
+- Security policy (`SECURITY.md`): supported versions, the renderer's trust
+  model, and a private vulnerability reporting process
 - CI workflow that tests on Ubuntu, macOS, and Windows, and builds the native
   addon for eight targets (GNU/MUSL Linux x64/arm64, macOS x64/arm64, and
   Windows x64/arm64) on every published release
@@ -226,16 +140,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Node.js integration tests (`js_tests/peisar.test.txt`) to cover front
   matter, visitors, hooks, and their composition
 - Rewrote documentation: README, CONTRIBUTING, and the Agent Skills
-
-### Removed
-
-- Static-site support, moved to the separate `peisar-ssg` project:
-  - The `PeisarCache` and `peisarSsgConfig()` Node.js exports
-  - The `peisar::ssg::{cache, files, ssg_config}` Rust modules
-  - `Peisar.toml` configuration loading and the `schema/peisar-ssg.json`
-    JSON Schema
-- The `blake3`, `notify`, `bincode`, and `toml` dependencies, which served
-  only the removed cache and configuration loader
 
 ### Notes
 

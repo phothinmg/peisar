@@ -11,7 +11,6 @@ native `peisar` package.
 | `frontmatter` | function | Extract YAML front matter and Markdown body |
 | `yamlParser` | function | Parse YAML text into a JS object |
 | `loadYaml` | function | Load and parse a YAML file from disk |
-| `PeisarCache` | class | Markdown and asset cache with static-site helpers |
 
 ## `Peisar`
 
@@ -173,91 +172,3 @@ loadYaml(filePath: string): Record<string, any>
 
 Use these helpers when you need standalone YAML parsing outside the Markdown
 pipeline.
-
-## `PeisarCache`
-
-`PeisarCache` is the higher-level Node.js API for static-site-like workflows.
-It caches Markdown and asset files, derives page and asset objects, and can
-watch the filesystem for changes.
-
-### Constructor and factory
-
-```ts
-new PeisarCache(entryDir: string, assetsDir?: string, options?: PeisarCacheOptions)
-PeisarCache.withConfig(config: PeisarCacheConfig)
-```
-
-Use `withConfig()` when you need memory-tier budgets.
-
-### Constructor options
-
-```ts
-{
-  markdown?: PeisarOptions;
-  archive?: {
-    shardBytes?: number;
-    flushIntervalMs?: number;
-  };
-  hosting?: {
-    provider?: "GithubPages" | "Vercel" | "Netlify" | "CloudflarePages" | "Custom";
-    repo?: string;
-    siteUrl?: string;
-    pathPrefix?: string;
-  };
-  outDir?: string;
-  cacheDir?: string;
-}
-```
-
-### Common methods
-
-| Method | Description |
-| --- | --- |
-| `usePlugin(plugin)` | Register a plugin for every page render |
-| `startWatchingJs()` | Start recursive file watching |
-| `getText(path)` | Read cached text content |
-| `getBinary(path)` | Read cached binary content |
-| `listFiles()` | List all cached absolute paths |
-| `markdownFiles()` | List cached Markdown files |
-| `assetFiles()` | List cached asset files |
-| `pages()` | Return derived page objects |
-| `getPage(path)` | Return one derived page object |
-| `assets()` | Return derived asset objects |
-| `getAsset(path)` | Return one derived asset object |
-| `archived()` | List files already flushed to the archive tier |
-| `mapJson()` | Return the archive `map.json` as JSON text |
-| `flush()` | Force pending archive writes |
-| `baseUrl()` | Return the resolved site base path |
-| `resolveUrl(path)` | Prefix a path with the resolved base URL |
-| `siteUrl()` | Return the configured absolute site URL |
-| `onChange(cb)` | Subscribe to watcher events |
-| `offChange(id)` | Remove a watcher subscription |
-| `dispose()` | Stop watching and release callbacks |
-
-### Derived page shape
-
-`pages()` and `getPage()` return page objects with these notable fields:
-
-- `layout`
-- `fileName`
-- `slug`
-- `html`
-- `outFilePath`
-- `inputFilePath`
-- `title`
-- `summary`
-- `tags`
-- `publishDate`
-- `extra`
-
-### Derived asset shape
-
-`assets()` and `getAsset()` return asset objects with these notable fields:
-
-- `fileName`
-- `slug`
-- `raw`
-- `outFilePath`
-- `inputFilePath`
-- `ext`
-- `fileType`

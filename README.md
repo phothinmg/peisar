@@ -31,7 +31,6 @@ Node.js through N-API.
 - YAML front matter extraction
 - AST visitors and parser hooks through `usePlugin()`
 - Native Node.js addon and Rust library surfaces
-- File cache and static-site helpers through `PeisarCache`
 
 ## Install
 

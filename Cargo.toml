@@ -40,8 +40,3 @@ crate-type = ["rlib", "cdylib"]
 [features]
 default = []
 npm = ["dep:napi", "dep:napi-derive"]
-
-
-[[example]]
-name = "cache_example"
-path = "examples/cache/main.rs"

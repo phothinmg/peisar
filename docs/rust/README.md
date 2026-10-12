@@ -1,7 +1,7 @@
 # Rust usage
 
 Peisar is a Rust crate first. The Node.js package is built on top of the same
-parser, renderer, front-matter support, and cache modules.
+parser, renderer, and front-matter support.
 
 This page is the Rust overview. Use it as the entry point for module-level and
 API-specific guides.
@@ -10,7 +10,7 @@ API-specific guides.
 
 - Crate: `peisar`
 - API style: module-based public Rust surface
-- Shared concepts: parser, renderer, front matter, cache, and plugin traits
+- Shared concepts: parser, renderer, front matter, and plugin traits
 - Full API details: see [Rust API reference](./apis.md)
 - Cross-language docs: see [Node.js overview](../nodejs/README.md)
 
@@ -29,7 +29,6 @@ The public Rust surface is module-based:
 | --- | --- |
 | `peisar::frontmatter` | YAML front matter extraction |
 | `peisar::yaml` | Standalone YAML parsing helpers |
-| `peisar::cache` | File cache, archive tier, hosting/baseUrl helpers |
 | `peisar::markdown::ast` | AST nodes, parser options, traversal helpers, plugin traits |
 | `peisar::markdown::config` | `PeisarOptions` shared with the Node-facing wrapper |
 | `peisar::markdown::html` | AST-to-HTML rendering |

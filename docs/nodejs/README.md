@@ -54,7 +54,6 @@ The Node.js package currently centers around these exports:
 | `frontmatter()` | Split Markdown into body content and YAML metadata |
 | `yamlParser()` | Parse inline YAML into a JS object |
 | `loadYaml()` | Load and parse a YAML file |
-| `PeisarCache` | Cache Markdown and assets for static-site-style workflows |
 
 Detailed signatures and option shapes are in the
 [Node.js API reference](./apis.md).

@@ -95,43 +95,8 @@ Notable methods:
 
 This wrapper is the closest Rust equivalent to the Node.js `Peisar` class.
 
-## `peisar::cache`
-
-Key exports:
-
-- `PeisarCache`
-- `PeisarCacheConfig`
-- `MemoryConfig`
-- `ArchiveConfig`
-- `HostingConfig`
-- `CachedContent`
-- `BaseDirInfo`
-- `HostingProvider`
-
-Highlights:
-
-- caches Markdown and assets by absolute path
-- keeps hot content in an LRU memory tier
-- flushes cold content into a `.peisar-cache` archive tier
-- derives page and asset objects for static-site-like workflows
-- resolves hosting-aware base URLs
-- can watch the filesystem for changes
-
-### Example
-
-```rust
-use peisar::cache::{PeisarCache, PeisarCacheConfig};
-
-let _cache = PeisarCache::with_config(PeisarCacheConfig {
-    entry_dir: "contents".into(),
-    ..Default::default()
-})?;
-# Ok::<(), std::io::Error>(())
-```
-
 ## Choosing an API
 
 - Use `markdown::ast` + `markdown::html` for lower-level parsing and rendering.
 - Use `markdown::peisar::Peisar` for a higher-level single-document wrapper.
 - Use `frontmatter` or `yaml` when you only need metadata/config handling.
-- Use `cache` when building static-site or content-pipeline workflows.
