@@ -1,10 +1,11 @@
 {
   "name": "peisar",
-  "version": "1.0.1",
+  "version": "1.0.11",
   "description": "A practical Markdown parser written in Rust",
   "main": "index.cjs",
   "types": "index.d.ts",
   "module": "index.mjs",
+  "browser": "browser/peisar.js",
   "exports": {
     ".": {
       "require": {
@@ -50,7 +51,8 @@
     "index.cjs",
     "index.mjs",
     "index.d.ts",
-    "package.json"
+    "package.json",
+    "browser"
   ],
   "publishConfig": {
     "access": "public"
