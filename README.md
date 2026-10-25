@@ -6,8 +6,10 @@
 </div>
 
 
-![NPM Version](https://img.shields.io/npm/v/peisar?logo=npm&logoColor=%23CB3837) ![NPM Downloads](https://img.shields.io/npm/dm/peisar?logo=npm&logoColor=%23CB3837)
+![NPM Version](https://img.shields.io/npm/v/peisar?logo=npm&logoColor=%23CB3837) 
 ![Crates.io Version](https://img.shields.io/crates/v/peisar?logo=rust) [![Documentation][docs_img]][docs]
+
+<!-- ![NPM Downloads](https://img.shields.io/npm/dm/peisar?logo=npm&logoColor=%23CB3837) -->
 
 
 ---
