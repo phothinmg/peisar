@@ -70,6 +70,7 @@
 //! its `ast`, `html`, `frontmatter`, or `astJson` properties; see the
 //! `peisar` npm package for the binding surface.
 
+pub mod cache;
 pub mod frontmatter;
 pub mod markdown;
 pub mod yaml;

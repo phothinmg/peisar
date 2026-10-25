@@ -5,6 +5,9 @@ js_tests_temp
 .notes
 dist
 js_tests/peisarloc
+aa.cjs
+aa.json
+ssg
 
 .peisar-cache
 .peisar
