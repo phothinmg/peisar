@@ -147,12 +147,12 @@ function digest(value) {
 function memoryIterationsFor(markdown) {
   const bytes = Buffer.byteLength(markdown);
   if (bytes < 1_500) {
-    return 4_000;
+    return 100;
   }
   if (bytes < 12_000) {
-    return 750;
+    return 25;
   }
-  return 150;
+  return 10;
 }
 
 function forceGc() {
@@ -245,6 +245,21 @@ async function benchmarkDocument(document) {
 }
 
 async function main() {
+  const [{ micromark }, { gfm, gfmHtml }] = await Promise.all([
+    import("micromark"),
+    import("micromark-extension-gfm"),
+  ]);
+  const micromarkOptions = {
+    extensions: [gfm()],
+    htmlExtensions: [gfmHtml()],
+  };
+  renderers.push({
+    name: "micromark",
+    render(markdown) {
+      return micromark(markdown, micromarkOptions);
+    },
+  });
+
   console.log(
     "Markdown benchmark with output validation, speed, and memory profiling.",
   );

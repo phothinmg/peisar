@@ -115,6 +115,17 @@ assert_eq!(html, "<h1>Hello <strong>world</strong></h1>\n");
 - Next.js example: <https://github.com/phothinmg/peisar/tree/main/examples/next>
 - Vite example: <https://github.com/phothinmg/peisar/tree/main/examples/vite>
 
+## Benchmark snapshot
+
+The graph below summarizes the benchmark results documented in
+[docs/benchmarks.md](docs/benchmarks.md). Each panel uses its own vertical
+scale; values are printed above the bars.
+
+![Benchmark results comparing Peisar, marked, markdown-it, and showdown throughput and average peak heap usage across three document sizes](docs/benchmark-results.svg)
+
+Run the benchmark with `npm run benchmark`. Results vary by runtime, hardware,
+input, and parser configuration.
+
 ## Development
 
 ```sh

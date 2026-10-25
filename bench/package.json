@@ -11,7 +11,9 @@
   "dependencies": {
     "markdown-it": "^15.0.2",
     "marked": "^18.1.0",
-    "peisar": "^1.0.0",
+    "micromark": "^4.0.3",
+    "micromark-extension-gfm": "^3.0.0",
+    "peisar": "^1.1.0",
     "showdown": "^2.1.0",
     "tinybench": "^6.2.2"
   }

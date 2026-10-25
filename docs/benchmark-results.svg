@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1140 700" role="img" aria-labelledby="title description">
+  <title id="title">Markdown renderer benchmark results</title>
+  <desc id="description">Grouped bar charts compare average throughput in operations per second and average peak heap in mebibytes for Peisar, marked, markdown-it, showdown, and micromark with GFM on base, medium, and large Markdown documents. Each document size has its own vertical scale. Exact values are labeled above the bars.</desc>
+  <style>
+    text { fill: #24292f; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .heading { font-size: 22px; font-weight: 700; }
+    .subtitle { fill: #57606a; font-size: 13px; }
+    .panel-title { font-size: 16px; font-weight: 600; }
+    .scale { fill: #57606a; font-size: 11px; }
+    .value { font-size: 10px; }
+    .category { font-size: 12px; font-weight: 600; }
+    .legend { font-size: 13px; }
+    .axis { stroke: #8c959f; stroke-width: 1; }
+    .grid { stroke: #d8dee4; stroke-width: 1; }
+  </style>
+  <rect width="1140" height="700" rx="12" fill="#ffffff"/>
+
+  <text x="36" y="38" class="heading">Markdown renderer benchmarks</text>
+  <text x="36" y="61" class="subtitle">Same representative Markdown workload · documented repository snapshot</text>
+
+  <rect x="306" y="78" width="14" height="14" rx="2" fill="#0969da"/>
+  <text x="327" y="90" class="legend">Peisar</text>
+  <rect x="402" y="78" width="14" height="14" rx="2" fill="#1a7f37"/>
+  <text x="423" y="90" class="legend">marked</text>
+  <rect x="500" y="78" width="14" height="14" rx="2" fill="#bf8700"/>
+  <text x="521" y="90" class="legend">markdown-it</text>
+  <rect x="658" y="78" width="14" height="14" rx="2" fill="#cf222e"/>
+  <text x="679" y="90" class="legend">showdown</text>
+  <rect x="782" y="78" width="14" height="14" rx="2" fill="#8250df"/>
+  <text x="803" y="90" class="legend">micromark (GFM)</text>
+
+  <text x="36" y="126" class="panel-title">Average throughput (operations/s)</text>
+  <text x="36" y="145" class="subtitle">Higher is better · independent scale per document size</text>
+
+  <text x="190" y="171" text-anchor="middle" class="category">Base</text>
+  <text x="570" y="171" text-anchor="middle" class="category">Medium</text>
+  <text x="950" y="171" text-anchor="middle" class="category">Large</text>
+  <text x="190" y="190" text-anchor="middle" class="scale">Scale: 0–23,000 ops/s</text>
+  <text x="570" y="190" text-anchor="middle" class="scale">Scale: 0–3,000 ops/s</text>
+  <text x="950" y="190" text-anchor="middle" class="scale">Scale: 0–750 ops/s</text>
+
+  <line x1="45" y1="345" x2="335" y2="345" class="axis"/>
+  <line x1="425" y1="345" x2="715" y2="345" class="axis"/>
+  <line x1="805" y1="345" x2="1095" y2="345" class="axis"/>
+  <line x1="45" y1="207" x2="335" y2="207" class="grid"/>
+  <line x1="425" y1="207" x2="715" y2="207" class="grid"/>
+  <line x1="805" y1="207" x2="1095" y2="207" class="grid"/>
+
+  <rect x="105" y="220.1" width="28" height="124.9" rx="2" fill="#0969da"/>
+  <text x="119" y="214" text-anchor="middle" class="value">20,822</text>
+  <rect x="140" y="292.1" width="28" height="52.9" rx="2" fill="#1a7f37"/>
+  <text x="154" y="286" text-anchor="middle" class="value">8,835</text>
+  <rect x="175" y="298.4" width="28" height="46.6" rx="2" fill="#bf8700"/>
+  <text x="189" y="292" text-anchor="middle" class="value">7,775</text>
+  <rect x="210" y="332.5" width="28" height="12.5" rx="2" fill="#cf222e"/>
+  <text x="224" y="326" text-anchor="middle" class="value">2,076</text>
+  <rect x="245" y="339.6" width="28" height="5.4" rx="2" fill="#8250df"/>
+  <text x="259" y="333" text-anchor="middle" class="value">909</text>
+
+  <rect x="485" y="228.5" width="28" height="116.5" rx="2" fill="#0969da"/>
+  <text x="499" y="222" text-anchor="middle" class="value">2,533</text>
+  <rect x="520" y="286.7" width="28" height="58.3" rx="2" fill="#1a7f37"/>
+  <text x="534" y="280" text-anchor="middle" class="value">1,268</text>
+  <rect x="555" y="299.5" width="28" height="45.5" rx="2" fill="#bf8700"/>
+  <text x="569" y="293" text-anchor="middle" class="value">990</text>
+  <rect x="590" y="329.1" width="28" height="15.9" rx="2" fill="#cf222e"/>
+  <text x="604" y="323" text-anchor="middle" class="value">345</text>
+  <rect x="625" y="340.1" width="28" height="4.9" rx="2" fill="#8250df"/>
+  <text x="639" y="334" text-anchor="middle" class="value">107</text>
+
+  <rect x="865" y="210.5" width="28" height="134.5" rx="2" fill="#0969da"/>
+  <text x="879" y="204" text-anchor="middle" class="value">731</text>
+  <rect x="900" y="284.3" width="28" height="60.7" rx="2" fill="#1a7f37"/>
+  <text x="914" y="278" text-anchor="middle" class="value">330</text>
+  <rect x="935" y="298.4" width="28" height="46.6" rx="2" fill="#bf8700"/>
+  <text x="949" y="292" text-anchor="middle" class="value">253</text>
+  <rect x="970" y="329.7" width="28" height="15.3" rx="2" fill="#cf222e"/>
+  <text x="984" y="323" text-anchor="middle" class="value">83</text>
+  <rect x="1005" y="340.6" width="28" height="4.4" rx="2" fill="#8250df"/>
+  <text x="1019" y="334" text-anchor="middle" class="value">24</text>
+
+  <line x1="380" y1="154" x2="380" y2="362" class="grid"/>
+  <line x1="760" y1="154" x2="760" y2="362" class="grid"/>
+  <line x1="36" y1="382" x2="1104" y2="382" class="grid"/>
+
+  <text x="36" y="414" class="panel-title">Average peak heap (MiB)</text>
+  <text x="36" y="433" class="subtitle">Lower is better · seven batches · independent scale per document size</text>
+
+  <text x="190" y="459" text-anchor="middle" class="category">Base</text>
+  <text x="570" y="459" text-anchor="middle" class="category">Medium</text>
+  <text x="950" y="459" text-anchor="middle" class="category">Large</text>
+  <text x="190" y="478" text-anchor="middle" class="scale">Scale: 0–65 MiB</text>
+  <text x="570" y="478" text-anchor="middle" class="scale">Scale: 0–70 MiB</text>
+  <text x="950" y="478" text-anchor="middle" class="scale">Scale: 0–95 MiB</text>
+
+  <line x1="45" y1="633" x2="335" y2="633" class="axis"/>
+  <line x1="425" y1="633" x2="715" y2="633" class="axis"/>
+  <line x1="805" y1="633" x2="1095" y2="633" class="axis"/>
+  <line x1="45" y1="495" x2="335" y2="495" class="grid"/>
+  <line x1="425" y1="495" x2="715" y2="495" class="grid"/>
+  <line x1="805" y1="495" x2="1095" y2="495" class="grid"/>
+
+  <rect x="105" y="632.7" width="28" height="0.3" rx="1" fill="#0969da"/>
+  <text x="119" y="626" text-anchor="middle" class="value">0.12</text>
+  <rect x="140" y="623.1" width="28" height="9.9" rx="2" fill="#1a7f37"/>
+  <text x="154" y="617" text-anchor="middle" class="value">4.69</text>
+  <rect x="175" y="620.2" width="28" height="12.8" rx="2" fill="#bf8700"/>
+  <text x="189" y="614" text-anchor="middle" class="value">6.05</text>
+  <rect x="210" y="590.0" width="28" height="43.0" rx="2" fill="#cf222e"/>
+  <text x="224" y="584" text-anchor="middle" class="value">20.26</text>
+  <rect x="245" y="509.3" width="28" height="123.7" rx="2" fill="#8250df"/>
+  <text x="259" y="503" text-anchor="middle" class="value">58.32</text>
+
+  <rect x="485" y="632.6" width="28" height="0.4" rx="1" fill="#0969da"/>
+  <text x="499" y="626" text-anchor="middle" class="value">0.22</text>
+  <rect x="520" y="614.2" width="28" height="18.8" rx="2" fill="#1a7f37"/>
+  <text x="534" y="608" text-anchor="middle" class="value">9.55</text>
+  <rect x="555" y="607.0" width="28" height="26.0" rx="2" fill="#bf8700"/>
+  <text x="569" y="601" text-anchor="middle" class="value">13.20</text>
+  <rect x="590" y="532.9" width="28" height="100.1" rx="2" fill="#cf222e"/>
+  <text x="604" y="527" text-anchor="middle" class="value">50.79</text>
+  <rect x="625" y="508.8" width="28" height="124.2" rx="2" fill="#8250df"/>
+  <text x="639" y="503" text-anchor="middle" class="value">62.98</text>
+
+  <rect x="865" y="632.5" width="28" height="0.5" rx="1" fill="#0969da"/>
+  <text x="879" y="626" text-anchor="middle" class="value">0.35</text>
+  <rect x="900" y="610.6" width="28" height="22.4" rx="2" fill="#1a7f37"/>
+  <text x="914" y="604" text-anchor="middle" class="value">15.39</text>
+  <rect x="935" y="602.5" width="28" height="30.5" rx="2" fill="#bf8700"/>
+  <text x="949" y="596" text-anchor="middle" class="value">20.99</text>
+  <rect x="970" y="540.2" width="28" height="92.8" rx="2" fill="#cf222e"/>
+  <text x="984" y="534" text-anchor="middle" class="value">63.88</text>
+  <rect x="1005" y="505.0" width="28" height="128.0" rx="2" fill="#8250df"/>
+  <text x="1019" y="499" text-anchor="middle" class="value">88.05</text>
+
+  <line x1="380" y1="442" x2="380" y2="650" class="grid"/>
+  <line x1="760" y1="442" x2="760" y2="650" class="grid"/>
+</svg>

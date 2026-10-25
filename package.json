@@ -25,7 +25,7 @@
     "commit": "bash scripts/commit.sh",
     "wf:test": "bash scripts/wf_tests.sh",
     "js:test": "bash scripts/js_tests.sh",
-    "benchmark": "node bench/index.cjs"
+    "benchmark": "cd bench && npm run bench"
   },
   "keywords": [
     "markdown",
