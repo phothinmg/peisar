@@ -92,8 +92,9 @@ impl Document {
 pub fn md_to_ast(input: &str, opts: &AstOptions, file_name: Option<String>) -> Document {
     md_to_ast_with_hooks(input, opts, file_name, &ParserHooks::empty())
 }
-
+#[allow(rustdoc::private_intra_doc_links)]
 /// Like [`md_to_ast`] but with custom parser hooks (see
+#[allow(rustdoc::private_intra_doc_links)]
 /// [`hooks`](self::hooks)).
 ///
 /// Hooks run before the built-in block and inline matchers; the first hook

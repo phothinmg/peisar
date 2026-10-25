@@ -116,11 +116,11 @@ pub struct InlineParserContext {
     /// 0-based character index of the current position in the inline text.
     pub index: u32,
 }
-
+#[allow(rustdoc::private_intra_doc_links)]
 /// Deprecated pre-1.3.0 name for [`BlockParserContext`].
 #[deprecated(since = "1.3.0", note = "Use `BlockParserContext` instead")]
 pub type BlockParseContext = BlockParserContext;
-
+#[allow(rustdoc::private_intra_doc_links)]
 /// Deprecated pre-1.3.0 name for [`InlineParserContext`].
 #[deprecated(since = "1.3.0", note = "Use `InlineParserContext` instead")]
 pub type InlineParseContext = InlineParserContext;

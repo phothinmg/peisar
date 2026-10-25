@@ -90,6 +90,10 @@ assert_eq!(html, "<h1>Hello <strong>world</strong></h1>\n");
 - [WASM guide][nodejs-wasm]
 - [Node.js API reference][nodejs-api]
 
+### Browser usage
+
+- [Browser example][browser-example]
+
 ### Rust usage
 
 - [Rust overview][rust-guide]
@@ -153,6 +157,7 @@ Security policy: [SECURITY.md](SECURITY.md)
 [nodejs-vite]: https://github.com/phothinmg/peisar/blob/main/docs/nodejs/vite.md
 [nodejs-wasm]: https://github.com/phothinmg/peisar/blob/main/docs/nodejs/wasm.md
 [nodejs-api]: https://github.com/phothinmg/peisar/blob/main/docs/nodejs/apis.md
+[browser-example]: https://github.com/phothinmg/peisar/tree/main/examples/browser
 [rust-guide]: https://github.com/phothinmg/peisar/blob/main/docs/rust/README.md
 [rust-api]: https://github.com/phothinmg/peisar/blob/main/docs/rust/apis.md
 [benchmarks]: https://github.com/phothinmg/peisar/blob/main/docs/benchmarks.md

@@ -124,6 +124,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v7
+      # `peisar.js` is a separate TypeScript implementation of the same API,
+      # not a browser build of the Rust native code. Check out its source repo.
       - uses: actions/checkout@v7
         with:
           repository: suseejs/peisar_browser
@@ -150,32 +152,33 @@ jobs:
         run: npm run build
         working-directory: peisar_browser
 
+      # Upload the TypeScript browser bundle as a separate release asset.
       - name: Upload browser bundle to GitHub Release
         run: gh release upload "$GITHUB_REF_NAME" browser/peisar.js --clobber
         env:
           GH_TOKEN: ${{ github.token }}
 
-      # 0. Generate JS binding (index.js) and type declarations (index.d.ts)
+      # 2. Generate JS binding (index.js) and type declarations (index.d.ts)
       #    for the root package — these are needed at publish time but are
       #    not uploaded as build artifacts (only *.node files are).
       - name: Generate JS binding & types
         run: npm run build
-      # 1. Download compiled artifacts from the build matrix
+      # 3. Download compiled artifacts from the build matrix
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
           path: artifacts
           digest-mismatch: warn
 
-      # 2. Generate target platform package directories under /npm
+      # 4. Generate target platform package directories under /npm
       - name: Scaffolding platform package dirs
         run: npx napi create-npm-dirs --config-path napi.config.json
 
-      # 3. Move binaries from artifacts folder into target /npm dirs
+      # 5. Move binaries from artifacts folder into target /npm dirs
       - name: Distribute build artifacts to npm dirs
         run: npx napi artifacts --config-path napi.config.json
 
-      # 3b. Ensure package.json version matches the release tag so we never
+      # 5a. Ensure package.json version matches the release tag so we never
       #     accidentally publish a stale version from a mistagged commit.
       - name: Sync version from release tag
         if: github.event.release.tag_name != ''
@@ -196,7 +199,7 @@ jobs:
             }
           "
 
-      # 4. Sync package versions across root and /npm platform packages
+      # 6. Sync package versions across root and /npm platform packages
       #    --gh-release-id targets the release that triggered this workflow,
       #    so napi uploads the .node binaries to *your* release instead of
       #    creating a second v-prefixed release/tag.
@@ -206,7 +209,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      # 5. Publish platform packages and root package to registry
+      # 7. Publish platform packages and root package to registry
       - name: Publish to npm
         run: |
           npm config set provenance true

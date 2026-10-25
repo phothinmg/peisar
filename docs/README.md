@@ -15,6 +15,11 @@ they can be updated between npm and crates.io releases.
 - [WASM environments](./nodejs/wasm.md)
 - [Node.js API reference](./nodejs/apis.md)
 
+### Browser
+
+- [Browser usage example](../examples/browser/example.md)
+- [Runnable browser example](../examples/browser/index.html)
+
 ### Rust
 
 - [Overview](./rust/README.md)

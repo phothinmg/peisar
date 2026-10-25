@@ -13,7 +13,7 @@ use crate::markdown::ast::tokens::Attributes;
 ///
 /// ```ignore
 /// // The attribute block in `{: #hero .card data-role="note"}` parses to:
-/// assert_eq!(attrs.to_html_attr_string(),
+/// assert_eq!(attrs.parse_attrs(),
 ///            "id=\"hero\" class=\"card\" data-role=\"note\"");
 /// ```
 pub fn parse_attrs(s: &str) -> Option<(Attributes, usize)> {
