@@ -14,6 +14,11 @@ separate JavaScript source tree.
 ```text
 src/
 ├── frontmatter/mod.rs                 YAML front-matter extraction
+├── cache/
+│   ├── mod.rs                          PeisarCache, watcher, archive coordination
+│   ├── lru.rs                          bounded in-memory cache tier
+│   ├── archive.rs                      disk shards and map.json index
+│   └── obj_cache.rs                    page/asset objects and derived values
 ├── markdown/
 │   ├── ast/
 │   │   ├── tokens/                    AST nodes, spans, and attributes
@@ -63,3 +68,5 @@ produces the published package files (`index.cjs`, `index.mjs`,
   `u64`/`usize`); clamp in the resolved accessors.
 - Rust consumers use module paths such as `peisar::markdown::ast::Document`,
   not root re-exports.
+- `PeisarCache` is exposed from `peisar::cache`; its cache implementation,
+  watcher, and archive tests are colocated in `src/cache/`.

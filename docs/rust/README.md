@@ -33,8 +33,10 @@ The public Rust surface is module-based:
 | `peisar::markdown::config` | `PeisarOptions` shared with the Node-facing wrapper |
 | `peisar::markdown::html` | AST-to-HTML rendering |
 | `peisar::markdown::peisar` | The high-level `Peisar` wrapper type |
+| `peisar::cache` | Filesystem-backed Markdown and asset cache |
 
-Detailed items and examples are in the [Rust API reference](./apis.md).
+Detailed items and examples, including
+[`cache::PeisarCache`](./apis.md#peisarcache), are in the Rust API reference.
 
 ## Parse and render
 
