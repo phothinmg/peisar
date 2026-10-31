@@ -39,6 +39,8 @@ jobs:
 
       - name: Generate Wiki
         run: repowiki scan https://github.com/phothinmg/peisar --site
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v6
