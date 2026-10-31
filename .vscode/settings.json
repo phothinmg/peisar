@@ -2,6 +2,9 @@
     "[markdown]": {
     "editor.formatOnSave": false
 },
+"files.associations": {
+    ".repowikiignore": "plaintext"
+},
     "cSpell.words": [
         "autolinks",
         "inlines",
