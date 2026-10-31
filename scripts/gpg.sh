@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# This file is only run to fix gpg key db lock
-# for package author local host system (Fedora Workstation)
+# Fixing a GPG key database lock
 
-# Do not run npm run fix:gpg in other systems.
+# `npm run fix:gpg` is a local recovery script for the package author's Fedora
+# Workstation. It fixes a GPG key database lock by restarting the GPG agent and
+# removing the lock file. Do not run this command on other systems.
 
 gpgconf --kill gpg-agent
 

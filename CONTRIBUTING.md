@@ -71,6 +71,12 @@ cargo fmt              # formatting (required by the commit helper)
 Node.js integration tests against it — it covers both the build and the test
 step after N-API-visible Rust types or methods change.
 
+### Fixing a GPG key database lock
+
+`npm run fix:gpg` is a local recovery script for the package author's Fedora
+Workstation. It fixes a GPG key database lock by restarting the GPG agent and
+removing the lock file. Do not run this command on other systems.
+
 ## Change guidelines
 
 - Keep AST shape changes consistent across `src/markdown/ast/tokens/token.rs`,
