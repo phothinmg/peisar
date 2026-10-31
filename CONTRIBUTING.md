@@ -23,24 +23,24 @@ Peisar builds as both a Rust library (`rlib`) and a native Node.js addon
 
 ```text
 src/
+├── cache/                    filesystem cache, watcher, and disk archive
 ├── frontmatter/mod.rs        YAML front-matter extraction
 ├── markdown/
 │   ├── ast/
 │   │   ├── tokens/           AST nodes, spans, and attributes
-│   │   ├── parsers/          block, inline, hooks, visitor traversal
-│   │   ├── js.rs             N-API callback adapters
-│   │   └── mod.rs            PeisarAst holder
+│   │   ├── parsers/          block, inline, plugin, and traversal logic
+│   │   ├── control.rs        JavaScript plugin adapters
+│   │   └── mod.rs            PeisarAst holder and public AST API
 │   ├── config/mod.rs         PeisarOptions resolution
 │   ├── html/mod.rs           AST-to-HTML renderer
 │   └── peisar/mod.rs         exported N-API Peisar class
 └── lib.rs                    public module declarations
 
-scripts/peisar.test.txt     Node.js integration tests
+scripts/peisar.test.txt       Node.js integration tests
 
 `npm run js:test` builds the addon in a temporary directory and runs the Node
 integration tests there; the file is kept as `.txt` so `node --test` does not
 auto-discover it.
-tests/readme_paths.rs         compile-checks README API paths
 skills/                       Agent Skills for AI coding tools
 ```
 
@@ -74,22 +74,25 @@ step after N-API-visible Rust types or methods change.
 ## Change guidelines
 
 - Keep AST shape changes consistent across `src/markdown/ast/tokens/token.rs`,
-  the N-API types in `ast/js.rs`, renderer handling in `html/mod.rs`, and tests.
-- Parser hooks live in `ast/parsers/hooks.rs`. Both block and inline hooks must
+  the N-API adapters in `src/markdown/ast/control.rs`, renderer handling in
+  `src/markdown/html/mod.rs`, and tests.
+- Parser hooks live in `src/markdown/ast/parsers/plugin.rs`. Both block and inline hooks must
   preserve their consume-or-decline semantics:
   - `parseBlock` must consume at least one line
   - `parseInline` must consume at least one character; a missing or zero
     `consumed` value declines the result
-- Visitor traversal lives in `ast/parsers/visitor.rs`. Replacements are
+- Visitor traversal also lives in `src/markdown/ast/parsers/plugin.rs`. Replacements are
   intentionally not traversed again — preserve this behavior.
-- `PeisarAst` owns raw Markdown, front matter, hooks, and visitors. Adding a
-  parser hook reparses the raw Markdown; document reads apply registered
-  visitors.
+- Prefer `usePlugin()` for Node.js integrations; `useVisitor()` and
+  `useParser()` are deprecated compatibility aliases. Adding a parser hook
+  reparses the original Markdown, and visitor changes are applied once per
+  plugin registration.
+- `PeisarCache` behavior and its watcher/archive lifecycle live under
+  `src/cache/`. Keep its Rust and Node.js APIs aligned.
 - Add tests for new behavior: Rust parser tests in
   `src/markdown/ast/tests.rs`, Node.js tests in
-  `scripts/peisar.test.txt`. If you document a new API path in
-  `README.md`, also add it to `tests/readme_paths.rs` so it stays
-  compile-checked.
+  `scripts/peisar.test.txt`; cache tests are colocated in
+  `src/cache/mod.rs`.
 
 ## Commit message convention
 

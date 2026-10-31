@@ -39,8 +39,8 @@
 //!
 //! # fn main() -> std::io::Result<()> {
 //! let mut cache = PeisarCache::with_config(PeisarCacheConfig {
-//!     entry_dir: "contents".into(),
-//!     assets_dir: Some("public".into()),
+//!     entry_dir: Some("contents".into()),
+//!     assets_dir: Some("contents/public".into()),
 //!     ..PeisarCacheConfig::default()
 //! })?;
 //! for path in cache.markdown_files() {
@@ -264,11 +264,17 @@ pub enum CachedContent {
 #[derive(Debug, Clone)]
 pub struct PeisarCacheConfig {
     /// Entry directory holding the markdown files (absolute, or relative
-    /// to the current working directory).
-    pub entry_dir: String,
-    /// Optional assets directory (defaults to `public` under the cwd when
-    /// omitted).
+    /// to the current working directory). Defaults to the current directory.
+    pub entry_dir: Option<String>,
+    /// Optional assets directory, resolved from the current working
+    /// directory and required to be inside `entry_dir`.
     pub assets_dir: Option<String>,
+    /// Theme package name resolved from `node_modules` under the current
+    /// working directory. Defaults to `"peisar-default"`.
+    pub theme: Option<String>,
+    /// Layouts accepted during Markdown discovery. Defaults are always
+    /// included, with duplicate values removed.
+    pub layouts: Option<Vec<String>>,
     /// Markdown parsing/rendering options applied to every page render
     /// (GFM/Kramdown toggles, `fragment`, title, …). Custom visitors and
     /// parsers are registered separately via `useVisitor` / `useParser`.
@@ -289,8 +295,10 @@ pub struct PeisarCacheConfig {
 impl Default for PeisarCacheConfig {
     fn default() -> Self {
         Self {
-            entry_dir: "contents".to_string(),
+            entry_dir: None,
             assets_dir: None,
+            theme: Some(DEFAULT_THEME_NAME.to_string()),
+            layouts: None,
             markdown: None,
             memory: None,
             archive: None,
@@ -299,6 +307,37 @@ impl Default for PeisarCacheConfig {
             cache_dir: None,
         }
     }
+}
+
+/// Default theme package name used by [`PeisarCache`].
+pub const DEFAULT_THEME_NAME: &str = "peisar-default";
+
+/// Theme metadata loaded from `theme.config.json`.
+#[cfg_attr(feature = "npm", napi(object))]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+pub struct PeisarThemeConfig {
+    pub name: String,
+    pub version: String,
+    #[serde(default)]
+    pub author: Option<String>,
+    #[serde(default = "default_theme_layouts_dir")]
+    pub layouts_dir: String,
+    #[serde(default = "default_theme_includes_dir")]
+    pub includes_dir: String,
+    #[serde(default = "default_theme_assets_dir")]
+    pub assets_dir: String,
+}
+
+fn default_theme_layouts_dir() -> String {
+    "_layouts".to_string()
+}
+
+fn default_theme_includes_dir() -> String {
+    "_indluces".to_string()
+}
+
+fn default_theme_assets_dir() -> String {
+    "_assets".to_string()
 }
 
 /// LRU budgets for the memory tier.
@@ -477,6 +516,10 @@ pub struct PeisarCache {
     watch_keep_alive: Option<KeepAlive>,
     entry_dir: PathBuf,
     assets_dir: Option<PathBuf>,
+    theme_path: PathBuf,
+    theme_config: PeisarThemeConfig,
+    theme_assets_dir: PathBuf,
+    markdown_layouts: HashSet<String>,
     change_callbacks: ChangeCallbacks,
     /// Hosting/baseUrl configuration.
     hosting: BaseDirInfo,
@@ -592,6 +635,55 @@ fn fm_string_list(fm: Option<&serde_json::Value>, key: &str) -> Option<Vec<Strin
     )
 }
 
+fn markdown_file_for_layouts(path: &Path, layouts: &HashSet<String>) -> io::Result<Option<String>> {
+    let text = fs::read_to_string(path)?;
+    let parsed = frontmatter(text.clone()).map_err(|error| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "failed to parse front matter for '{}': {error}",
+                path.display()
+            ),
+        )
+    })?;
+    let matches_layout = parsed
+        .yaml_data()
+        .and_then(|metadata| metadata.get("layout"))
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|layout| layouts.contains(layout));
+    Ok(matches_layout.then_some(text))
+}
+
+fn collect_markdown_content(
+    entry_dir: &Path,
+    layouts: &HashSet<String>,
+) -> io::Result<HashMap<PathBuf, String>> {
+    let mut markdown = HashMap::new();
+    for path in collect_markdown_files(entry_dir)? {
+        if let Some(text) = markdown_file_for_layouts(&path, layouts)? {
+            markdown.insert(path, text);
+        }
+    }
+    Ok(markdown)
+}
+
+fn collect_asset_content(assets_dir: &Path) -> io::Result<HashMap<PathBuf, CachedContent>> {
+    let mut assets = HashMap::new();
+    for path in collect_asset_files(assets_dir)? {
+        let is_binary = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|ext| ASSET_BINARY_EXTENSIONS.contains(&ext.to_lowercase().as_str()));
+        let content = if is_binary {
+            CachedContent::Binary(fs::read(&path)?)
+        } else {
+            CachedContent::Text(fs::read_to_string(&path)?)
+        };
+        assets.insert(path, content);
+    }
+    Ok(assets)
+}
+
 /// Base64 encode bytes (standard alphabet with padding) without a
 /// dependency — used for `AssetsObject.raw` of binary assets.
 fn binary_to_base64(bytes: &[u8]) -> String {
@@ -620,7 +712,7 @@ fn binary_to_base64(bytes: &[u8]) -> String {
 
 #[cfg_attr(feature = "npm", napi)]
 impl PeisarCache {
-    /// JS: `new PeisarCache(entryDir, assetsDir?, options?)`.
+    /// JS: `new PeisarCache(entryDir?, assetsDir?, options?)`.
     ///
     /// `options` configures markdown parsing (`fragment`, GFM, …), archive
     /// thresholds, hosting resolution, and the output directory. Custom
@@ -629,13 +721,15 @@ impl PeisarCache {
     #[cfg(feature = "npm")]
     #[napi(constructor)]
     pub fn new_js(
-        entry_dir: String,
+        entry_dir: Option<String>,
         assets_dir: Option<String>,
         options: Option<PeisarCacheJsOptions>,
     ) -> Result<Self> {
         let mut cache = PeisarCache::with_config(PeisarCacheConfig {
             entry_dir,
             assets_dir,
+            theme: options.as_ref().and_then(|o| o.theme.clone()),
+            layouts: options.as_ref().and_then(|o| o.layouts.clone()),
             markdown: options.as_ref().and_then(|o| o.markdown.clone()),
             archive: options.as_ref().and_then(|o| o.archive),
             hosting: options.as_ref().and_then(|o| o.hosting.clone()),
@@ -664,37 +758,129 @@ impl PeisarCache {
     /// size/interval flush (or explicitly via [`Self::flush`]).
     pub fn with_config(config: PeisarCacheConfig) -> io::Result<Self> {
         let cwd = env::current_dir()?;
+        let theme_name = config.theme.as_deref().unwrap_or(DEFAULT_THEME_NAME);
+        let theme_name_path = Path::new(theme_name);
+        if theme_name.is_empty()
+            || theme_name_path.is_absolute()
+            || theme_name_path.components().any(|component| {
+                matches!(
+                    component,
+                    std::path::Component::ParentDir
+                        | std::path::Component::RootDir
+                        | std::path::Component::Prefix(_)
+                )
+            })
+        {
+            let message = format!("invalid theme package name '{theme_name}'");
+            eprintln!("PeisarCache configuration error: {message}");
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, message));
+        }
+        let theme_path = cwd.join("node_modules").join(theme_name_path);
+        if !theme_path.is_dir() {
+            let message = format!(
+                "theme package '{}' does not exist or is not a directory",
+                theme_path.display()
+            );
+            eprintln!("PeisarCache configuration error: {message}");
+            return Err(io::Error::new(io::ErrorKind::NotFound, message));
+        }
+        let theme_config_path = theme_path.join("theme.config.json");
+        let theme_config_text = fs::read_to_string(&theme_config_path).map_err(|error| {
+            let message = format!(
+                "failed to read theme configuration '{}': {error}",
+                theme_config_path.display()
+            );
+            eprintln!("PeisarCache configuration error: {message}");
+            io::Error::new(error.kind(), message)
+        })?;
+        let theme_config: PeisarThemeConfig =
+            serde_json::from_str(&theme_config_text).map_err(|error| {
+                let message = format!(
+                    "invalid theme configuration '{}': {error}",
+                    theme_config_path.display()
+                );
+                eprintln!("PeisarCache configuration error: {message}");
+                io::Error::new(io::ErrorKind::InvalidData, message)
+            })?;
+        let theme_assets_dir = theme_path.join(&theme_config.assets_dir);
+        if theme_assets_dir.exists() && !theme_assets_dir.is_dir() {
+            let message = format!(
+                "theme assets path '{}' is not a directory",
+                theme_assets_dir.display()
+            );
+            eprintln!("PeisarCache configuration error: {message}");
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, message));
+        }
         // Resolve the entry dir to an absolute path: watcher events carry
         // absolute paths, so the `is_markdown` prefix check needs an
         // absolute entry_dir even when JS passes a relative one.
         let entry_dir = {
-            let d = Path::new(&config.entry_dir);
+            let d = Path::new(config.entry_dir.as_deref().unwrap_or("."));
             if d.is_absolute() {
                 d.to_path_buf()
             } else {
                 cwd.join(d)
             }
         };
+        if !MARKDOWN_EXTENSIONS
+            .iter()
+            .any(|ext| entry_dir.join(format!("index.{ext}")).is_file())
+        {
+            let message = format!(
+                "entry directory '{}' must contain an index file with a supported Markdown extension",
+                entry_dir.display()
+            );
+            eprintln!("PeisarCache configuration error: {message}");
+            return Err(io::Error::new(io::ErrorKind::NotFound, message));
+        }
+        let entry_dir = fs::canonicalize(&entry_dir)?;
 
-        // Assets default to `public` under the cwd when omitted.
+        // Assets are resolved from cwd and must remain inside entry_dir.
         let resolved_assets: Option<PathBuf> = match &config.assets_dir {
             Some(p) => {
                 let pbuf = PathBuf::from(p);
-                Some(if pbuf.is_absolute() {
+                let path = if pbuf.is_absolute() {
                     pbuf
                 } else {
                     cwd.join(pbuf)
-                })
-            }
-            None => {
-                let p = cwd.join("public");
-                if p.exists() && p.is_dir() {
-                    Some(p)
-                } else {
-                    None
+                };
+                let resolved = match fs::canonicalize(&path) {
+                    Ok(resolved) if resolved.is_dir() => resolved,
+                    Ok(_) => {
+                        let message =
+                            format!("assets directory '{}' is not a directory", path.display());
+                        eprintln!("PeisarCache configuration error: {message}");
+                        return Err(io::Error::new(io::ErrorKind::InvalidInput, message));
+                    }
+                    Err(error) => {
+                        let message = format!(
+                            "assets directory '{}' does not exist or cannot be accessed: {error}",
+                            path.display()
+                        );
+                        eprintln!("PeisarCache configuration error: {message}");
+                        return Err(io::Error::new(error.kind(), message));
+                    }
+                };
+                if !resolved.starts_with(&entry_dir) {
+                    let message = format!(
+                        "assets directory '{}' must be inside entry directory '{}'",
+                        resolved.display(),
+                        entry_dir.display()
+                    );
+                    eprintln!("PeisarCache configuration error: {message}");
+                    return Err(io::Error::new(io::ErrorKind::InvalidInput, message));
                 }
+                Some(resolved)
             }
+            None => None,
         };
+        let mut markdown_layouts: HashSet<String> = ["default", "docs", "blog", "page", "home"]
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        if let Some(layouts) = config.layouts {
+            markdown_layouts.extend(layouts);
+        }
 
         // Markdown options for every page render.
         let resolved = get_options(config.markdown.clone());
@@ -730,28 +916,14 @@ impl PeisarCache {
 
         // Discover and load markdown + assets into the memory tier.
         let mut cache_map: HashMap<PathBuf, CachedContent> = HashMap::new();
-        for f in collect_markdown_files(&entry_dir)? {
-            if let Ok(text) = fs::read_to_string(&f) {
-                cache_map.insert(f, CachedContent::Text(text));
-            }
+        for (path, text) in collect_markdown_content(&entry_dir, &markdown_layouts)? {
+            cache_map.insert(path, CachedContent::Text(text));
         }
-        if let Some(ref a_dir) = resolved_assets
-            && let Ok(asset_files) = collect_asset_files(a_dir)
-        {
-            for f in asset_files {
-                let is_binary = f
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .map(|s| ASSET_BINARY_EXTENSIONS.contains(&s.to_lowercase().as_str()))
-                    .unwrap_or(false);
-                if is_binary {
-                    if let Ok(bytes) = fs::read(&f) {
-                        cache_map.insert(f, CachedContent::Binary(bytes));
-                    }
-                } else if let Ok(text) = fs::read_to_string(&f) {
-                    cache_map.insert(f, CachedContent::Text(text));
-                }
-            }
+        if let Some(ref a_dir) = resolved_assets {
+            cache_map.extend(collect_asset_content(a_dir)?);
+        }
+        if theme_assets_dir.is_dir() {
+            cache_map.extend(collect_asset_content(&theme_assets_dir)?);
         }
         memory.replace_all(cache_map.clone());
 
@@ -775,6 +947,10 @@ impl PeisarCache {
             watch_keep_alive: None,
             entry_dir,
             assets_dir: resolved_assets,
+            theme_path,
+            theme_config,
+            theme_assets_dir,
+            markdown_layouts,
             change_callbacks: ChangeCallbacks::default(),
             hosting,
             out_dir,
@@ -786,7 +962,7 @@ impl PeisarCache {
     /// the NAPI boundary).
     pub fn new<P: AsRef<Path>>(entry_dir: P) -> io::Result<Self> {
         PeisarCache::with_config(PeisarCacheConfig {
-            entry_dir: entry_dir.as_ref().to_string_lossy().to_string(),
+            entry_dir: Some(entry_dir.as_ref().to_string_lossy().to_string()),
             ..Default::default()
         })
     }
@@ -840,6 +1016,8 @@ impl PeisarCache {
         let archive = self.archive.clone();
         let entry_dir = self.entry_dir.clone();
         let assets_dir = self.assets_dir.clone();
+        let theme_assets_dir = self.theme_assets_dir.clone();
+        let markdown_layouts = self.markdown_layouts.clone();
         let change_callbacks = self.change_callbacks.clone();
         // Pretty logs render paths relative to the project root (the
         // cwd the cache was constructed in).
@@ -881,33 +1059,33 @@ impl PeisarCache {
                             // cache tiers instead of leaving stale entries.
                             if path.is_dir() || !path.exists() {
                                 let mut new_map: HashMap<PathBuf, CachedContent> = HashMap::new();
-                                if let Ok(files) = collect_markdown_files(&entry_dir) {
-                                    for f in files {
-                                        if let Ok(text) = fs::read_to_string(&f) {
-                                            new_map.insert(f, CachedContent::Text(text));
+                                match collect_markdown_content(&entry_dir, &markdown_layouts) {
+                                    Ok(files) => {
+                                        new_map.extend(
+                                            files.into_iter().map(|(path, text)| {
+                                                (path, CachedContent::Text(text))
+                                            }),
+                                        );
+                                    }
+                                    Err(error) => {
+                                        eprintln!("watch error collecting markdown: {error}");
+                                        continue;
+                                    }
+                                }
+                                if let Some(ref a_dir) = assets_dir {
+                                    match collect_asset_content(a_dir) {
+                                        Ok(assets) => new_map.extend(assets),
+                                        Err(error) => {
+                                            eprintln!("watch error collecting assets: {error}");
+                                            continue;
                                         }
                                     }
                                 }
-                                if let Some(ref a_dir) = assets_dir
-                                    && let Ok(asset_files) = collect_asset_files(a_dir)
-                                {
-                                    for f in asset_files {
-                                        let ext_l = f
-                                            .extension()
-                                            .and_then(|e| e.to_str())
-                                            .map(|s| s.to_lowercase())
-                                            .unwrap_or_default();
-                                        if ASSET_EXTENSIONS.contains(&ext_l.as_str()) {
-                                            let is_binary =
-                                                ASSET_BINARY_EXTENSIONS.contains(&ext_l.as_str());
-                                            if is_binary {
-                                                if let Ok(bytes) = fs::read(&f) {
-                                                    new_map.insert(f, CachedContent::Binary(bytes));
-                                                }
-                                            } else if let Ok(text) = fs::read_to_string(&f) {
-                                                new_map.insert(f, CachedContent::Text(text));
-                                            }
-                                        }
+                                match collect_asset_content(&theme_assets_dir) {
+                                    Ok(assets) => new_map.extend(assets),
+                                    Err(error) => {
+                                        eprintln!("watch error collecting theme assets: {error}");
+                                        continue;
                                     }
                                 }
                                 memory.replace_all(new_map.clone());
@@ -920,7 +1098,29 @@ impl PeisarCache {
                             {
                                 let ext_l = ext.to_lowercase();
                                 if MARKDOWN_EXTENSIONS.contains(&ext_l.as_str())
-                                    || ASSET_EXTENSIONS.contains(&ext_l.as_str())
+                                    && path.starts_with(&entry_dir)
+                                {
+                                    match markdown_file_for_layouts(&path, &markdown_layouts) {
+                                        Ok(Some(text)) => {
+                                            let content = CachedContent::Text(text);
+                                            memory.insert(path.clone(), content.clone());
+                                            archive.upsert(path, content);
+                                        }
+                                        Ok(None) => {
+                                            memory.remove(&path);
+                                            archive.remove(path);
+                                        }
+                                        Err(error) => {
+                                            eprintln!("watch error reading markdown: {error}");
+                                            memory.remove(&path);
+                                            archive.remove(path);
+                                        }
+                                    }
+                                } else if ASSET_EXTENSIONS.contains(&ext_l.as_str())
+                                    && (assets_dir
+                                        .as_ref()
+                                        .is_some_and(|dir| path.starts_with(dir))
+                                        || path.starts_with(&theme_assets_dir))
                                 {
                                     let is_binary =
                                         ASSET_BINARY_EXTENSIONS.contains(&ext_l.as_str());
@@ -955,6 +1155,12 @@ impl PeisarCache {
         if let Some(a) = &self.assets_dir {
             watcher
                 .watch(a, RecursiveMode::Recursive)
+                .map_err(|e| io::Error::other(format!("notify::watch error: {e}")))?;
+        }
+
+        if self.theme_assets_dir.is_dir() {
+            watcher
+                .watch(&self.theme_assets_dir, RecursiveMode::Recursive)
                 .map_err(|e| io::Error::other(format!("notify::watch error: {e}")))?;
         }
 
@@ -1171,7 +1377,11 @@ impl PeisarCache {
     /// Build one [`AssetsObject`] for an asset path (either tier).
     pub fn asset_object_for(&self, path: &Path) -> Option<AssetsObject> {
         let content = self.get(path)?;
-        let base_dir = self.assets_dir.as_deref().unwrap_or(&self.entry_dir);
+        let base_dir = if path.starts_with(&self.theme_assets_dir) {
+            &self.theme_assets_dir
+        } else {
+            self.assets_dir.as_deref().unwrap_or(&self.entry_dir)
+        };
         let fname = path
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
@@ -1202,6 +1412,18 @@ impl PeisarCache {
     #[cfg_attr(feature = "npm", napi)]
     pub fn get_asset(&self, input_path: String) -> Option<AssetsObject> {
         self.asset_object_for(Path::new(&input_path))
+    }
+
+    /// Absolute path to the configured theme package.
+    #[cfg_attr(feature = "npm", napi)]
+    pub fn theme_path(&self) -> String {
+        self.theme_path.to_string_lossy().to_string()
+    }
+
+    /// Parsed theme metadata exposed as an object to Rust and JavaScript.
+    #[cfg_attr(feature = "npm", napi)]
+    pub fn theme_config(&self) -> PeisarThemeConfig {
+        self.theme_config.clone()
     }
 
     // ===== Archive-tier introspection =====
@@ -1331,6 +1553,11 @@ impl PeisarCache {
 #[cfg(feature = "npm")]
 #[napi(object)]
 pub struct PeisarCacheJsOptions {
+    /// Theme package name resolved from `node_modules`; defaults to
+    /// `"peisar-default"`.
+    pub theme: Option<String>,
+    /// Additional layouts accepted during Markdown discovery.
+    pub layouts: Option<Vec<String>>,
     /// Markdown parsing/rendering options (`fragment`, GFM, …).
     pub markdown: Option<PeisarOptions>,
     /// Disk-archive thresholds (shard size / flush interval).
@@ -1378,6 +1605,12 @@ mod tests {
             fs::remove_dir_all(&tmp)?;
         }
         fs::create_dir_all(&tmp)?;
+        let default_theme = tmp.join("node_modules").join(DEFAULT_THEME_NAME);
+        fs::create_dir_all(default_theme.join("_assets"))?;
+        fs::write(
+            default_theme.join("theme.config.json"),
+            r#"{"name":"peisar-default","version":"1.0.0"}"#,
+        )?;
         let orig = env::current_dir()?;
         Ok((tmp, orig))
     }
@@ -1397,12 +1630,207 @@ mod tests {
         let _ = fs::remove_dir_all(tmp);
     }
 
+    #[test]
+    fn default_entry_and_layout_filter() -> io::Result<()> {
+        let _guard = TEST_CWD_LOCK.lock().unwrap();
+        let (tmp, orig) = make_tmp("layoutfilter")?;
+        env::set_current_dir(&tmp)?;
+        write_md(&tmp, "index.md", "---\nlayout: default\n---\n# Home\n");
+        write_md(&tmp, "docs/page.md", "---\nlayout: docs\n---\n# Docs\n");
+        write_md(&tmp, "blog/post.md", "---\nlayout: blog\n---\n# Blog\n");
+        write_md(&tmp, "custom.md", "---\nlayout: custom\n---\n# Custom\n");
+        write_md(&tmp, "missing-layout.md", "# No layout\n");
+
+        let cache = PeisarCache::with_config(PeisarCacheConfig {
+            layouts: Some(vec!["custom".into(), "custom".into()]),
+            ..Default::default()
+        })?;
+
+        assert_eq!(cache.markdown_layouts.len(), 6);
+        assert_eq!(cache.markdown_files().len(), 4);
+        assert!(
+            cache
+                .markdown_files()
+                .iter()
+                .any(|path| path.ends_with("custom.md"))
+        );
+        assert!(
+            !cache
+                .markdown_files()
+                .iter()
+                .any(|path| path.ends_with("missing-layout.md"))
+        );
+
+        restore(orig, tmp);
+        Ok(())
+    }
+
+    #[test]
+    fn theme_config_and_assets_are_loaded() -> io::Result<()> {
+        let _guard = TEST_CWD_LOCK.lock().unwrap();
+        let (tmp, orig) = make_tmp("theme")?;
+        env::set_current_dir(&tmp)?;
+        write_md(
+            &tmp,
+            "contents/index.md",
+            "---\nlayout: home\n---\n# Home\n",
+        );
+        let theme_dir = tmp.join("node_modules/custom-theme");
+        fs::create_dir_all(theme_dir.join("_assets/css"))?;
+        fs::write(
+            theme_dir.join("theme.config.json"),
+            r#"{"name":"custom-theme","version":"2.0.0"}"#,
+        )?;
+        fs::write(theme_dir.join("_assets/css/theme.css"), "body {}")?;
+
+        let cache = PeisarCache::with_config(PeisarCacheConfig {
+            entry_dir: Some("contents".into()),
+            theme: Some("custom-theme".into()),
+            ..Default::default()
+        })?;
+
+        let config = cache.theme_config();
+        assert_eq!(config.name, "custom-theme");
+        assert_eq!(config.version, "2.0.0");
+        assert_eq!(config.author, None);
+        assert_eq!(config.layouts_dir, "_layouts");
+        assert_eq!(config.includes_dir, "_indluces");
+        assert_eq!(config.assets_dir, "_assets");
+        assert_eq!(cache.theme_path(), theme_dir.to_string_lossy());
+        assert_eq!(cache.pages().len(), 1);
+        let assets = cache.assets();
+        assert_eq!(assets.len(), 1);
+        assert_eq!(assets[0].slug, "/css/theme.css");
+        assert_eq!(assets[0].raw, "body {}");
+
+        restore(orig, tmp);
+        Ok(())
+    }
+
+    #[test]
+    fn missing_theme_is_an_error() -> io::Result<()> {
+        let _guard = TEST_CWD_LOCK.lock().unwrap();
+        let (tmp, orig) = make_tmp("missingtheme")?;
+        env::set_current_dir(&tmp)?;
+        write_md(
+            &tmp,
+            "contents/index.md",
+            "---\nlayout: default\n---\n# Home\n",
+        );
+
+        let error = match PeisarCache::with_config(PeisarCacheConfig {
+            entry_dir: Some("contents".into()),
+            theme: Some("missing-theme".into()),
+            ..Default::default()
+        }) {
+            Err(error) => error,
+            Ok(_) => return Err(io::Error::other("missing theme unexpectedly succeeded")),
+        };
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
+        assert!(error.to_string().contains("theme package"));
+
+        restore(orig, tmp);
+        Ok(())
+    }
+
+    #[test]
+    fn missing_index_is_an_error() -> io::Result<()> {
+        let _guard = TEST_CWD_LOCK.lock().unwrap();
+        let (tmp, orig) = make_tmp("missingindex")?;
+        env::set_current_dir(&tmp)?;
+        fs::create_dir("contents")?;
+
+        let error = match PeisarCache::with_config(PeisarCacheConfig {
+            entry_dir: Some("contents".into()),
+            ..Default::default()
+        }) {
+            Err(error) => error,
+            Ok(_) => return Err(io::Error::other("missing index unexpectedly succeeded")),
+        };
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
+        assert!(error.to_string().contains("index"));
+
+        restore(orig, tmp);
+        Ok(())
+    }
+
+    #[test]
+    fn assets_must_exist_inside_entry_directory() -> io::Result<()> {
+        let _guard = TEST_CWD_LOCK.lock().unwrap();
+        let (tmp, orig) = make_tmp("assetvalidation")?;
+        env::set_current_dir(&tmp)?;
+        write_md(
+            &tmp,
+            "contents/index.md",
+            "---\nlayout: default\n---\n# Home\n",
+        );
+        fs::create_dir_all("contents/assets")?;
+        fs::create_dir("outside")?;
+
+        let missing = match PeisarCache::with_config(PeisarCacheConfig {
+            entry_dir: Some("contents".into()),
+            assets_dir: Some("contents/missing".into()),
+            ..Default::default()
+        }) {
+            Err(error) => error,
+            Ok(_) => return Err(io::Error::other("missing assets unexpectedly succeeded")),
+        };
+        assert_eq!(missing.kind(), io::ErrorKind::NotFound);
+
+        let outside = match PeisarCache::with_config(PeisarCacheConfig {
+            entry_dir: Some("contents".into()),
+            assets_dir: Some("outside".into()),
+            ..Default::default()
+        }) {
+            Err(error) => error,
+            Ok(_) => return Err(io::Error::other("outside assets unexpectedly succeeded")),
+        };
+        assert_eq!(outside.kind(), io::ErrorKind::InvalidInput);
+
+        restore(orig, tmp);
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_front_matter_is_a_collection_error() -> io::Result<()> {
+        let _guard = TEST_CWD_LOCK.lock().unwrap();
+        let (tmp, orig) = make_tmp("invalidfrontmatter")?;
+        env::set_current_dir(&tmp)?;
+        write_md(
+            &tmp,
+            "contents/index.md",
+            "---\nlayout: default\n---\n# Home\n",
+        );
+        write_md(
+            &tmp,
+            "contents/broken.md",
+            "---\nlayout: [\n---\n# Broken\n",
+        );
+
+        let error = match PeisarCache::with_config(PeisarCacheConfig {
+            entry_dir: Some("contents".into()),
+            ..Default::default()
+        }) {
+            Err(error) => error,
+            Ok(_) => {
+                return Err(io::Error::other(
+                    "invalid front matter unexpectedly succeeded",
+                ));
+            }
+        };
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+
+        restore(orig, tmp);
+        Ok(())
+    }
+
     #[cfg(not(feature = "npm"))]
     #[test]
     fn on_change_registers_a_rust_callback() -> io::Result<()> {
         let _guard = TEST_CWD_LOCK.lock().unwrap();
         let (tmp, orig) = make_tmp("change")?;
         env::set_current_dir(&tmp)?;
+        write_md(&tmp, "index.md", "---\nlayout: default\n---\n# Home\n");
 
         let cache = PeisarCache::new(&tmp)?;
         let received = Arc::new(Mutex::new(Vec::new()));
@@ -1428,13 +1856,18 @@ mod tests {
         let _guard = TEST_CWD_LOCK.lock().unwrap();
         let (tmp, orig) = make_tmp("memfirst")?;
         env::set_current_dir(&tmp)?;
-        write_md(&tmp, "docs/doc1.md", "---\ntitle: Test\n---\n# Hello\n");
+        write_md(&tmp, "docs/index.md", "---\nlayout: default\n---\n# Home\n");
+        write_md(
+            &tmp,
+            "docs/doc1.md",
+            "---\ntitle: Test\nlayout: default\n---\n# Hello\n",
+        );
 
         let cache = PeisarCache::new("docs")?;
 
         // Memory tier has the content immediately.
         let all = cache.all();
-        assert_eq!(all.len(), 1);
+        assert_eq!(all.len(), 2);
         let content = cache.get(&tmp.join("docs").join("doc1.md")).unwrap();
         assert!(matches!(content, CachedContent::Text(ref s) if s.contains("# Hello")));
 
@@ -1453,7 +1886,8 @@ mod tests {
         let _guard = TEST_CWD_LOCK.lock().unwrap();
         let (tmp, orig) = make_tmp("flush")?;
         env::set_current_dir(&tmp)?;
-        write_md(&tmp, "docs/a.md", "# A\n");
+        write_md(&tmp, "docs/index.md", "---\nlayout: default\n---\n# Home\n");
+        write_md(&tmp, "docs/a.md", "---\nlayout: default\n---\n# A\n");
 
         let cache = PeisarCache::new("docs")?;
         cache.flush();
@@ -1462,9 +1896,12 @@ mod tests {
         let map_str = fs::read_to_string(archive_dir.join("map.json"))?;
         let map: serde_json::Value = serde_json::from_str(&map_str).unwrap();
         assert_eq!(map["version"], 1);
-        assert!(map["files"]["docs/a.md"]["frontmatter"].is_null());
+        assert_eq!(
+            map["files"]["docs/a.md"]["frontmatter"]["layout"],
+            "default"
+        );
 
-        assert_eq!(cache.archived().len(), 1);
+        assert_eq!(cache.archived().len(), 2);
         assert!(archive_dir.join("shard-000001.bin").exists());
 
         restore(orig, tmp);
@@ -1481,10 +1918,15 @@ mod tests {
             "contents/index.md",
             "---\ntitle: Home Page\nlayout: custom\nsummary: hi there\ntags:\n  - a\n  - b\ndate: 2026-01-01\nauthor: someone\n---\n# Not the title\n\nBody\n",
         );
-        write_md(&tmp, "contents/docs/intro.md", "# Intro\n");
+        write_md(
+            &tmp,
+            "contents/docs/intro.md",
+            "---\nlayout: docs\n---\n# Intro\n",
+        );
 
         let cache = PeisarCache::with_config(PeisarCacheConfig {
-            entry_dir: "contents".into(),
+            entry_dir: Some("contents".into()),
+            layouts: Some(vec!["custom".into(), "custom".into()]),
             markdown: Some(PeisarOptions {
                 fragment: Some(true),
                 ..Default::default()
@@ -1525,8 +1967,7 @@ mod tests {
         assert_eq!(intro.title.as_deref(), Some("Intro"));
         assert_eq!(intro.slug, "/my-repo/docs/intro");
         assert_eq!(intro.out_file_path, "dist/docs/intro/index.html");
-        // layout defaults
-        assert_eq!(intro.layout, "default");
+        assert_eq!(intro.layout, "docs");
 
         restore(orig, tmp);
         Ok(())
@@ -1537,16 +1978,20 @@ mod tests {
         let _guard = TEST_CWD_LOCK.lock().unwrap();
         let (tmp, orig) = make_tmp("assets")?;
         env::set_current_dir(&tmp)?;
-        write_md(&tmp, "contents/index.md", "# Home\n");
-        fs::create_dir_all(tmp.join("public").join("img"))?;
+        write_md(
+            &tmp,
+            "contents/index.md",
+            "---\nlayout: default\n---\n# Home\n",
+        );
+        fs::create_dir_all(tmp.join("contents/public").join("img"))?;
         fs::write(
-            tmp.join("public").join("img").join("logo.png"),
+            tmp.join("contents/public").join("img").join("logo.png"),
             vec![1u8, 2, 3],
         )?;
 
         let cache = PeisarCache::with_config(PeisarCacheConfig {
-            entry_dir: "contents".into(),
-            assets_dir: Some("public".into()),
+            entry_dir: Some("contents".into()),
+            assets_dir: Some("contents/public".into()),
             ..Default::default()
         })?;
 
@@ -1571,15 +2016,19 @@ mod tests {
         let _guard = TEST_CWD_LOCK.lock().unwrap();
         let (tmp, orig) = make_tmp("evict")?;
         env::set_current_dir(&tmp)?;
-        write_md(&tmp, "docs/small.md", "# Small\n");
+        write_md(
+            &tmp,
+            "docs/index.md",
+            "---\nlayout: default\n---\n# Small\n",
+        );
         write_md(
             &tmp,
             "docs/big.md",
-            "# Big\nBody padding to exceed the budget.\n",
+            "---\nlayout: default\n---\n# Big\nBody padding to exceed the budget.\n",
         );
 
         let cache = PeisarCache::with_config(PeisarCacheConfig {
-            entry_dir: "docs".into(),
+            entry_dir: Some("docs".into()),
             memory: Some(MemoryConfig {
                 byte_budget: Some(10),
                 entry_budget: None,
@@ -1609,10 +2058,14 @@ mod tests {
         let _guard = TEST_CWD_LOCK.lock().unwrap();
         let (tmp, orig) = make_tmp("resolve")?;
         env::set_current_dir(&tmp)?;
-        write_md(&tmp, "contents/index.md", "# Home\n");
+        write_md(
+            &tmp,
+            "contents/index.md",
+            "---\nlayout: default\n---\n# Home\n",
+        );
 
         let cache = PeisarCache::with_config(PeisarCacheConfig {
-            entry_dir: "contents".into(),
+            entry_dir: Some("contents".into()),
             hosting: Some(HostingConfig {
                 provider: Some(HostingProvider::GithubPages),
                 repo: Some("my-repo".into()),
@@ -1636,6 +2089,7 @@ mod tests {
         let (tmp, orig) = make_tmp("gitignore")?;
         env::set_current_dir(&tmp)?;
         fs::write(".gitignore", format!("{DEFAULT_ARCHIVE_DIR_NAME}\n"))?;
+        write_md(&tmp, "docs/index.md", "---\nlayout: default\n---\n# Home\n");
         write_md(&tmp, "docs/doc2.md", "# No frontmatter\nContent\n");
 
         let _cache = PeisarCache::new("docs")?;
@@ -1658,10 +2112,11 @@ mod tests {
         let _guard = TEST_CWD_LOCK.lock().unwrap();
         let (tmp, orig) = make_tmp("mapjson")?;
         env::set_current_dir(&tmp)?;
+        write_md(&tmp, "docs/index.md", "---\nlayout: default\n---\n# Home\n");
         write_md(
             &tmp,
             "docs/tagged.md",
-            "---\ntitle: Tagged\ntags:\n  - x\n---\n# Tagged\n",
+            "---\ntitle: Tagged\nlayout: default\ntags:\n  - x\n---\n# Tagged\n",
         );
 
         let cache = PeisarCache::new("docs")?;
@@ -1736,7 +2191,11 @@ mod tests {
         let _guard = TEST_CWD_LOCK.lock().unwrap();
         let (tmp, orig) = make_tmp("classify")?;
         env::set_current_dir(&tmp)?;
-        write_md(&tmp, "docs/known.md", "# Known\n");
+        write_md(
+            &tmp,
+            "docs/index.md",
+            "---\nlayout: default\n---\n# Known\n",
+        );
 
         let cache = PeisarCache::new("docs")?;
 
@@ -1745,7 +2204,7 @@ mod tests {
             classify_change(
                 &cache.memory,
                 &cache.archive,
-                &tmp.join("docs").join("known.md")
+                &tmp.join("docs").join("index.md")
             ),
             "modify"
         );
@@ -1811,7 +2270,7 @@ mod tests {
         let _guard = TEST_CWD_LOCK.lock().unwrap();
         let (tmp, orig) = make_tmp("stopwatch")?;
         env::set_current_dir(&tmp)?;
-        write_md(&tmp, "docs/a.md", "# A\n");
+        write_md(&tmp, "docs/index.md", "---\nlayout: default\n---\n# A\n");
 
         let mut cache = PeisarCache::new("docs")?;
         // Stop without start, then stop twice — all must be no-ops.
@@ -1820,7 +2279,7 @@ mod tests {
         cache.stop_watching();
         cache.stop_watching();
         // The watcher is gone: the entry stayed in memory throughout.
-        assert!(cache.get(&tmp.join("docs").join("a.md")).is_some());
+        assert!(cache.get(&tmp.join("docs").join("index.md")).is_some());
 
         restore(orig, tmp);
         Ok(())
@@ -1831,7 +2290,8 @@ mod tests {
         let _guard = TEST_CWD_LOCK.lock().unwrap();
         let (tmp, orig) = make_tmp("watchremove")?;
         env::set_current_dir(&tmp)?;
-        write_md(&tmp, "docs/a.md", "# A\n");
+        write_md(&tmp, "docs/index.md", "---\nlayout: default\n---\n# Home\n");
+        write_md(&tmp, "docs/a.md", "---\nlayout: default\n---\n# A\n");
 
         let mut cache = PeisarCache::new("docs")?;
         let path = tmp.join("docs/a.md");

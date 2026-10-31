@@ -2,13 +2,12 @@
 
 ## Supported versions
 
-Only the latest release receives security fixes.
+Only the latest release series receives security fixes.
 
-| Version        | Supported   |
-| -------------- | ----------- |
-| 1.0.x (latest) | ✅ Yes      |
-| 0.3.x          | ✅ Yes      |
-| 0.2.x and older | ❌ No      |
+| Version         | Supported |
+| --------------- | --------- |
+| 1.2.x (latest)  | ✅ Yes    |
+| 1.1.x and older | ❌ No     |
 
 ## Trust model
 

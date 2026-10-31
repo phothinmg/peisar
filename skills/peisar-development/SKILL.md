@@ -22,8 +22,8 @@ src/
 ├── markdown/
 │   ├── ast/
 │   │   ├── tokens/                    AST nodes, spans, and attributes
-│   │   ├── parsers/                   block, inline, hooks, visitor traversal
-│   │   ├── js.rs                      N-API callback adapters
+│   │   ├── parsers/                   block, inline, plugin, visitor traversal
+│   │   ├── control.rs                 N-API plugin adapters
 │   │   └── mod.rs                     PeisarAst holder
 │   ├── config/mod.rs                  PeisarOptions resolution
 │   ├── html/mod.rs                    AST-to-HTML renderer
@@ -32,8 +32,9 @@ src/
 ```
 
 The Node.js `Peisar` class exposes `ast`, `html`, `frontmatter`, `astJson`,
-`useVisitor`, and `useParser`. The generated TypeScript declarations are
-output by the N-API build; do not hand-edit them.
+and `usePlugin()`. `useVisitor()` and `useParser()` are deprecated
+compatibility aliases. The generated TypeScript declarations are output by
+the N-API build; do not hand-edit them.
 
 ## Build and test
 
@@ -50,20 +51,19 @@ tests in `scripts/peisar.test.txt` — it covers both the build and the test
 step after changing N-API-visible Rust types or methods. `npm run build`
 produces the published package files (`index.cjs`, `index.mjs`,
 `index.d.ts`). Rust parser tests are in
-`src/markdown/ast/tests.rs`; documentation API paths are compile-checked in
-`tests/readme_paths.rs`.
+`src/markdown/ast/tests.rs`; cache tests are colocated in
+`src/cache/mod.rs`.
 
 ## Change guidelines
 
 - Change AST shapes consistently in `tokens/token.rs`, N-API types in
-  `ast/js.rs`, renderer handling in `html/mod.rs`, and tests.
-- Parser hooks are defined in `ast/parsers/hooks.rs`; both block and inline
+  `ast/control.rs`, renderer handling in `html/mod.rs`, and tests.
+- Parser hooks are defined in `ast/parsers/plugin.rs`; both block and inline
   hooks must preserve their consume-or-decline semantics.
-- Visitor traversal is in `ast/parsers/visitor.rs`. Replacements intentionally
+- Visitor traversal is in `ast/parsers/plugin.rs`. Replacements intentionally
   are not traversed again.
-- `PeisarAst` owns raw Markdown, front matter, hooks, and visitors. Adding a
-  parser hook reparses the raw Markdown; document reads apply registered
-  visitors.
+- Prefer `usePlugin()` for Node.js integrations. Adding parser hooks reparses
+  the original Markdown; visitor changes are applied once per registration.
 - napi numerics: config fields crossing the boundary use `i64`/`u32` (not
   `u64`/`usize`); clamp in the resolved accessors.
 - Rust consumers use module paths such as `peisar::markdown::ast::Document`,

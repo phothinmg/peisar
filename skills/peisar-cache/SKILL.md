@@ -29,7 +29,8 @@ const path = require("node:path");
 
 const cache = PeisarCache.withConfig({
   entryDir: "contents",
-  assetsDir: "public",
+  assetsDir: "contents/public",
+  layouts: ["custom"],
   memory: { byteBudget: 32 * 1024 * 1024, entryBudget: 500 },
   archive: { shardBytes: 8 * 1024 * 1024, flushIntervalMs: 2000 },
 });
@@ -40,7 +41,7 @@ const source = cache.getText(path.resolve("contents/intro.md"));
 cache.dispose();
 ```
 
-The constructor is `new PeisarCache(entryDir, assetsDir?, options?)`.
+The constructor is `new PeisarCache(entryDir?, assetsDir?, options?)`.
 `PeisarCache.withConfig(config)` accepts the full configuration, including
 memory limits; use the constructor options for Markdown, archive, hosting,
 output-directory, and cache-directory settings.
@@ -52,8 +53,9 @@ use peisar::cache::{CachedContent, PeisarCache, PeisarCacheConfig};
 use std::path::Path;
 
 let mut cache = PeisarCache::with_config(PeisarCacheConfig {
-    entry_dir: "contents".into(),
-    assets_dir: Some("public".into()),
+    entry_dir: Some("contents".into()),
+    assets_dir: Some("contents/public".into()),
+    layouts: Some(vec!["custom".into()]),
     ..PeisarCacheConfig::default()
 })?;
 
@@ -74,10 +76,14 @@ text assets, and `Binary(Vec<u8>)` for binary assets.
 
 ## Behavior and lifecycle
 
-- Markdown is discovered recursively under `entryDir`; assets are optional
-  and discovered under `assetsDir`. Relative paths resolve from the current
-  working directory. If assets are omitted, an existing `public` directory
-  is used.
+- `entryDir` defaults to the current working directory and must contain an
+  `index` file with a supported Markdown extension at its root.
+- Markdown is discovered recursively under `entryDir` and cached only when
+  its front matter has a `layout` string matching the default layouts
+  (`default`, `docs`, `blog`, `page`, `home`) or a user-supplied layout.
+- Assets are optional. A provided `assetsDir` resolves from the current
+  working directory and must exist inside `entryDir`; missing/invalid paths
+  and Markdown collection failures are surfaced as errors.
 - Markdown extensions include `md`, `markdown`, `mdown`, `mkdn`, `mkd`,
   `mdwn`, `mkdown`, and `ron`. Recognized assets include common image,
   script/style, font, and audio/video files. `js`, `css`, `map`, and `svg`
@@ -97,6 +103,9 @@ text assets, and `Binary(Vec<u8>)` for binary assets.
   `stop_watching()`; Node.js uses `startWatchingJs()` and `dispose()`.
   Watch setup errors are surfaced. Stop watching and flush pending writes
   during graceful shutdown; dropping the Rust cache also joins its workers.
+- Use `cache.usePlugin()` to register visitors or parser hooks for page
+  rendering. The legacy `useVisitor()` and `useParser()` methods are not
+  available on the cache; parser and visitor registration is unified here.
 
 ## Change and test workflow
 

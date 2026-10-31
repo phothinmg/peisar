@@ -18,7 +18,7 @@ API-specific guides.
 
 ```toml
 [dependencies]
-peisar = "1.0.0"
+peisar = "1.2.0"
 ```
 
 ## Current API structure

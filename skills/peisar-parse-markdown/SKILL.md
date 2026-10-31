@@ -52,10 +52,12 @@ AST nodes use PascalCase `type` values in Node.js (`Heading`, `Paragraph`,
 `Link`, and so on). Every node has a half-open `pos` span with zero-based
 `line`, `column`, and byte `offset`. The root uses `nodeType: "root"`.
 
-For syntax extensions, use `document.useParser(...)`; for post-parse changes,
-use `document.useVisitor(...)`. Register both before relying on a document
-read: parser registration reparses the original source, and visitors run when
-`ast`, `astJson`, `html`, or `frontmatter` is read.
+For syntax extensions or post-parse changes, use `document.usePlugin(...)`
+with any combination of `parseBlock`, `parseInline`, `visitBlock`, and
+`visitInline`. `useParser()` and `useVisitor()` remain deprecated
+compatibility aliases. Register plugins before relying on a document read:
+parser hooks reparse the original source, while visitor changes are applied
+once per registration.
 
 ## Rust
 
@@ -79,11 +81,11 @@ assert_eq!(html, "<h1>Hello</h1>\n");
 
 Use these paths:
 
-- `peisar::markdown::ast::{AstOptions, Document, PeisarAst, AstVisitor}`
+- `peisar::markdown::ast::{AstOptions, Document, PeisarAst, PluginFactory}`
 - `peisar::markdown::ast::{parse_inline, parse_inline_with_refs, LinkRefMap}`
 - `peisar::markdown::ast::tokens::token::{Block, Inline}`
 - `peisar::markdown::ast::tokens::span::{Span, Position}`
-- `peisar::markdown::ast::visitor::{visit_document_mut, VisitControl, InlineVisitControl}`
+- `peisar::markdown::ast::{ParserHooks, md_to_ast_with_hooks, visit_document_mut}`
 - `peisar::markdown::html::{render_document_html, RenderOptions}`
 - `peisar::markdown::peisar::Peisar`
 - `peisar::markdown::config::PeisarOptions`

@@ -5,7 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [unrelease]
+## [1.2.0] - Unreleased
+
+### Added
+
+- Added theme-package loading to `PeisarCache`, including validated
+  `theme.config.json` metadata and theme assets.
+- Added default and custom layout filtering when discovering Markdown pages.
+- Added `PeisarCache.usePlugin()` for applying visitors and parser hooks to
+  cached page rendering.
+
+### Changed
+
+- Cache entry directories now default to the current working directory,
+  require a supported root `index` Markdown file, and only cache Markdown
+  pages with a recognized `layout` front-matter value.
+- Assets are no longer implicitly loaded from `public`; configure an asset
+  directory explicitly, and keep it within the entry directory.
+- Cache configuration and theme-loading failures are surfaced as errors.
+- Updated the README, API references, and Agent Skills to document the
+  current cache, plugin, and release APIs.
 
 ## [1.1.0] - 2026-10-25
 
@@ -175,7 +194,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and parse/render options (GFM and Kramdown enabled by default)
 - Rust `rlib` crate and Node.js integration test suite
 
-[Unreleased]: https://github.com/phothinmg/peisar/compare/1.0.0...HEAD
+[1.2.0]: https://github.com/phothinmg/peisar/compare/1.1.0...1.2.0
 [1.0.0]: https://github.com/phothinmg/peisar/compare/0.3.0...1.0.0
 [0.3.0]: https://github.com/phothinmg/peisar/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/phothinmg/peisar/compare/0.1.2...0.2.0

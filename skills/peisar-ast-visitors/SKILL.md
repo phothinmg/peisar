@@ -10,14 +10,15 @@ syntax; use the parser-hook API for that.
 
 ## Node.js
 
-Register a visitor through the `Peisar` instance. Both callbacks receive a
-**one-item tuple**, not a node directly.
+Register a visitor with `usePlugin()` on the `Peisar` instance. Both
+callbacks receive a **one-item tuple**, not a node directly. `useVisitor()`
+is a deprecated compatibility alias.
 
 ```js
 const { Peisar } = require("peisar");
 
 const document = new Peisar("# Hello", { fragment: true });
-document.useVisitor({
+document.usePlugin({
   visitBlock([block]) {
     if (block.type === "Heading") {
       return { replaceWith: [{ ...block, level: 2 }] };
@@ -56,36 +57,12 @@ the peisar-parse-markdown skill.)
 
 ## Rust
 
-Implement `AstVisitor` and call `visit_document_mut`:
+`AstVisitor` is deprecated in favor of `PluginFactory`, but the current
+public Rust AST module does not re-export the visitor control types needed to
+implement Rust visitor callbacks. Use the Node.js `usePlugin()` interface
+for supported AST rewriting; Rust consumers can use the parser API described
+in the `peisar-parser-hooks` skill.
 
-```rust
-use peisar::markdown::ast::{AstOptions, AstVisitor, Document};
-use peisar::markdown::ast::tokens::token::{Block, Inline};
-use peisar::markdown::ast::visitor::{InlineVisitControl, VisitControl, visit_document_mut};
-
-struct PromoteHeadings;
-
-impl AstVisitor for PromoteHeadings {
-    fn visit_block(&mut self, block: &mut Block) -> VisitControl {
-        if let Block::Heading { level, .. } = block {
-            *level = 2;
-        }
-        VisitControl::keep_and_recurse()
-    }
-
-    fn visit_inline(&mut self, _inline: &mut Inline) -> InlineVisitControl {
-        InlineVisitControl::default()
-    }
-}
-
-let mut document = Document::parse("# Hello\n", &AstOptions::default(), None);
-visit_document_mut(&mut document, &mut PromoteHeadings);
-```
-
-Use `VisitControl::keep_and_recurse()`, `VisitControl::remove()`, or
-`VisitControl::replace_with(nodes)` for block nodes. `InlineVisitControl`
-offers the equivalent inline helpers. Its public fields support insertion too.
-
-Do not use obsolete root paths such as `peisar::visitor` or `peisar::token`;
-the visitor API is under `peisar::markdown::ast::visitor` and nodes are under
-`peisar::markdown::ast::tokens::token`.
+Rust node types remain under
+`peisar::markdown::ast::tokens::token::{Block, Inline}`. Do not use
+obsolete root paths such as `peisar::visitor` or `peisar::token`.

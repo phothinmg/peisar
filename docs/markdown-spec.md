@@ -463,13 +463,15 @@ package root.
 
 ## 6. Extensibility (not default syntax)
 
-Custom syntax is added per-document, not by the language itself:
+Custom syntax is added per-document, not by the language itself. Prefer the
+unified `usePlugin()` API; `useParser()` and `useVisitor()` remain available as
+deprecated compatibility aliases:
 
-- `useParser({ parseBlock, parseInline })` — hooks that run **before** the
+- `usePlugin({ parseBlock, parseInline })` — hooks that run **before** the
   built-in matchers; block hooks receive `{ line, lineIndex, lines }` and
   return `{ block, consumed }`; inline hooks receive `{ rest, index }` and
   return `{ inline, consumed }`. Registering a hook re-parses the source.
-- `useVisitor({ visitBlock, visitInline })` — post-parse transforms with
+- `usePlugin({ visitBlock, visitInline })` — post-parse transforms with
   control objects (`insertBefore`, `insertAfter`, `replaceWith`, `remove`,
   `recurse`).
 

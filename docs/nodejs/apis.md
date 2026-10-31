@@ -184,20 +184,23 @@ as binary shards plus a `map.json` index.
 ### Construction
 
 ```ts
-new PeisarCache(entryDir: string, assetsDir?: string, options?: PeisarCacheJsOptions)
+new PeisarCache(entryDir?: string, assetsDir?: string, options?: PeisarCacheJsOptions)
 PeisarCache.withConfig(config: PeisarCacheConfig): PeisarCache
 ```
 
-The constructor defaults `assetsDir` to `public` under the current working
-directory when that directory exists. `withConfig()` accepts the full
-configuration, including memory-tier budgets.
+The constructor accepts an optional entry directory and optional asset
+directory; a configured asset directory must exist beneath the entry
+directory. `withConfig()` accepts the full configuration, including
+memory-tier budgets.
 
 ```js
 const { PeisarCache } = require("peisar");
 
 const cache = PeisarCache.withConfig({
   entryDir: "contents",
-  assetsDir: "public",
+  assetsDir: "contents/public",
+  theme: "peisar-default",
+  layouts: ["custom"],
   markdown: { fragment: true },
   memory: { byteBudget: 32 * 1024 * 1024, entryBudget: 500 },
   archive: { shardBytes: 8 * 1024 * 1024, flushIntervalMs: 2000 },
@@ -212,14 +215,17 @@ cache.dispose();
 
 ### Configuration
 
-`entryDir` is required when calling `withConfig()`; the Rust
-`PeisarCacheConfig::default()` value is `"contents"`. Other configuration
-fields are optional.
+All configuration fields are optional. `entryDir` defaults to the current
+working directory; construction requires an `index` file with a supported
+Markdown extension directly inside it. Other configuration fields are
+optional.
 
 | Property | Type | Default | Description |
 | --- | --- | --- | --- |
-| `entryDir` | `string` | `"contents"` | Markdown source directory; relative paths use the current working directory |
-| `assetsDir` | `string \| undefined` | Existing `public` directory, otherwise none | Optional asset source directory |
+| `entryDir` | `string \| undefined` | Current working directory | Markdown source directory; relative paths use the current working directory |
+| `assetsDir` | `string \| undefined` | None | Optional asset source directory; relative paths use the current working directory and must resolve inside `entryDir` |
+| `theme` | `string \| undefined` | `"peisar-default"` | Theme package name loaded from `node_modules` under the current working directory |
+| `layouts` | `string[] \| undefined` | `["default", "docs", "blog", "page", "home"]` | Additional accepted layouts merged with the defaults; only Markdown files with a matching string `layout` front-matter value are cached |
 | `markdown` | `PeisarOptions` | Peisar defaults | Markdown parsing and rendering options used for page HTML |
 | `memory` | `MemoryConfig` | 64 MiB, unlimited entries | LRU limits; `0` means unlimited |
 | `archive` | `ArchiveConfig` | 8 MiB shards, 2000 ms | Pending-write flush thresholds; zero disables the corresponding threshold |
@@ -227,9 +233,20 @@ fields are optional.
 | `outDir` | `string` | `".peisar"` | Output root used in page and asset `outFilePath` values |
 | `cacheDir` | `string` | `".peisar-cache"` | Archive directory under the current working directory |
 
-The regular constructor options are `PeisarCacheJsOptions`: `markdown`,
-`archive`, `hosting`, `outDir`, and `cacheDir`. Use `withConfig()` to set
-`memory` budgets.
+The regular constructor options are `PeisarCacheJsOptions`: `theme`,
+`layouts`, `markdown`, `archive`, `hosting`, `outDir`, and `cacheDir`. Use
+`withConfig()` to set `memory` budgets.
+
+Markdown discovery is recursive under `entryDir`, and collection, missing
+index, invalid assets-directory, and theme-loading failures are surfaced as
+constructor errors. A theme must be a package directory containing a valid
+`theme.config.json` with required `name` and `version` fields. The optional
+`author` defaults to `null`; `layoutsDir`, `includesDir`, and `assetsDir`
+default to `"_layouts"`, `"_indluces"`, and `"_assets"`. Assets under the
+theme's configured assets directory are merged into `cache.assets()`.
+`cache.themePath()` and `cache.themeConfig()` return the resolved package
+path and parsed configuration object. The library logs configuration
+validation errors but does not terminate the Node process.
 
 `MemoryConfig` fields:
 

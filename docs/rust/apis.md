@@ -47,7 +47,18 @@ Notable behavior:
 - GFM and Kramdown parsing are configured through `AstOptions`.
 - `PluginFactory` is the current unified extension trait for parser hooks and
   visitor callbacks.
-- Deprecated compatibility traits `AstVisitor` and `AstParser` still exist.
+- `ParserHooks` and `md_to_ast_with_hooks` expose the hook-enabled parser for
+  Rust integrations.
+- The public AST module re-exports the deprecated `BlockParseContext` and
+  `InlineParseContext` aliases, but not the newer `BlockParserContext` and
+  `InlineParserContext` names. Use the aliases in Rust `PluginFactory`
+  parser-hook signatures for now.
+- `AstVisitor` and `AstParser` are deprecated compatibility traits; use
+  `PluginFactory` for new extension code.
+- The Rust AST module does not currently re-export `VisitControl` or
+  `InlineVisitControl`, so external Rust callers cannot implement the
+  `PluginFactory` visitor callbacks through the public module paths. Node.js
+  consumers can use the complete visitor API through `usePlugin()`.
 
 ### Example
 
@@ -104,8 +115,9 @@ keeps evicted entries readable through a background disk archive.
 use peisar::cache::{CachedContent, PeisarCache, PeisarCacheConfig};
 
 let mut cache = PeisarCache::with_config(PeisarCacheConfig {
-    entry_dir: "contents".into(),
-    assets_dir: Some("public".into()),
+    entry_dir: Some("contents".into()),
+    assets_dir: Some("contents/public".into()),
+    layouts: Some(vec!["custom".into()]),
     ..PeisarCacheConfig::default()
 })?;
 
@@ -127,9 +139,25 @@ cache.stop_watching(); // Stops watching and flushes pending archive writes.
 - `PeisarCache::new(entry_dir)` uses default settings.
 - `PeisarCache::with_config(PeisarCacheConfig { .. })` configures the
   directories, Markdown options, memory/archive budgets, hosting, output
-  directory, and archive directory.
-- `entry_dir` defaults to `"contents"`. If `assets_dir` is omitted, an
-  existing `public` directory under the current working directory is used.
+  directory, archive directory, and theme package.
+- `entry_dir` is optional and defaults to the current working directory.
+  Construction requires an `index` file with a supported Markdown extension
+  directly inside it.
+- `assets_dir` is optional. When provided, its path is resolved from the
+  current working directory and must exist as a directory inside `entry_dir`.
+- `theme` defaults to `"peisar-default"` and resolves to
+  `node_modules/<theme>` under the current working directory. The package
+  must contain a valid `theme.config.json` with required `name` and `version`
+  fields. `PeisarCache::theme_path()` and `PeisarCache::theme_config()` expose
+  its resolved path and parsed metadata.
+- `PeisarThemeConfig` defaults `author` to `None`, `layouts_dir` to
+  `"_layouts"`, `includes_dir` to `"_indluces"`, and `assets_dir` to
+  `"_assets"`. Assets discovered in the theme assets directory are included
+  in `asset_objects()` / `assets()`.
+- `layouts` defaults to `["default", "docs", "blog", "page", "home"]`; user layouts
+  are merged with these defaults and duplicate names are removed. Only
+  recursively discovered Markdown files with a string `layout` front-matter
+  value in that set are cached.
 - `MemoryConfig` defaults to a 64 MiB byte budget and unlimited entries.
   Set either budget to `0` for unlimited.
 - `ArchiveConfig` defaults to 8 MiB shards and a 2-second flush interval.
@@ -138,10 +166,11 @@ cache.stop_watching(); // Stops watching and flushes pending archive writes.
   both relative to the current working directory.
 
 Markdown files with extensions `md`, `markdown`, `mdown`, `mkdn`, `mkd`,
-`mdwn`, `mkdown`, or `ron` are discovered recursively. The optional assets
-directory recognizes common image, script/style, font, and audio/video file
-types. Markdown and textual assets are stored as text; other recognized
-assets are stored as bytes.
+`mdwn`, `mkdown`, or `ron` are discovered recursively, subject to the layout
+filter above. Configuration and Markdown collection failures are returned
+as `io::Error`. The optional assets directory recognizes common image,
+script/style, font, and audio/video file types. Markdown and textual assets
+are stored as text; other recognized assets are stored as bytes.
 
 ### Reading and derived objects
 

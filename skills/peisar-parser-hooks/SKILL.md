@@ -14,8 +14,9 @@ of nodes that the parser has already produced.
 
 ## Node.js
 
-Register a plain object with `useParser`. Both callbacks receive a one-item
-tuple.
+Register a plain object with `usePlugin()`. Parser callbacks receive a
+one-item tuple; visitor callbacks may also be included in the same plugin.
+`useParser()` remains a deprecated compatibility alias.
 
 ```js
 const { Peisar } = require("peisar");
@@ -23,7 +24,7 @@ const { Peisar } = require("peisar");
 const document = new Peisar("See [[Some Page]].", { fragment: true });
 const zero = { line: 0, column: 0, offset: 0 };
 
-document.useParser({
+document.usePlugin({
   parseInline([{ rest }]) {
     if (!rest.startsWith("[[")) return;
     const close = rest.indexOf("]]");
@@ -69,15 +70,12 @@ can chain constructs back to back.
 
 ## Rust status
 
-The crate publicly exposes `AstParser`, `BlockParseContext`,
-`InlineParseContext`, and `ParseHooks` from `peisar::markdown::ast`. They
-define the same hook contract used by the implementation:
-`try_parse_block` returns `Option<(Block, usize)>` and `try_parse_inline`
-returns `Option<(Inline, usize)>`.
-
-The hook-enabled parser entry point is currently private to the crate, so
-external Rust consumers cannot yet apply a `ParseHooks` registry to
-`Document::parse`. Do not suggest imports from
-`peisar::markdown::ast::parsers`: that module is not public. For a working
-extension path today, use Node.js `Peisar#useParser`; use the exposed Rust hook
-types only when modifying Peisar itself.
+The crate exposes `PluginFactory`, `ParserHooks`, and
+`md_to_ast_with_hooks` from `peisar::markdown::ast`. Implement
+`try_parse_block` and/or `try_parse_inline`, add the plugin to a
+`ParserHooks` registry, and pass that registry to `md_to_ast_with_hooks`.
+`AstParser`, `BlockParseContext`, `InlineParseContext`, and `ParseHooks` are
+deprecated compatibility names. The newer context type names are not
+re-exported yet, so use the compatibility context aliases in Rust trait
+signatures. Do not import from `peisar::markdown::ast::parsers`; that module
+is private.

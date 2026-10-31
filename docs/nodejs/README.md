@@ -69,8 +69,8 @@ combination of:
 - `parseBlock`
 - `parseInline`
 
-`useVisitor()` and `useParser()` are still supported as backward-compatible
-aliases for older integrations, but they are now the deprecated path.
+`useVisitor()` and `useParser()` remain supported as deprecated,
+backward-compatible aliases for older integrations.
 
 ```js
 const { Peisar } = require("peisar");

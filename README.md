@@ -19,11 +19,6 @@ Kramdown block attributes, YAML front matter, source spans, AST visitors,
 custom parser hooks, and a Rust-first architecture that is also exposed to
 Node.js through N-API.
 
-> [!NOTE]
-> The README is intentionally short so the npm and crates.io pages stay easy
-> to scan. Detailed guides now live in the repository under `docs/`, which
-> lets the project update documentation between package releases.
-
 ## Features
 
 - CommonMark blocks and inlines, including HTML and reference links
@@ -31,6 +26,7 @@ Node.js through N-API.
 - Kramdown block attributes such as `{:#intro .lead key="value"}`
 - YAML front matter extraction
 - AST visitors and parser hooks through `usePlugin()`
+- Filesystem-backed Markdown and asset caching for static-site builds
 - Native Node.js addon and Rust library surfaces
 
 ## Install
@@ -45,7 +41,7 @@ npm i peisar
 
 ```toml
 [dependencies]
-peisar = "1.0.0"
+peisar = "1.2.0"
 ```
 
 ## Quick start
@@ -150,6 +146,7 @@ npx skills add phothinmg/peisar
 - **peisar-parse-markdown**: consume the Node.js and Rust Markdown APIs
 - **peisar-ast-visitors**: make post-parse AST transformations
 - **peisar-parser-hooks**: add syntax recognized during parsing
+- **peisar-cache**: cache Markdown and assets and build page/asset objects
 - **peisar-development**: modify and validate the codebase
 
 ## License
