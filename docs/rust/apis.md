@@ -154,10 +154,11 @@ cache.stop_watching(); // Stops watching and flushes pending archive writes.
   `"_layouts"`, `includes_dir` to `"_indluces"`, and `assets_dir` to
   `"_assets"`. Assets discovered in the theme assets directory are included
   in `asset_objects()` / `assets()`.
-- `layouts` defaults to `["default", "docs", "blog", "page", "home"]`; user layouts
-  are merged with these defaults and duplicate names are removed. Only
-  recursively discovered Markdown files with a string `layout` front-matter
-  value in that set are cached.
+- Layout names are discovered recursively from `.html` files in the theme's
+  configured `layouts_dir`, using each filename without its extension.
+  `markdown_layouts()` returns the accepted names sorted alphabetically.
+  Only recursively discovered Markdown files with a string `layout`
+  front-matter value in that set are cached.
 - `MemoryConfig` defaults to a 64 MiB byte budget and unlimited entries.
   Set either budget to `0` for unlimited.
 - `ArchiveConfig` defaults to 8 MiB shards and a 2-second flush interval.
@@ -179,6 +180,8 @@ are stored as text; other recognized assets are stored as bytes.
 - `page_objects()` and `asset_objects()` derive template-ready values sorted
   by slug. `page_object_for(path)` and `asset_object_for(path)` derive one.
 - `markdown_files()` and `asset_files()` list absolute cached paths.
+- `markdown_layouts()` lists the accepted layout names discovered from the
+  theme.
 - `pages()` and `assets()` are the corresponding Node.js-facing methods.
 - The memory budgets limit the hot in-memory set. Archive-backed entries
   remain readable after eviction.

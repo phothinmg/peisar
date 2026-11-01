@@ -79,8 +79,10 @@ text assets, and `Binary(Vec<u8>)` for binary assets.
 - `entryDir` defaults to the current working directory and must contain an
   `index` file with a supported Markdown extension at its root.
 - Markdown is discovered recursively under `entryDir` and cached only when
-  its front matter has a `layout` string matching the default layouts
-  (`default`, `docs`, `blog`, `page`, `home`) or a user-supplied layout.
+  its front matter has a `layout` string matching the name of a top-level
+  `.html` template in the theme's configured layouts directory or a
+  user-supplied layout. Rust exposes accepted names through
+  `markdown_layouts()` and Node.js through `markdownLayouts()`.
 - Assets are optional. A provided `assetsDir` resolves from the current
   working directory and must exist inside `entryDir`; missing/invalid paths
   and Markdown collection failures are surfaced as errors.

@@ -8,9 +8,14 @@
     "cSpell.words": [
         "autolinks",
         "inlines",
+        "libuv",
         "Maung",
+        "NAPI",
         "peisar",
+        "rescan",
         "serde",
-        "strikethroughs"
+        "strikethroughs",
+        "threadsafe",
+        "TSFN"
     ]
 }
