@@ -1,8 +1,9 @@
 //! Memory-first cache of a site's Markdown and asset files.
 //!
-//! [`PeisarCache`] loads every markdown file under an entry directory
-//! (plus optional assets) into an in-memory LRU store, derives
-//! template-ready [`PageObject`] / [`AssetsObject`] values on demand, and
+//! [`PeisarCache`] loads supported Markdown files whose front-matter layout
+//! matches a theme template (plus optional assets) into an in-memory LRU
+//! store, derives template-ready [`PageObject`] / [`AssetsObject`] values on
+//! demand, and
 //! — in the background — flushes content into a binary shard archive
 //! under `.peisar-cache` (with a `map.json` search index). Disk is *not*
 //! the primary store: reads hit memory first and only fall through to the
@@ -259,6 +260,13 @@ pub enum CachedContent {
     Binary(Vec<u8>),
 }
 
+/// Default theme package name used by [`PeisarCache`].
+pub const DEFAULT_THEME_NAME: &str = "peisar-minima";
+/// Directory under the current working directory that contains theme packages.
+pub const DEFAULT_THEME_DIR: &str = "peisar_themes";
+/// JSON metadata filename required in each theme package directory.
+pub const THEME_CONFIG_FILE: &str = "peisar-theme.json";
+
 /// Cache-wide configuration: directories, markdown options, memory/archive
 /// budgets, hosting/baseUrl resolution, and the build output directory.
 #[cfg_attr(feature = "npm", napi(object))]
@@ -270,12 +278,12 @@ pub struct PeisarCacheConfig {
     /// Optional assets directory, resolved from the current working
     /// directory and required to be inside `entry_dir`.
     pub assets_dir: Option<String>,
-    /// Theme package name resolved from `node_modules` under the current
-    /// working directory. Defaults to `"peisar-minima"`.
+    /// Theme package name resolved from [`DEFAULT_THEME_DIR`] under the current
+    /// working directory. Defaults to [`DEFAULT_THEME_NAME`].
     pub theme: Option<String>,
     /// Markdown parsing/rendering options applied to every page render
     /// (GFM/Kramdown toggles, `fragment`, title, …). Custom visitors and
-    /// parsers are registered separately via `useVisitor` / `useParser`.
+    /// parser hooks are registered separately via `usePlugin()`.
     pub markdown: Option<PeisarOptions>,
     /// Memory-tier budgets (LRU eviction). Defaults: 64 MiB bytes,
     /// unlimited entries.
@@ -287,7 +295,8 @@ pub struct PeisarCacheConfig {
     /// Build output directory used for `outFilePath` fields (default
     /// `".peisar"`).
     pub out_dir: Option<String>,
-    /// Cache directory (default `".peisar_cache")
+    /// Archive directory, relative to the current working directory
+    /// (default `".peisar-cache"`).
     pub cache_dir: Option<String>,
 }
 
@@ -307,28 +316,32 @@ impl Default for PeisarCacheConfig {
     }
 }
 
-/// Default theme package name used by [`PeisarCache`].
-pub const DEFAULT_THEME_NAME: &str = "peisar-minima";
-/// Theme config file
-pub const THEME_CONFIG_FILE: &str = "peisar-theme.json";
-
-/// Theme metadata loaded from `peisar-theme.json`.
+/// Theme metadata loaded from [`THEME_CONFIG_FILE`].
 #[cfg_attr(feature = "npm", napi(object))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct PeisarThemeConfig {
+    /// Theme package name.
     pub name: String,
+    /// Theme package version.
     pub version: String,
+    /// Optional theme author.
     #[serde(default)]
     pub author: Option<String>,
-    #[serde(default = "default_theme_layouts_dir")]
-    pub layouts_dir: String,
+    /// Relative path to the theme's HTML layout templates (default `"_layouts"`).
+    #[serde(default = "default_theme_theme_layouts_dir")]
+    pub theme_layouts_dir: String,
+    /// Relative path to the theme's include templates (default `"_indluces"`).
     #[serde(default = "default_theme_includes_dir")]
     pub includes_dir: String,
+    /// Relative path to the theme's static assets (default `"_assets"`).
     #[serde(default = "default_theme_assets_dir")]
     pub assets_dir: String,
+    /// Relative path to the theme's data files (default `"_data"`).
+    #[serde(default = "default_theme_data_dir")]
+    pub data_dir: String,
 }
 
-fn default_theme_layouts_dir() -> String {
+fn default_theme_theme_layouts_dir() -> String {
     "_layouts".to_string()
 }
 
@@ -338,6 +351,10 @@ fn default_theme_includes_dir() -> String {
 
 fn default_theme_assets_dir() -> String {
     "_assets".to_string()
+}
+
+fn default_theme_data_dir() -> String {
+    "_data".to_string()
 }
 
 /// LRU budgets for the memory tier.
@@ -484,6 +501,18 @@ impl ChangeCallbacks {
     }
 }
 
+#[cfg_attr(feature = "npm", napi(object))]
+#[derive(Debug, Clone, Default)]
+/// Resolved theme directories, as absolute paths.
+pub struct ThemeDirs {
+    /// Directory containing the theme's HTML layout templates.
+    pub layouts_dir: String,
+    /// Directory containing the theme's static assets.
+    pub assets_dir: String,
+    /// Directory containing the theme's data files.
+    pub data_dir: String,
+}
+
 /// In-memory + archive-backed cache of the Markdown and asset files under a
 /// directory tree.
 ///
@@ -519,6 +548,8 @@ pub struct PeisarCache {
     theme_path: PathBuf,
     theme_config: PeisarThemeConfig,
     theme_assets_dir: PathBuf,
+    theme_layouts_dir: PathBuf,
+    theme_data_dir: PathBuf,
     markdown_layouts: HashSet<String>,
     change_callbacks: ChangeCallbacks,
     /// Hosting/baseUrl configuration.
@@ -731,11 +762,6 @@ fn layout_names(dir: PathBuf) -> HashSet<String> {
             }
         }
     }
-    if results.is_empty() {
-        let message = format!("theme layout dir '{}' is empty", dir.display());
-        eprintln!("PeisarCache configuration error: {message}");
-        std::process::exit(1)
-    }
     results
 }
 
@@ -743,13 +769,13 @@ fn layout_names(dir: PathBuf) -> HashSet<String> {
 impl PeisarCache {
     /// JS: `new PeisarCache(entryDir?, assetsDir?, options?)`.
     ///
-    /// `options` configures markdown parsing (`fragment`, GFM, …), archive
-    /// thresholds, hosting resolution, and the output directory. Custom
-    /// visitors/parsers register afterwards via `useVisitor` /
-    /// `useParser`.
+    /// `options` configures the theme, Markdown parsing (`fragment`, GFM,
+    /// …), archive thresholds, hosting resolution, and output directories.
+    /// Register custom visitors and parser hooks afterwards with
+    /// `usePlugin()`.
     #[cfg(feature = "npm")]
     #[napi(constructor)]
-    pub fn new_js(
+    pub fn new(
         entry_dir: Option<String>,
         assets_dir: Option<String>,
         options: Option<PeisarCacheJsOptions>,
@@ -803,7 +829,7 @@ impl PeisarCache {
             eprintln!("PeisarCache configuration error: {message}");
             return Err(io::Error::new(io::ErrorKind::InvalidInput, message));
         }
-        let theme_path = cwd.join("node_modules").join(theme_name_path);
+        let theme_path = cwd.join(DEFAULT_THEME_DIR).join(theme_name_path);
         if !theme_path.is_dir() {
             let message = format!(
                 "theme package '{}' does not exist or is not a directory",
@@ -902,24 +928,25 @@ impl PeisarCache {
             }
             None => None,
         };
+        let theme_data_dir = theme_path.join(&theme_config.data_dir);
         // Get layouts names
-        let layouts_dir = theme_path.join(&theme_config.layouts_dir);
-        if !layouts_dir.exists() {
+        let theme_layouts_dir = theme_path.join(&theme_config.theme_layouts_dir);
+        if !theme_layouts_dir.exists() {
             let message = format!(
                 "layouts dir path '{}' dose not exists",
-                layouts_dir.display()
+                theme_layouts_dir.display()
             );
             eprintln!("PeisarCache configuration error: {message}");
             return Err(io::Error::new(io::ErrorKind::InvalidInput, message));
-        } else if !layouts_dir.is_dir() {
+        } else if !theme_layouts_dir.is_dir() {
             let message = format!(
                 "layouts dir path '{}' is not a directory",
-                layouts_dir.display()
+                theme_layouts_dir.display()
             );
             eprintln!("PeisarCache configuration error: {message}");
             return Err(io::Error::new(io::ErrorKind::InvalidInput, message));
         }
-        let markdown_layouts: HashSet<String> = layout_names(layouts_dir);
+        let markdown_layouts: HashSet<String> = layout_names(theme_layouts_dir.clone());
 
         // Markdown options for every page render.
         let resolved = get_options(config.markdown.clone());
@@ -989,6 +1016,8 @@ impl PeisarCache {
             theme_path,
             theme_config,
             theme_assets_dir,
+            theme_layouts_dir,
+            theme_data_dir,
             markdown_layouts,
             change_callbacks: ChangeCallbacks::default(),
             hosting,
@@ -999,6 +1028,7 @@ impl PeisarCache {
     /// Construct a [`PeisarCache`] over `entry_dir` with the default
     /// configuration — Rust convenience (generic signatures cannot cross
     /// the NAPI boundary).
+    #[cfg(not(feature = "npm"))]
     pub fn new<P: AsRef<Path>>(entry_dir: P) -> io::Result<Self> {
         PeisarCache::with_config(PeisarCacheConfig {
             entry_dir: Some(entry_dir.as_ref().to_string_lossy().to_string()),
@@ -1232,7 +1262,10 @@ impl PeisarCache {
         self.archive.read(path)
     }
 
-    /// Clone of every cached markdown entry: absolute path → raw text.
+    /// Clone of every text entry in memory: absolute path → raw text.
+    ///
+    /// This returns only entries currently in memory; use [`Self::get`] to
+    /// read an individual entry from either the memory or archive tier.
     pub fn all(&self) -> HashMap<PathBuf, String> {
         self.memory
             .iter_all()
@@ -1304,6 +1337,17 @@ impl PeisarCache {
         layouts
     }
 
+    /// Absolute paths to the configured theme's layouts, assets, and data
+    /// directories.
+    #[cfg_attr(feature = "npm", napi)]
+    pub fn theme_dirs(&self) -> ThemeDirs {
+        let dirs = ThemeDirs {
+            assets_dir: self.theme_assets_dir.to_string_lossy().to_string(),
+            layouts_dir: self.theme_layouts_dir.to_string_lossy().to_string(),
+            data_dir: self.theme_data_dir.to_string_lossy().to_string(),
+        };
+        dirs
+    }
     /// JS: `cache.assetFiles()` — absolute paths of cached non-markdown
     /// files (either tier).
     #[cfg_attr(feature = "npm", napi)]
@@ -1603,8 +1647,8 @@ impl PeisarCache {
 #[cfg(feature = "npm")]
 #[napi(object)]
 pub struct PeisarCacheJsOptions {
-    /// Theme package name resolved from `node_modules`; defaults to
-    /// `"peisar-default"`.
+    /// Theme package name resolved from [`DEFAULT_THEME_DIR`]; defaults to
+    /// [`DEFAULT_THEME_NAME`].
     pub theme: Option<String>,
     /// Markdown parsing/rendering options (`fragment`, GFM, …).
     pub markdown: Option<PeisarOptions>,
@@ -1653,7 +1697,7 @@ mod tests {
             fs::remove_dir_all(&tmp)?;
         }
         fs::create_dir_all(&tmp)?;
-        let default_theme = tmp.join("node_modules").join(DEFAULT_THEME_NAME);
+        let default_theme = tmp.join(DEFAULT_THEME_DIR).join(DEFAULT_THEME_NAME);
         fs::create_dir_all(default_theme.join("_assets"))?;
         fs::create_dir_all(default_theme.join("_layouts"))?;
         for layout in ["default", "docs", "blog", "page", "home"] {
@@ -1666,7 +1710,7 @@ mod tests {
         }
         fs::write(default_theme.join("_layouts").join("ignored.txt"), "")?;
         fs::write(
-            default_theme.join("theme.config.json"),
+            default_theme.join(THEME_CONFIG_FILE),
             r#"{"name":"peisar-default","version":"1.0.0"}"#,
         )?;
         let orig = env::current_dir()?;
@@ -1699,7 +1743,7 @@ mod tests {
         write_md(&tmp, "custom.md", "---\nlayout: custom\n---\n# Custom\n");
         write_md(&tmp, "missing-layout.md", "# No layout\n");
         fs::write(
-            tmp.join("node_modules")
+            tmp.join(DEFAULT_THEME_DIR)
                 .join(DEFAULT_THEME_NAME)
                 .join("_layouts/custom.html"),
             "",
@@ -1741,12 +1785,12 @@ mod tests {
             "contents/index.md",
             "---\nlayout: home\n---\n# Home\n",
         );
-        let theme_dir = tmp.join("node_modules/custom-theme");
+        let theme_dir = tmp.join(DEFAULT_THEME_DIR).join("custom-theme");
         fs::create_dir_all(theme_dir.join("_assets/css"))?;
         fs::create_dir_all(theme_dir.join("_layouts"))?;
         fs::write(theme_dir.join("_layouts/home.html"), "")?;
         fs::write(
-            theme_dir.join("theme.config.json"),
+            theme_dir.join(THEME_CONFIG_FILE),
             r#"{"name":"custom-theme","version":"2.0.0"}"#,
         )?;
         fs::write(theme_dir.join("_assets/css/theme.css"), "body {}")?;
@@ -1761,7 +1805,7 @@ mod tests {
         assert_eq!(config.name, "custom-theme");
         assert_eq!(config.version, "2.0.0");
         assert_eq!(config.author, None);
-        assert_eq!(config.layouts_dir, "_layouts");
+        assert_eq!(config.theme_layouts_dir, "_layouts");
         assert_eq!(config.includes_dir, "_indluces");
         assert_eq!(config.assets_dir, "_assets");
         assert_eq!(cache.theme_path(), theme_dir.to_string_lossy());
@@ -1781,11 +1825,11 @@ mod tests {
         let (tmp, orig) = make_tmp("customlayoutdir")?;
         env::set_current_dir(&tmp)?;
         write_md(&tmp, "index.md", "---\nlayout: custom\n---\n# Custom\n");
-        let theme_dir = tmp.join("node_modules/custom-theme");
+        let theme_dir = tmp.join(DEFAULT_THEME_DIR).join("custom-theme");
         fs::create_dir_all(theme_dir.join("templates"))?;
         fs::write(
-            theme_dir.join("theme.config.json"),
-            r#"{"name":"custom-theme","version":"1.0.0","layouts_dir":"templates"}"#,
+            theme_dir.join(THEME_CONFIG_FILE),
+            r#"{"name":"custom-theme","version":"1.0.0","theme_layouts_dir":"templates"}"#,
         )?;
         fs::write(theme_dir.join("templates/custom.html"), "")?;
         fs::write(theme_dir.join("templates/ignored.txt"), "")?;
@@ -1813,12 +1857,12 @@ mod tests {
         let _guard = TEST_CWD_LOCK.lock().unwrap();
         let (tmp, orig) = make_tmp("emptylayouts")?;
         env::set_current_dir(&tmp)?;
-        let layouts_dir = tmp
-            .join("node_modules")
+        let theme_layouts_dir = tmp
+            .join(DEFAULT_THEME_DIR)
             .join(DEFAULT_THEME_NAME)
             .join("_layouts");
-        fs::remove_dir_all(&layouts_dir)?;
-        fs::create_dir_all(&layouts_dir)?;
+        fs::remove_dir_all(&theme_layouts_dir)?;
+        fs::create_dir_all(&theme_layouts_dir)?;
         write_md(&tmp, "index.md", "---\nlayout: default\n---\n# Home\n");
 
         let cache = PeisarCache::new(&tmp)?;
@@ -2049,7 +2093,7 @@ mod tests {
         );
         write_md(&tmp, "outside.md", "---\nlayout: custom\n---\n# Outside\n");
         fs::write(
-            tmp.join("node_modules")
+            tmp.join(DEFAULT_THEME_DIR)
                 .join(DEFAULT_THEME_NAME)
                 .join("_layouts/custom.html"),
             "",

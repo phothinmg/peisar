@@ -5,7 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [unrelease]
+## [1.2.2] - Unreleased
+
+### Added
+
+- Added theme-directory introspection to the cache API through
+  `PeisarCache::theme_dirs()` and `themeDirs()`.
+
+### Changed
+
+- Cache themes now resolve from `peisar_themes/<name>` under the current
+  working directory, using `peisar-theme.json`; the default theme is
+  `peisar-minima`.
+- Updated Rust and Node.js API references to match current cache
+  configuration, theme metadata, layout discovery, archive, and watcher
+  behavior.
+- Updated Rust dependency examples to use version `1.2.2`.
 
 ## [1.2.0] - 2026-10-31
 

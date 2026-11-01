@@ -1,12 +1,12 @@
 [package]
 name = "peisar"
-version = "1.2.0"
+version = "1.2.2"
 edition = "2024"
 rust-version = "1.86"
 license = "Apache-2.0"
 repository = "https://github.com/phothinmg/peisar"
 readme = "README.md"
-description = "A practical Markdown parser written in Rust"
+description = "A practical Markdown parser engineered in Rust"
 
 
 [dependencies]

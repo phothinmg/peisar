@@ -108,16 +108,18 @@ This wrapper is the closest Rust equivalent to the Node.js `Peisar` class.
 
 ## `peisar::cache`
 
-`PeisarCache` loads Markdown and optional assets into an in-memory LRU and
-keeps evicted entries readable through a background disk archive.
+`PeisarCache` loads Markdown pages and optional assets into an in-memory LRU.
+Pages are selected by their front-matter `layout`, which must match an HTML
+layout provided by the configured theme. A background archive keeps evicted
+entries readable.
 
 ```rust
 use peisar::cache::{CachedContent, PeisarCache, PeisarCacheConfig};
+use std::path::Path;
 
 let mut cache = PeisarCache::with_config(PeisarCacheConfig {
     entry_dir: Some("contents".into()),
     assets_dir: Some("contents/public".into()),
-    layouts: Some(vec!["custom".into()]),
     ..PeisarCacheConfig::default()
 })?;
 
@@ -125,12 +127,12 @@ for page in cache.page_objects() {
     println!("{} -> {}", page.slug, page.out_file_path);
 }
 let intro = std::env::current_dir()?.join("contents/intro.md");
-if let Some(CachedContent::Text(markdown)) = cache.get(&intro) {
+if let Some(CachedContent::Text(markdown)) = cache.get(Path::new(&intro)) {
     println!("{markdown}");
 }
 
 cache.start_watching()?;
-cache.stop_watching(); // Stops watching and flushes pending archive writes.
+cache.stop_watching();
 # Ok::<(), std::io::Error>(())
 ```
 
@@ -145,20 +147,20 @@ cache.stop_watching(); // Stops watching and flushes pending archive writes.
   directly inside it.
 - `assets_dir` is optional. When provided, its path is resolved from the
   current working directory and must exist as a directory inside `entry_dir`.
-- `theme` defaults to `"peisar-default"` and resolves to
-  `node_modules/<theme>` under the current working directory. The package
-  must contain a valid `theme.config.json` with required `name` and `version`
-  fields. `PeisarCache::theme_path()` and `PeisarCache::theme_config()` expose
-  its resolved path and parsed metadata.
-- `PeisarThemeConfig` defaults `author` to `None`, `layouts_dir` to
-  `"_layouts"`, `includes_dir` to `"_indluces"`, and `assets_dir` to
-  `"_assets"`. Assets discovered in the theme assets directory are included
-  in `asset_objects()` / `assets()`.
+- `theme` defaults to `DEFAULT_THEME_NAME` (`"peisar-minima"`) and is
+  resolved under `peisar_themes/` in the current working directory. A theme
+  package must contain `peisar-theme.json` with `name` and `version` fields.
+  `PeisarCache::theme_path()`, `theme_config()`, and `theme_dirs()` expose the
+  resolved package path, parsed metadata, and absolute theme directories.
+- `PeisarThemeConfig` defaults `author` to `None`, `theme_layouts_dir` to
+  `"_layouts"`, `includes_dir` to `"_indluces"`, `assets_dir` to `"_assets"`,
+  and `data_dir` to `"_data"`. Theme assets are included in
+  `asset_objects()` / `assets()`.
 - Layout names are discovered recursively from `.html` files in the theme's
-  configured `layouts_dir`, using each filename without its extension.
+  configured `theme_layouts_dir`, using each filename without its extension.
   `markdown_layouts()` returns the accepted names sorted alphabetically.
   Only recursively discovered Markdown files with a string `layout`
-  front-matter value in that set are cached.
+  front-matter value matching one of those names are cached.
 - `MemoryConfig` defaults to a 64 MiB byte budget and unlimited entries.
   Set either budget to `0` for unlimited.
 - `ArchiveConfig` defaults to 8 MiB shards and a 2-second flush interval.
@@ -168,20 +170,26 @@ cache.stop_watching(); // Stops watching and flushes pending archive writes.
 
 Markdown files with extensions `md`, `markdown`, `mdown`, `mkdn`, `mkd`,
 `mdwn`, `mkdown`, or `ron` are discovered recursively, subject to the layout
-filter above. Configuration and Markdown collection failures are returned
-as `io::Error`. The optional assets directory recognizes common image,
-script/style, font, and audio/video file types. Markdown and textual assets
-are stored as text; other recognized assets are stored as bytes.
+filter above. Configuration, theme loading, and Markdown/asset collection
+failures are returned as `io::Error`. The optional assets directory
+recognizes common image, script/style, font, and audio/video file types.
+Markdown and textual assets are stored as text; other recognized assets are
+stored as bytes.
 
 ### Reading and derived objects
 
 - `get(path)` checks memory first, then the archive, and returns
   `Option<CachedContent>`.
+- `all()` clones text entries currently held in memory; it does not read the
+  archive tier.
+- `list_files()`, `markdown_files()`, and `asset_files()` list absolute cached
+  paths across the memory and archive tiers.
 - `page_objects()` and `asset_objects()` derive template-ready values sorted
   by slug. `page_object_for(path)` and `asset_object_for(path)` derive one.
-- `markdown_files()` and `asset_files()` list absolute cached paths.
 - `markdown_layouts()` lists the accepted layout names discovered from the
   theme.
+- `theme_dirs()` returns absolute paths for the theme layouts, assets, and
+  data directories.
 - `pages()` and `assets()` are the corresponding Node.js-facing methods.
 - The memory budgets limit the hot in-memory set. Archive-backed entries
   remain readable after eviction.
@@ -198,14 +206,16 @@ Call `start_watching()` to keep the cache synchronized with changes under the
 entry and asset directories. Register callbacks with `on_change()` and remove
 them with `off_change(id)`; each callback receives a `CacheChangeEvent` with
 the absolute `path`, `kind` (`"create"`, `"modify"`, `"remove"`, or
-`"other"`), and `is_markdown` fields. Watcher setup errors are returned from
-`start_watching()`.
+`"other"`), and `is_markdown` fields. Callbacks receive detected watcher
+events; pretty stderr logs coalesce duplicate file events. Watcher setup
+errors are returned from `start_watching()`, while runtime errors are logged.
 
 The archive worker writes binary shards and a `map.json` index in the cache
 directory. `archived()` lists flushed paths, `map_json()` returns the current
 index, and `flush()` blocks until pending writes finish. `stop_watching()`
 stops the watcher and flushes pending writes; dropping the cache also flushes
-and joins its workers.
+pending writes and joins its workers. The watcher may be started again after
+it is stopped.
 
 ## Choosing an API
 

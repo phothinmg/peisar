@@ -34,9 +34,28 @@ const peisar = require("./index.cjs");
 export const Peisar = peisar.Peisar;
 export const frontmatter = peisar.frontmatter;
 export const yamlParser = peisar.yamlParser;
+export const loadYaml = peisar.loadYaml;
+export const PeisarCache = peisar.PeisarCache;
+export const HostingProvider = peisar.HostingProvider;
 EOF
 
 # 4. Remove binary and .d.ts
 rm -rf "$BINARY_FILE"
 sleep 3
 rm -rf "$DTS_FILE"
+
+# 5. Write gitHead
+
+node -e "
+const fs = require('fs');
+const pkg = require('./package.json');
+try {
+  pkg.gitHead = require('child_process').execSync('git rev-parse HEAD').toString().trim();
+  fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
+  console.log('Successfully added gitHead:', pkg.gitHead);
+} catch (e) {
+  console.error('Failed to read git HEAD or write package.json', e);
+}
+"
+
+echo "Finished Build"

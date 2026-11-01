@@ -1,7 +1,7 @@
 {
   "name": "peisar",
-  "version": "1.2.1",
-  "description": "A practical Markdown parser written in Rust",
+  "version": "1.2.2",
+  "description": "A practical Markdown parser engineered in Rust",
   "main": "index.cjs",
   "types": "index.d.ts",
   "module": "index.mjs",
@@ -61,5 +61,6 @@
   },
   "engines": {
     "node": "^20.19.0 || ^22.13.0 || >=23.5.0 || ^24.21.0"
-  }
+  },
+  "gitHead": "20019b561f494782ada042f6a1c620f7df21752b"
 }

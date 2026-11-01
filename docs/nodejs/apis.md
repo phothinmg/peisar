@@ -185,22 +185,21 @@ as binary shards plus a `map.json` index.
 
 ```ts
 new PeisarCache(entryDir?: string, assetsDir?: string, options?: PeisarCacheJsOptions)
-PeisarCache.withConfig(config: PeisarCacheConfig): PeisarCache
+PeisarCache.withConfigJs(config: PeisarCacheConfig): PeisarCache
 ```
 
 The constructor accepts an optional entry directory and optional asset
 directory; a configured asset directory must exist beneath the entry
-directory. `withConfig()` accepts the full configuration, including
+directory. `withConfigJs()` accepts the full configuration, including
 memory-tier budgets.
 
 ```js
 const { PeisarCache } = require("peisar");
 
-const cache = PeisarCache.withConfig({
+const cache = PeisarCache.withConfigJs({
   entryDir: "contents",
   assetsDir: "contents/public",
-  theme: "peisar-default",
-  layouts: ["custom"],
+  theme: "peisar-minima",
   markdown: { fragment: true },
   memory: { byteBudget: 32 * 1024 * 1024, entryBudget: 500 },
   archive: { shardBytes: 8 * 1024 * 1024, flushIntervalMs: 2000 },
@@ -224,7 +223,7 @@ optional.
 | --- | --- | --- | --- |
 | `entryDir` | `string \| undefined` | Current working directory | Markdown source directory; relative paths use the current working directory |
 | `assetsDir` | `string \| undefined` | None | Optional asset source directory; relative paths use the current working directory and must resolve inside `entryDir` |
-| `theme` | `string \| undefined` | `"peisar-default"` | Theme package name loaded from `node_modules` under the current working directory |
+| `theme` | `string \| undefined` | `"peisar-minima"` | Theme package name loaded from `peisar_themes/<theme>` under the current working directory |
 | `markdown` | `PeisarOptions` | Peisar defaults | Markdown parsing and rendering options used for page HTML |
 | `memory` | `MemoryConfig` | 64 MiB, unlimited entries | LRU limits; `0` means unlimited |
 | `archive` | `ArchiveConfig` | 8 MiB shards, 2000 ms | Pending-write flush thresholds; zero disables the corresponding threshold |
@@ -234,21 +233,22 @@ optional.
 
 The regular constructor options are `PeisarCacheJsOptions`: `theme`,
 `markdown`, `archive`, `hosting`, `outDir`, and `cacheDir`. Use
-`withConfig()` to set `memory` budgets.
+`withConfigJs()` to set `memory` budgets.
 
 Markdown discovery is recursive under `entryDir`, and collection, missing
 index, invalid assets-directory, and theme-loading failures are surfaced as
 constructor errors. A theme must be a package directory containing a valid
-`theme.config.json` with required `name` and `version` fields. The optional
-`author` defaults to `null`; `layoutsDir`, `includesDir`, and `assetsDir`
-default to `"_layouts"`, `"_indluces"`, and `"_assets"`. Assets under the
-theme's configured assets directory are merged into `cache.assets()`.
-`.html` files discovered recursively in `layoutsDir` define the accepted
-layout names; each name is the filename without `.html`. Markdown is cached
-only when its string `layout` front matter matches one of these names.
-`cache.themePath()` and `cache.themeConfig()` return the resolved package
-path and parsed configuration object. The library logs configuration
-validation errors but does not terminate the Node process.
+`peisar-theme.json` with required `name` and `version` fields. The optional
+`author` defaults to `null`; `themeLayoutsDir`, `includesDir`, `assetsDir`,
+and `dataDir` default to `"_layouts"`, `"_indluces"`, `"_assets"`, and
+`"_data"`. Assets under the theme's configured assets directory are merged
+into `cache.assets()`. `.html` files discovered recursively in
+`themeLayoutsDir` define the accepted layout names; each name is the filename
+without `.html`. Markdown is cached only when its string `layout` front
+matter matches one of these names. `cache.themePath()`,
+`cache.themeConfig()`, and `cache.themeDirs()` return the resolved package
+path, parsed metadata, and absolute theme directories. The library logs
+configuration validation errors but does not terminate the Node process.
 
 `MemoryConfig` fields:
 
@@ -292,6 +292,7 @@ form a `/<repo>/` base path; `pathPrefix` adds an explicit path prefix.
 | `listFiles()` | Absolute paths for all cached entries |
 | `markdownFiles()` / `assetFiles()` | Absolute paths filtered to Markdown or assets |
 | `markdownLayouts()` | Accepted layout names discovered from the theme and configuration, sorted alphabetically |
+| `themeDirs()` | Absolute paths for the theme's layouts, assets, and data directories |
 | `pages()` / `assets()` | Derived page or asset objects, sorted by slug |
 | `getPage(absPath)` / `getAsset(absPath)` | One derived object for an absolute source path, or `null` |
 | `archived()` | Absolute paths already flushed to the archive |

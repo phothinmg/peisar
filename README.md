@@ -1,8 +1,9 @@
 <!-- markdownlint-disable MD033 -->
 <!-- markdownlint-disable MD041 -->
 <div align="center">
+ <img src="https://pub-c9ba018358dd48a99b70013b65a25e5f.r2.dev/logo/peisar.webp" width="160" height="160" alt="prisar" />
   <h1>Peisar</h1>
-  <p>A practical Markdown parser written in Rust</p>
+  <p>A practical Markdown parser engineered in Rust</p>
 </div>
 
 
@@ -41,7 +42,7 @@ npm i peisar
 
 ```toml
 [dependencies]
-peisar = "1.2.0"
+peisar = "1.2.2"
 ```
 
 ## Quick start
