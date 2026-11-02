@@ -1,18 +1,8 @@
 # Rust usage
 
-Peisar is a Rust crate first. The Node.js package is built on top of the same
-parser, renderer, and front-matter support.
-
-This page is the Rust overview. Use it as the entry point for module-level and
-API-specific guides.
-
-## At a glance
-
-- Crate: `peisar`
-- API style: module-based public Rust surface
-- Shared concepts: parser, renderer, front matter, and plugin traits
-- Full API details: see [Rust API reference](./apis.md)
-- Cross-language docs: see [Node.js overview](../nodejs/README.md)
+Peisar provides a high-level Rust parser wrapper and optional lower-level
+AST, HTML, plugin, and YAML APIs. The implementation is split between this
+crate and its `peisar_ast` / `peisar_yaml` dependencies.
 
 ## Install
 
@@ -21,31 +11,47 @@ API-specific guides.
 peisar = "1.2.2"
 ```
 
-## Current API structure
+The high-level `Peisar` wrapper is available without optional features. Enable
+the feature for each lower-level module you use:
 
-The public Rust surface is module-based:
+| Cargo feature | Public module | Purpose |
+| --- | --- | --- |
+| `ast` | `peisar::ast` | AST types and parser helpers |
+| `html` | `peisar::html` | HTML rendering |
+| `plugin` | `peisar::plugin` | Plugin types and traits |
+| `yaml` | `peisar::yaml` | Front matter and standalone YAML helpers |
 
-| Module | Purpose |
-| --- | --- |
-| `peisar::frontmatter` | YAML front matter extraction |
-| `peisar::yaml` | Standalone YAML parsing helpers |
-| `peisar::markdown::ast` | AST nodes, parser options, traversal helpers, plugin traits |
-| `peisar::markdown::config` | `PeisarOptions` shared with the Node-facing wrapper |
-| `peisar::markdown::html` | AST-to-HTML rendering |
-| `peisar::markdown::peisar` | The high-level `Peisar` wrapper type |
-| `peisar::cache` | Filesystem-backed Markdown and asset cache |
+For example:
 
-Detailed items and examples, including
-[`cache::PeisarCache`](./apis.md#peisarcache), are in the Rust API reference.
+```toml
+peisar = { version = "1.2.2", features = ["ast", "html", "yaml"] }
+```
 
 ## Parse and render
 
+The high-level wrapper is re-exported at the crate root:
+
 ```rust
-use peisar::markdown::ast::{AstOptions, Document};
-use peisar::markdown::html::{RenderOptions, render_document_html};
+use peisar::{Peisar, PeisarOptions};
 
-let document = Document::parse("# Hello **world**\n", &AstOptions::default(), None);
+let mut document = Peisar::new(
+    "# Hello **world**\n".into(),
+    Some(PeisarOptions {
+        fragment: Some(true),
+        ..Default::default()
+    }),
+);
 
+assert_eq!(document.html(), "<h1>Hello <strong>world</strong></h1>\n");
+```
+
+For lower-level parsing and rendering, enable `ast` and `html`:
+
+```rust
+use peisar::ast::{AstOptions, Document};
+use peisar::html::{RenderOptions, render_document_html};
+
+let document = Document::parse("# Hello\n", &AstOptions::default(), None);
 let html = render_document_html(
     &document,
     Some(RenderOptions {
@@ -53,42 +59,21 @@ let html = render_document_html(
         ..RenderOptions::default()
     }),
 );
-
-assert_eq!(html, "<h1>Hello <strong>world</strong></h1>\n");
+assert_eq!(html, "<h1>Hello</h1>\n");
 ```
 
-## Front matter
+## Front matter and YAML
+
+Enable the `yaml` feature to use the re-exported helpers:
 
 ```rust
-use peisar::frontmatter::frontmatter;
+use peisar::yaml::frontmatter;
 
 let parsed = frontmatter("---\ntitle: Hello\n---\n\n# Hello".to_string())?;
-
 assert_eq!(parsed.yaml_data().unwrap()["title"], "Hello");
 assert_eq!(parsed.pure_markdown_content(), "# Hello");
 # Ok::<(), String>(())
 ```
 
-## High-level wrapper
-
-```rust
-use peisar::markdown::config::PeisarOptions;
-use peisar::markdown::peisar::Peisar;
-
-let mut document = Peisar::new(
-    "# Hello".into(),
-    Some(PeisarOptions {
-        fragment: Some(true),
-        ..Default::default()
-    }),
-);
-
-assert_eq!(document.html(), "<h1>Hello</h1>\n");
-```
-
-## Related docs
-
-- [Rust API reference](./apis.md)
-- [Benchmark results](../benchmarks.md)
-- [Node.js overview](../nodejs/README.md)
-- [Documentation hub](../README.md)
+See the [Rust API reference](./apis.md) for module details and links to the
+Node.js guides.

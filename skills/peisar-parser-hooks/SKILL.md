@@ -14,17 +14,15 @@ of nodes that the parser has already produced.
 
 ## Node.js
 
-Register a plain object with `usePlugin()`. Parser callbacks receive a
+Register a plain object with `Peisar.use()`. Parser callbacks receive a
 one-item tuple; visitor callbacks may also be included in the same plugin.
-`useParser()` remains a deprecated compatibility alias.
-
 ```js
 const { Peisar } = require("peisar");
 
 const document = new Peisar("See [[Some Page]].", { fragment: true });
 const zero = { line: 0, column: 0, offset: 0 };
 
-document.usePlugin({
+document.use({
   parseInline([{ rest }]) {
     if (!rest.startsWith("[[")) return;
     const close = rest.indexOf("]]");
@@ -70,12 +68,7 @@ can chain constructs back to back.
 
 ## Rust status
 
-The crate exposes `PluginFactory`, `ParserHooks`, and
-`md_to_ast_with_hooks` from `peisar::markdown::ast`. Implement
-`try_parse_block` and/or `try_parse_inline`, add the plugin to a
-`ParserHooks` registry, and pass that registry to `md_to_ast_with_hooks`.
-`AstParser`, `BlockParseContext`, `InlineParseContext`, and `ParseHooks` are
-deprecated compatibility names. The newer context type names are not
-re-exported yet, so use the compatibility context aliases in Rust trait
-signatures. Do not import from `peisar::markdown::ast::parsers`; that module
-is private.
+The Rust AST and plugin interfaces are feature-gated and re-exported from
+`peisar::ast` and `peisar::plugin`, respectively. Enable both `ast` and
+`plugin` in `Cargo.toml`; consult the Rust API reference for the current
+dependency-provided traits and signatures.

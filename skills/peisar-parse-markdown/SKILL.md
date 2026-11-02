@@ -1,13 +1,12 @@
 ---
 name: peisar-parse-markdown
-description: Parse Markdown and render HTML with Peisar's native Node.js addon or Rust library. Use for HTML rendering, AST access, YAML front matter, parser options.
+description: Parse Markdown and render HTML with Peisar's native Node.js addon or Rust library. Use for HTML rendering, AST access, YAML front matter, and parser options.
 ---
 
 # Parse Markdown with Peisar
 
 Peisar supports CommonMark, GFM, Kramdown block attributes, YAML front
-matter, source spans, and HTML rendering. Its Node.js API is a native N-API
-addon; Rust consumers use the public module paths under `peisar::markdown`.
+matter, source spans, and HTML rendering.
 
 ## Node.js
 
@@ -15,89 +14,38 @@ addon; Rust consumers use the public module paths under `peisar::markdown`.
 const { Peisar } = require("peisar");
 
 const document = new Peisar("# Hello **world**", { fragment: true });
-console.log(document.html); // <h1>Hello <strong>world</strong></h1>\n
+console.log(document.html);
 console.log(document.ast);
 console.log(document.astJson);
-console.log(document.frontmatter); // object or null
+console.log(document.frontmatter);
 ```
 
-`ast` (the real JavaScript object) uses PascalCase `type` values
-(`Heading`, `Paragraph`, `Link`) and a `nodeType: "root"` root.
-`astJson` serializes the Rust AST, so its types are snake_case
-(`heading`, `paragraph`, `link`) and the root uses `type: "root"`.
-GFM task state is `0` (unchecked) / `1` (checked) in both shapes.
-
-`Peisar` accepts optional `gfm`, `kramdown`, `fileName`, `fragment`,
-`charset`, `viewport`, `title`, `bodyClass`, and `style` properties. GFM and
-Kramdown default to `true`; `fragment` defaults to `false`. Full-document
-settings (`charset`, `viewport`, `title`, `bodyClass`, and `style`) have no
-effect in fragment mode.
-
-Leading YAML front matter is removed before parsing:
-
-```js
-const document = new Peisar(
-  `---
-title: Guide
----
-
-# Guide`,
-  { fragment: true },
-);
-
-console.log(document.frontmatter); // { title: "Guide" }
-```
-
-AST nodes use PascalCase `type` values in Node.js (`Heading`, `Paragraph`,
-`Link`, and so on). Every node has a half-open `pos` span with zero-based
-`line`, `column`, and byte `offset`. The root uses `nodeType: "root"`.
-
-For syntax extensions or post-parse changes, use `document.usePlugin(...)`
-with any combination of `parseBlock`, `parseInline`, `visitBlock`, and
-`visitInline`. `useParser()` and `useVisitor()` remain deprecated
-compatibility aliases. Register plugins before relying on a document read:
-parser hooks reparse the original source, while visitor changes are applied
-once per registration.
+`Peisar` accepts optional GFM, Kramdown, file-name, and rendering options.
+Use `document.use(plugin)` to register parser hooks or AST visitors.
 
 ## Rust
 
-The Rust API is module-based; do not use old root imports such as
-`peisar::{Document, Peisar}`.
+The high-level wrapper and options are available from the crate root:
 
 ```rust
-use peisar::markdown::ast::{AstOptions, Document};
-use peisar::markdown::html::{RenderOptions, render_document_html};
+use peisar::{Peisar, PeisarOptions};
 
-let document = Document::parse("# Hello\n", &AstOptions::default(), None);
-let html = render_document_html(
-    &document,
-    Some(RenderOptions {
-        fragment: true,
+let mut document = Peisar::new(
+    "# Hello\n".into(),
+    Some(PeisarOptions {
+        fragment: Some(true),
         ..Default::default()
     }),
 );
-assert_eq!(html, "<h1>Hello</h1>\n");
+assert_eq!(document.html(), "<h1>Hello</h1>\n");
 ```
 
-Use these paths:
+The lower-level Rust APIs are optional features:
 
-- `peisar::markdown::ast::{AstOptions, Document, PeisarAst, PluginFactory}`
-- `peisar::markdown::ast::{parse_inline, parse_inline_with_refs, LinkRefMap}`
-- `peisar::markdown::ast::tokens::token::{Block, Inline}`
-- `peisar::markdown::ast::tokens::span::{Span, Position}`
-- `peisar::markdown::ast::{ParserHooks, md_to_ast_with_hooks, visit_document_mut}`
-- `peisar::markdown::html::{render_document_html, RenderOptions}`
-- `peisar::markdown::peisar::Peisar`
-- `peisar::markdown::config::PeisarOptions`
-- `peisar::frontmatter::parse_markdown_frontmatter`
+- `peisar::ast` with the `ast` feature
+- `peisar::html` with the `html` feature
+- `peisar::plugin` with the `plugin` feature
+- `peisar::yaml` with the `yaml` feature
 
-`parse_markdown_frontmatter` returns a `ParseResult`. Use
-`pure_markdown_content()`, `yaml_data()`, or `into_parts()` to access it.
-
-## Output details
-
-- Fragment HTML ends in `\n`.
-- `Document::parse` accepts Markdown without front matter; strip it first with
-  `parse_markdown_frontmatter` when needed.
-- `render_document_html(doc, None)` uses `RenderOptions::default()`, which is
-  fragment mode. The `Peisar` wrapper instead defaults to a complete document.
+See the [Rust API reference](../../docs/rust/apis.md) and
+[Node.js API reference](../../docs/nodejs/apis.md) for details.

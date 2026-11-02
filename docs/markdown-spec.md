@@ -463,15 +463,14 @@ package root.
 
 ## 6. Extensibility (not default syntax)
 
-Custom syntax is added per-document, not by the language itself. Prefer the
-unified `usePlugin()` API; `useParser()` and `useVisitor()` remain available as
-deprecated compatibility aliases:
+Custom syntax is added per-document, not by the language itself. Use the
+`Peisar.use()` plugin API:
 
-- `usePlugin({ parseBlock, parseInline })` — hooks that run **before** the
+- `use({ parseBlock, parseInline })` — hooks that run **before** the
   built-in matchers; block hooks receive `{ line, lineIndex, lines }` and
   return `{ block, consumed }`; inline hooks receive `{ rest, index }` and
   return `{ inline, consumed }`. Registering a hook re-parses the source.
-- `usePlugin({ visitBlock, visitInline })` — post-parse transforms with
+- `use({ visitBlock, visitInline })` — post-parse transforms with
   control objects (`insertBefore`, `insertAfter`, `replaceWith`, `remove`,
   `recurse`).
 

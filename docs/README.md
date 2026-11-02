@@ -27,11 +27,11 @@ they can be updated between npm and crates.io releases.
 
 ### Current API reference
 
-The Node.js and Rust API references include the `PeisarCache` configuration,
-theme, page/asset object, archive, and watcher APIs:
+The API references describe the single-document parser, optional Rust feature
+modules, and Node.js plugin interface:
 
-- [Node.js `PeisarCache`](./nodejs/apis.md#peisarcache)
-- [Rust `peisar::cache`](./rust/apis.md#peisarcache)
+- [Node.js API](./nodejs/apis.md)
+- [Rust API](./rust/apis.md)
 
 ## Reference
 

@@ -51,17 +51,16 @@ The Node.js package currently centers around these exports:
 | Export | Purpose |
 | --- | --- |
 | `Peisar` | Parse one Markdown document and read `ast`, `html`, `frontmatter`, or `astJson` |
-| `PeisarCache` | Cache Markdown and assets from directories and derive page/asset objects |
 | `frontmatter()` | Split Markdown into body content and YAML metadata |
 | `yamlParser()` | Parse inline YAML into a JS object |
 | `loadYaml()` | Load and parse a YAML file |
 
-Detailed signatures and option shapes, including the
-[`PeisarCache`](./apis.md#peisarcache) API, are in the Node.js API reference.
+Detailed signatures and option shapes are in the
+[Node.js API reference](./apis.md).
 
 ## Preferred extension API
 
-Use `usePlugin()` for all new Node.js integrations. A plugin may provide any
+Use `Peisar.use()` for Node.js integrations. A plugin may provide any
 combination of:
 
 - `visitBlock`
@@ -69,15 +68,12 @@ combination of:
 - `parseBlock`
 - `parseInline`
 
-`useVisitor()` and `useParser()` remain supported as deprecated,
-backward-compatible aliases for older integrations.
-
 ```js
 const { Peisar } = require("peisar");
 
 const document = new Peisar("# Hello", { fragment: true });
 
-document.usePlugin({
+document.use({
   visitBlock([block]) {
     if (block.type === "Heading") {
       return { recurse: true };

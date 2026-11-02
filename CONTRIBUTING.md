@@ -19,22 +19,21 @@ npm install
 ## Project layout
 
 Peisar builds as both a Rust library (`rlib`) and a native Node.js addon
-(`cdylib`). The Node bindings live beside the Rust implementation:
+(`cdylib`). The high-level wrapper lives in this crate; the AST and YAML
+implementations are provided by the `peisar_ast` and `peisar_yaml`
+dependencies:
 
 ```text
 src/
-├── cache/                    filesystem cache, watcher, and disk archive
-├── frontmatter/mod.rs        YAML front-matter extraction
-├── markdown/
-│   ├── ast/
-│   │   ├── tokens/           AST nodes, spans, and attributes
-│   │   ├── parsers/          block, inline, plugin, and traversal logic
-│   │   ├── control.rs        JavaScript plugin adapters
-│   │   └── mod.rs            PeisarAst holder and public AST API
-│   ├── config/mod.rs         PeisarOptions resolution
-│   ├── html/mod.rs           AST-to-HTML renderer
-│   └── peisar/mod.rs         exported N-API Peisar class
-└── lib.rs                    public module declarations
+├── ast.rs                    feature-gated AST re-exports
+├── core/
+│   ├── config.rs             parser and rendering options
+│   ├── html.rs               HTML rendering integration
+│   └── parser.rs             Peisar wrapper and N-API binding
+├── html.rs                   feature-gated renderer re-exports
+├── plugin.rs                 feature-gated plugin re-exports
+├── yaml.rs                   feature-gated YAML re-exports
+└── lib.rs                    public modules and root re-exports
 
 scripts/peisar.test.txt       Node.js integration tests
 
@@ -44,9 +43,10 @@ auto-discover it.
 skills/                       Agent Skills for AI coding tools
 ```
 
-Rust consumers use module paths such as `peisar::markdown::ast::Document`,
-not root re-exports. The generated TypeScript declarations (`index.d.ts`)
-are produced by the N-API build — never hand-edit them.
+Rust consumers use `peisar::ast`, `peisar::html`, `peisar::plugin`, and
+`peisar::yaml` when enabling those Cargo features. `Peisar` and its options
+are re-exported at the crate root. The generated TypeScript declarations
+(`index.d.ts`) are produced by the N-API build — never hand-edit them.
 
 ## Development workflow
 
@@ -79,26 +79,12 @@ removing the lock file. Do not run this command on other systems.
 
 ## Change guidelines
 
-- Keep AST shape changes consistent across `src/markdown/ast/tokens/token.rs`,
-  the N-API adapters in `src/markdown/ast/control.rs`, renderer handling in
-  `src/markdown/html/mod.rs`, and tests.
-- Parser hooks live in `src/markdown/ast/parsers/plugin.rs`. Both block and inline hooks must
-  preserve their consume-or-decline semantics:
-  - `parseBlock` must consume at least one line
-  - `parseInline` must consume at least one character; a missing or zero
-    `consumed` value declines the result
-- Visitor traversal also lives in `src/markdown/ast/parsers/plugin.rs`. Replacements are
-  intentionally not traversed again — preserve this behavior.
-- Prefer `usePlugin()` for Node.js integrations; `useVisitor()` and
-  `useParser()` are deprecated compatibility aliases. Adding a parser hook
-  reparses the original Markdown, and visitor changes are applied once per
-  plugin registration.
-- `PeisarCache` behavior and its watcher/archive lifecycle live under
-  `src/cache/`. Keep its Rust and Node.js APIs aligned.
-- Add tests for new behavior: Rust parser tests in
-  `src/markdown/ast/tests.rs`, Node.js tests in
-  `scripts/peisar.test.txt`; cache tests are colocated in
-  `src/cache/mod.rs`.
+- The parser, AST, renderer, plugin, and YAML implementations live in their
+  respective dependency crates. Keep this crate's feature-gated re-exports
+  and N-API wrapper aligned with those dependency APIs.
+- Use `Peisar.use()` for Node.js plugin integrations.
+- Add or update Node.js integration tests in `scripts/peisar.test.txt` when
+  changing the N-API surface; run `cargo test` for Rust changes.
 
 ## Commit message convention
 

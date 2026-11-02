@@ -1,227 +1,72 @@
 # Rust API reference
 
-This document summarizes the current public Rust-facing API layout.
+The crate re-exports `Peisar`, `PeisarOptions`, and `get_options` at the root.
+The lower-level APIs are split into optional, feature-gated modules.
 
-## `peisar::frontmatter`
+## `peisar::{Peisar, PeisarOptions}`
 
-Primary entry point:
+`Peisar` is the high-level single-document parser and renderer. It exposes
+`ast()`, `html()`, `frontmatter()`, and `ast_json()` methods. `PeisarOptions`
+configures GFM, Kramdown attributes, file metadata, and HTML output.
 
 ```rust
-use peisar::frontmatter::frontmatter;
+use peisar::{Peisar, PeisarOptions};
+
+let mut document = Peisar::new(
+    "# Hello".into(),
+    Some(PeisarOptions {
+        fragment: Some(true),
+        ..Default::default()
+    }),
+);
+assert_eq!(document.html(), "<h1>Hello</h1>\n");
 ```
 
-Returns `FrontmatterResult`, which provides:
+## Feature-gated modules
 
-- `yaml_data() -> Option<&serde_json::Value>`
-- `pure_markdown_content() -> &str`
-- `into_parts() -> (String, Option<serde_json::Value>)`
+Enable each Cargo feature to expose its corresponding module. The crate's
+default feature set is empty.
 
-Use it when you want front matter separated before parsing Markdown further.
+| Feature | Module | Main exports |
+| --- | --- | --- |
+| `ast` | `peisar::ast` | `AstOptions`, `Document`, AST node types, parse and visitor helpers |
+| `html` | `peisar::html` | `RenderOptions`, `render_document_html`, `AstToHtml` |
+| `plugin` | `peisar::plugin` | `Plugin`, `PluginFactory`, `RegisteredPlugin` |
+| `yaml` | `peisar::yaml` | `FrontmatterResult`, `frontmatter`, `load_yaml`, `yaml_parser` |
 
-## `peisar::yaml`
+### `peisar::ast`
 
-Dynamic YAML helpers:
-
-- `parse_yaml_value(&str) -> Result<serde_json::Value, String>`
-- `load_yaml_value_file(path) -> Result<serde_json::Value, String>`
-
-Typed config helpers:
-
-- `parse_yaml_config<T>(&str) -> Result<T, String>`
-- `load_yaml_config_file<T>(path) -> Result<T, String>`
-
-## `peisar::markdown::ast`
-
-Key exports:
-
-- `AstOptions`
-- `Document`
-- `PluginFactory`
-- `ParserHooks`
-- `visit_document_mut`
-- `md_to_ast_with_hooks`
-
-Notable behavior:
-
-- `Document::parse(...)` is the normal entry point for parsing Markdown.
-- GFM and Kramdown parsing are configured through `AstOptions`.
-- `PluginFactory` is the current unified extension trait for parser hooks and
-  visitor callbacks.
-- `ParserHooks` and `md_to_ast_with_hooks` expose the hook-enabled parser for
-  Rust integrations.
-- The public AST module re-exports the deprecated `BlockParseContext` and
-  `InlineParseContext` aliases, but not the newer `BlockParserContext` and
-  `InlineParserContext` names. Use the aliases in Rust `PluginFactory`
-  parser-hook signatures for now.
-- `AstVisitor` and `AstParser` are deprecated compatibility traits; use
-  `PluginFactory` for new extension code.
-- The Rust AST module does not currently re-export `VisitControl` or
-  `InlineVisitControl`, so external Rust callers cannot implement the
-  `PluginFactory` visitor callbacks through the public module paths. Node.js
-  consumers can use the complete visitor API through `usePlugin()`.
-
-### Example
+Use `Document::parse` to parse Markdown directly. This module re-exports AST
+types and parser helpers from `peisar_ast`.
 
 ```rust
-use peisar::markdown::ast::{AstOptions, Document};
+use peisar::ast::{AstOptions, Document};
 
 let document = Document::parse("# Hello\n", &AstOptions::default(), None);
 assert_eq!(document.children.len(), 1);
 ```
 
-## `peisar::markdown::html`
+### `peisar::html`
 
-Key exports:
+`render_document_html` converts a parsed document to HTML. Pass
+`RenderOptions { fragment: true, .. }` to render only the body. The default
+render options use fragment mode.
 
-- `RenderOptions`
-- `render_document_html(&Document, Option<RenderOptions>) -> String`
-- `AstToHtml`
+### `peisar::plugin`
 
-Use `RenderOptions { fragment: true, .. }` when you want just the rendered
-body content instead of a full HTML document.
+This module re-exports the plugin interfaces from `peisar_ast`. Enable both
+`ast` and `plugin` when using plugin types alongside AST parsing.
 
-## `peisar::markdown::config`
+### `peisar::yaml`
 
-Key exports:
+`frontmatter` separates leading YAML front matter from Markdown content.
+`yaml_parser` parses YAML text, while `load_yaml` reads and parses a YAML file.
 
-- `PeisarOptions`
-- `get_options`
+## Cargo features
 
-`PeisarOptions` is the shared high-level option object used by the Node-facing
-wrapper and the Rust `markdown::peisar::Peisar` type.
-
-## `peisar::markdown::peisar`
-
-Key type:
-
-- `Peisar`
-
-Notable methods:
-
-- `Peisar::new(markdown, options)`
-- `ast()`
-- `html()`
-- `frontmatter()`
-- `ast_json()`
-
-This wrapper is the closest Rust equivalent to the Node.js `Peisar` class.
-
-## `peisar::cache`
-
-`PeisarCache` loads Markdown pages and optional assets into an in-memory LRU.
-Pages are selected by their front-matter `layout`, which must match an HTML
-layout provided by the configured theme. A background archive keeps evicted
-entries readable.
-
-```rust
-use peisar::cache::{CachedContent, PeisarCache, PeisarCacheConfig};
-use std::path::Path;
-
-let mut cache = PeisarCache::with_config(PeisarCacheConfig {
-    entry_dir: Some("contents".into()),
-    assets_dir: Some("contents/public".into()),
-    ..PeisarCacheConfig::default()
-})?;
-
-for page in cache.page_objects() {
-    println!("{} -> {}", page.slug, page.out_file_path);
-}
-let intro = std::env::current_dir()?.join("contents/intro.md");
-if let Some(CachedContent::Text(markdown)) = cache.get(Path::new(&intro)) {
-    println!("{markdown}");
-}
-
-cache.start_watching()?;
-cache.stop_watching();
-# Ok::<(), std::io::Error>(())
+```toml
+peisar = { version = "1.2.2", features = ["ast", "html", "plugin", "yaml"] }
 ```
 
-### Configuration
-
-- `PeisarCache::new(entry_dir)` uses default settings.
-- `PeisarCache::with_config(PeisarCacheConfig { .. })` configures the
-  directories, Markdown options, memory/archive budgets, hosting, output
-  directory, archive directory, and theme package.
-- `entry_dir` is optional and defaults to the current working directory.
-  Construction requires an `index` file with a supported Markdown extension
-  directly inside it.
-- `assets_dir` is optional. When provided, its path is resolved from the
-  current working directory and must exist as a directory inside `entry_dir`.
-- `theme` defaults to `DEFAULT_THEME_NAME` (`"peisar-minima"`) and is
-  resolved under `peisar_themes/` in the current working directory. A theme
-  package must contain `peisar-theme.json` with `name` and `version` fields.
-  `PeisarCache::theme_path()`, `theme_config()`, and `theme_dirs()` expose the
-  resolved package path, parsed metadata, and absolute theme directories.
-- `PeisarThemeConfig` defaults `author` to `None`, `theme_layouts_dir` to
-  `"_layouts"`, `includes_dir` to `"_indluces"`, `assets_dir` to `"_assets"`,
-  and `data_dir` to `"_data"`. Theme assets are included in
-  `asset_objects()` / `assets()`.
-- Layout names are discovered recursively from `.html` files in the theme's
-  configured `theme_layouts_dir`, using each filename without its extension.
-  `markdown_layouts()` returns the accepted names sorted alphabetically.
-  Only recursively discovered Markdown files with a string `layout`
-  front-matter value matching one of those names are cached.
-- `MemoryConfig` defaults to a 64 MiB byte budget and unlimited entries.
-  Set either budget to `0` for unlimited.
-- `ArchiveConfig` defaults to 8 MiB shards and a 2-second flush interval.
-  The initial cache snapshot flushes immediately in the background regardless
-  of the configured interval.
-  Set either threshold to `0` to disable that trigger.
-- `out_dir` defaults to `".peisar"` and `cache_dir` to `".peisar-cache"`,
-  both relative to the current working directory.
-
-Markdown files with extensions `md`, `markdown`, `mdown`, `mkdn`, `mkd`,
-`mdwn`, `mkdown`, or `ron` are discovered recursively, subject to the layout
-filter above. Configuration, theme loading, and Markdown/asset collection
-failures are returned as `io::Error`. The optional assets directory
-recognizes common image, script/style, font, and audio/video file types.
-Markdown and textual assets are stored as text; other recognized assets are
-stored as bytes.
-
-### Reading and derived objects
-
-- `get(path)` checks memory first, then the archive, and returns
-  `Option<CachedContent>`.
-- `all()` clones text entries currently held in memory; it does not read the
-  archive tier.
-- `list_files()`, `markdown_files()`, and `asset_files()` list absolute cached
-  paths across the memory and archive tiers.
-- `page_objects()` and `asset_objects()` derive template-ready values sorted
-  by slug. `page_object_for(path)` and `asset_object_for(path)` derive one.
-- `markdown_layouts()` lists the accepted layout names discovered from the
-  theme.
-- `theme_dirs()` returns absolute paths for the theme layouts, assets, and
-  data directories.
-- `pages()` and `assets()` are the corresponding Node.js-facing methods.
-- The memory budgets limit the hot in-memory set. Archive-backed entries
-  remain readable after eviction.
-
-`PageObject` includes its rendered HTML, slug, output and input paths, and
-page metadata (`layout`, `title`, `summary`, `tags`, `publish_date`, and
-additional front matter). `AssetsObject` includes its slug, paths, extension,
-type, and raw content; binary asset content is base64-encoded in its `raw`
-field.
-
-### Watching and archive lifecycle
-
-Call `start_watching()` to keep the cache synchronized with changes under the
-entry and asset directories. Register callbacks with `on_change()` and remove
-them with `off_change(id)`; each callback receives a `CacheChangeEvent` with
-the absolute `path`, `kind` (`"create"`, `"modify"`, `"remove"`, or
-`"other"`), and `is_markdown` fields. Callbacks receive detected watcher
-events; pretty stderr logs coalesce duplicate file events. Watcher setup
-errors are returned from `start_watching()`, while runtime errors are logged.
-
-The archive worker writes binary shards and a `map.json` index in the cache
-directory. `archived()` lists flushed paths, `map_json()` returns the current
-index, and `flush()` blocks until pending writes finish. `stop_watching()`
-stops the watcher and flushes pending writes; dropping the cache also flushes
-pending writes and joins its workers. The watcher may be started again after
-it is stopped.
-
-## Choosing an API
-
-- Use `markdown::ast` + `markdown::html` for lower-level parsing and rendering.
-- Use `markdown::peisar::Peisar` for a higher-level single-document wrapper.
-- Use `cache::PeisarCache` for filesystem-backed Markdown and asset caching.
-- Use `frontmatter` or `yaml` when you only need metadata/config handling.
+All features are optional and disabled by default. See the [Rust overview](./README.md)
+for an installation example and end-to-end usage.

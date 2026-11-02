@@ -6,35 +6,29 @@ description: Build, test, and modify Peisar's Rust implementation and native Nod
 # Peisar Development
 
 Peisar is a Rust crate that builds both an `rlib` and an N-API `cdylib`.
-Node.js bindings live beside the Rust implementation rather than in a
-separate JavaScript source tree.
+The crate provides a high-level parser wrapper and delegates the lower-level
+AST, HTML, plugin, and YAML implementations to `peisar_ast` and `peisar_yaml`.
 
 ## Layout
 
 ```text
 src/
-├── frontmatter/mod.rs                 YAML front-matter extraction
-├── cache/
-│   ├── mod.rs                          PeisarCache, watcher, archive coordination
-│   ├── lru.rs                          bounded in-memory cache tier
-│   ├── archive.rs                      disk shards and map.json index
-│   └── obj_cache.rs                    page/asset objects and derived values
-├── markdown/
-│   ├── ast/
-│   │   ├── tokens/                    AST nodes, spans, and attributes
-│   │   ├── parsers/                   block, inline, plugin, visitor traversal
-│   │   ├── control.rs                 N-API plugin adapters
-│   │   └── mod.rs                     PeisarAst holder
-│   ├── config/mod.rs                  PeisarOptions resolution
-│   ├── html/mod.rs                    AST-to-HTML renderer
-│   └── peisar/mod.rs                  exported N-API Peisar class
-└── lib.rs                             public module declarations
+├── ast.rs                             feature-gated AST re-exports
+├── core/
+│   ├── config.rs                      parser and rendering options
+│   ├── html.rs                        HTML rendering integration
+│   └── parser.rs                      Peisar wrapper and N-API binding
+├── html.rs                            feature-gated renderer re-exports
+├── plugin.rs                          feature-gated plugin re-exports
+├── yaml.rs                            feature-gated YAML re-exports
+└── lib.rs                             public modules and root re-exports
 ```
 
-The Node.js `Peisar` class exposes `ast`, `html`, `frontmatter`, `astJson`,
-and `usePlugin()`. `useVisitor()` and `useParser()` are deprecated
-compatibility aliases. The generated TypeScript declarations are output by
-the N-API build; do not hand-edit them.
+`Peisar`, `PeisarOptions`, and `get_options` are re-exported at the crate root.
+The lower-level Rust modules require the matching `ast`, `html`, `plugin`, or
+`yaml` Cargo feature. The Node.js `Peisar` class exposes `ast`, `html`,
+`frontmatter`, `astJson`, and `use()`. The generated TypeScript declarations
+are output by the N-API build; do not hand-edit them.
 
 ## Build and test
 
@@ -47,26 +41,18 @@ cargo test
 
 `npm run js:test` builds a fresh addon in a temporary directory, regenerates
 the package loader and TypeScript declarations, and runs the Node integration
-tests in `scripts/peisar.test.txt` — it covers both the build and the test
-step after changing N-API-visible Rust types or methods. `npm run build`
-produces the published package files (`index.cjs`, `index.mjs`,
-`index.d.ts`). Rust parser tests are in
-`src/markdown/ast/tests.rs`; cache tests are colocated in
-`src/cache/mod.rs`.
+tests in `scripts/peisar.test.txt`. `npm run build` produces the published
+package files (`index.cjs`, `index.mjs`, `index.d.ts`). Use `cargo test` for
+Rust tests.
 
 ## Change guidelines
 
-- Change AST shapes consistently in `tokens/token.rs`, N-API types in
-  `ast/control.rs`, renderer handling in `html/mod.rs`, and tests.
-- Parser hooks are defined in `ast/parsers/plugin.rs`; both block and inline
-  hooks must preserve their consume-or-decline semantics.
-- Visitor traversal is in `ast/parsers/plugin.rs`. Replacements intentionally
-  are not traversed again.
-- Prefer `usePlugin()` for Node.js integrations. Adding parser hooks reparses
-  the original Markdown; visitor changes are applied once per registration.
+- AST, renderer, plugin, and YAML implementation changes belong in their
+  respective dependency crates; update this crate's re-exports or N-API
+  wrapper only when its integration surface changes.
+- Prefer `Peisar.use()` for Node.js plugin integrations.
 - napi numerics: config fields crossing the boundary use `i64`/`u32` (not
   `u64`/`usize`); clamp in the resolved accessors.
-- Rust consumers use module paths such as `peisar::markdown::ast::Document`,
-  not root re-exports.
-- `PeisarCache` is exposed from `peisar::cache`; its cache implementation,
-  watcher, and archive tests are colocated in `src/cache/`.
+- Rust consumers use `peisar::ast`, `peisar::html`, `peisar::plugin`, and
+  `peisar::yaml` when enabling those features. `Peisar` and its options are
+  available from the crate root.

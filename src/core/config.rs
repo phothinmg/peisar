@@ -79,8 +79,7 @@ pub struct PeisarOptions {
     /// Enable Kramdown-style block attributes (`{:#id .class key="val"}`).
     /// Default: `true`.
     pub kramdown: Option<bool>,
-    /// Optional file name to attach to the parsed
-    /// [`Document`](crate::markdown::ast::Document).
+    /// Optional file name to attach to the parsed document.
     pub file_name: Option<String>,
     /// If `true`, emit only the body content (no `<!DOCTYPE>`, `<html>`,
     /// `<head>`, or `<body>` wrapper).  If `false`, emit a full HTML

@@ -10,15 +10,14 @@ syntax; use the parser-hook API for that.
 
 ## Node.js
 
-Register a visitor with `usePlugin()` on the `Peisar` instance. Both
-callbacks receive a **one-item tuple**, not a node directly. `useVisitor()`
-is a deprecated compatibility alias.
+Register a visitor with `use()` on the `Peisar` instance. Both callbacks
+receive a **one-item tuple**, not a node directly.
 
 ```js
 const { Peisar } = require("peisar");
 
 const document = new Peisar("# Hello", { fragment: true });
-document.usePlugin({
+document.use({
   visitBlock([block]) {
     if (block.type === "Heading") {
       return { replaceWith: [{ ...block, level: 2 }] };
@@ -57,12 +56,7 @@ the peisar-parse-markdown skill.)
 
 ## Rust
 
-`AstVisitor` is deprecated in favor of `PluginFactory`, but the current
-public Rust AST module does not re-export the visitor control types needed to
-implement Rust visitor callbacks. Use the Node.js `usePlugin()` interface
-for supported AST rewriting; Rust consumers can use the parser API described
-in the `peisar-parser-hooks` skill.
-
-Rust node types remain under
-`peisar::markdown::ast::tokens::token::{Block, Inline}`. Do not use
-obsolete root paths such as `peisar::visitor` or `peisar::token`.
+Rust AST types are re-exported from `peisar::ast` with the `ast` Cargo
+feature, and plugin interfaces are available from `peisar::plugin` with the
+`plugin` feature. See the Rust API reference for the current dependency
+interfaces and feature requirements.

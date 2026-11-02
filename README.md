@@ -26,8 +26,7 @@ Node.js through N-API.
 - GFM tables, strikethrough, task lists, and autolinks
 - Kramdown block attributes such as `{:#intro .lead key="value"}`
 - YAML front matter extraction
-- AST visitors and parser hooks through `usePlugin()`
-- Filesystem-backed Markdown and asset caching for static-site builds
+- AST visitors and parser hooks through `Peisar.use()`
 - Native Node.js addon and Rust library surfaces
 
 ## Install
@@ -62,17 +61,16 @@ console.log(document.frontmatter);
 ### Rust
 
 ```rust
-use peisar::markdown::ast::{AstOptions, Document};
-use peisar::markdown::html::{RenderOptions, render_document_html};
+use peisar::{Peisar, PeisarOptions};
 
-let doc = Document::parse("# Hello **world**\n", &AstOptions::default(), None);
-let html = render_document_html(
-    &doc,
-    Some(RenderOptions {
-        fragment: true,
-        ..RenderOptions::default()
+let mut doc = Peisar::new(
+    "# Hello **world**\n".into(),
+    Some(PeisarOptions {
+        fragment: Some(true),
+        ..Default::default()
     }),
 );
+let html = doc.html();
 
 assert_eq!(html, "<h1>Hello <strong>world</strong></h1>\n");
 ```
@@ -147,7 +145,6 @@ npx skills add phothinmg/peisar
 - **peisar-parse-markdown**: consume the Node.js and Rust Markdown APIs
 - **peisar-ast-visitors**: make post-parse AST transformations
 - **peisar-parser-hooks**: add syntax recognized during parsing
-- **peisar-cache**: cache Markdown and assets and build page/asset objects
 - **peisar-development**: modify and validate the codebase
 
 ## License

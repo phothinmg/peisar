@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Split the parser, renderer, plugin, and YAML implementation into the
+  `peisar_ast` and `peisar_yaml` dependencies. Rust APIs now use the
+  `peisar::ast`, `peisar::html`, `peisar::plugin`, and `peisar::yaml` modules;
+  AST, HTML, plugin, and YAML re-exports require their matching Cargo features.
+- Renamed the Node.js plugin registration method to `Peisar.use()`.
+
+### Removed
+
+- Removed the filesystem-backed `PeisarCache` API from the Rust crate and
+  Node.js package.
+- Removed the deprecated Node.js `useVisitor()` and `useParser()` aliases.
+
 ## [1.2.2] - 2026-11-1
 
 ### Added
