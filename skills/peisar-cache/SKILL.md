@@ -96,7 +96,9 @@ text assets, and `Binary(Vec<u8>)` for binary assets.
 - The archive writes binary shards and a `map.json` index under
   `.peisar-cache` by default. It flushes on the size threshold, interval,
   explicit `flush()`, or shutdown. Default shard size is 8 MiB and default
-  flush interval is 2000 ms; `0` disables the corresponding trigger.
+  flush interval is 2000 ms; `0` disables the corresponding trigger. The
+  initial cache snapshot is flushed immediately in the background, regardless
+  of the configured interval.
 - `page_objects()` / `asset_objects()` derive objects sorted by slug.
   Node.js exposes these as `pages()` / `assets()`. Page HTML uses Peisar's
   Markdown pipeline; page metadata is extracted from YAML front matter.

@@ -262,7 +262,7 @@ configuration validation errors but does not terminate the Node process.
 | Property | Type | Default | Description |
 | --- | --- | --- | --- |
 | `shardBytes` | `number` | `8388608` | Flush pending content after reaching this size; zero disables size-triggered flushes |
-| `flushIntervalMs` | `number` | `2000` | Flush pending content after this interval; zero disables timer-triggered flushes |
+| `flushIntervalMs` | `number` | `2000` | Flush pending content after this interval; zero disables timer-triggered flushes. The initial cache snapshot flushes immediately in the background, regardless of this setting. |
 
 `HostingConfig` fields are `provider`, `repo`, `siteUrl`, and `pathPrefix`.
 Providers are `"GithubPages"`, `"Vercel"`, `"Netlify"`,

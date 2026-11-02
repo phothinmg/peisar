@@ -164,6 +164,8 @@ cache.stop_watching();
 - `MemoryConfig` defaults to a 64 MiB byte budget and unlimited entries.
   Set either budget to `0` for unlimited.
 - `ArchiveConfig` defaults to 8 MiB shards and a 2-second flush interval.
+  The initial cache snapshot flushes immediately in the background regardless
+  of the configured interval.
   Set either threshold to `0` to disable that trigger.
 - `out_dir` defaults to `".peisar"` and `cache_dir` to `".peisar-cache"`,
   both relative to the current working directory.

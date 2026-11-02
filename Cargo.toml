@@ -14,29 +14,22 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["preserve_order"] }
 napi = { version = "3", features = ["serde-json"], optional = true }
 napi-derive = { version = "3", optional = true }
-noyalib = "0.0.57"
-blake3 = "1.4"
-notify = "6"
-bincode = "1.3"
+peisar_yaml = "0.1.2"
+peisar_ast = "1.2.14"
 
 [build-dependencies]
 napi-build = "2"
-
-# Signal handling (SIGINT/Ctrl+C) for the `cache` example. `libc` is
-# already in the dependency tree via `notify`, so this adds no new
-# transitive crates. The signal API used (`signal`, `SIGINT`, `SIG_ERR`,
-# `SIG_DFL`) is available on every supported target, Windows included.
-[dev-dependencies]
-libc = "0.2"
 
 
 [lib]
 name = "peisar"
 path = "src/lib.rs"
-# `rlib` for the CLI binary + integration tests; `cdylib` for the Node
-# native addon (only built when the `napi` feature is on).
 crate-type = ["rlib", "cdylib"]
 
 [features]
 default = []
-npm = ["dep:napi", "dep:napi-derive"]
+npm = ["dep:napi", "dep:napi-derive", "peisar_yaml/npm", "peisar_ast/npm"]
+yaml = []
+ast = []
+html = []
+plugin = []

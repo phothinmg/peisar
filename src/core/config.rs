@@ -1,14 +1,58 @@
-//! Combined JavaScript-facing options for Markdown parsing and HTML rendering.
-//!
-//! [`PeisarOptions`] is the single options object JS consumers pass to the
-//! `Peisar` constructor.  It is split internally by [`get_options`] into
-//! [`AstOptions`] (parsing) and [`RenderOptions`] (rendering).
-
-use crate::markdown::ast::AstOptions;
-use crate::markdown::html::RenderOptions;
 #[cfg(feature = "npm")]
 use napi_derive::napi;
+
+use peisar_ast::AstOptions;
 use serde::{Deserialize, Serialize};
+
+/// Options that control how the AST is rendered to HTML.
+#[cfg_attr(feature = "npm", napi(object))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RenderOptions {
+    /// If `true`, emit only the body content (no `<!DOCTYPE>`, `<html>`,
+    /// `<head>`, or `<body>` wrapper).  If `false`, emit a full HTML
+    /// document.  Default: `true` (fragment).
+    pub fragment: bool,
+    /// Include a `<meta charset="utf-8">` in the head (only relevant when
+    /// `fragment` is `false`).  Default: `true`.
+    pub charset: bool,
+    /// Include a `<meta name="viewport" content="width=device-width,
+    /// initial-scale=1.0">` in the head (only relevant when `fragment` is
+    /// `false`).  Default: `true`.
+    pub viewport: bool,
+    /// Optional `<title>` for the HTML head (only relevant when
+    /// `fragment` is `false`).  Default: `None`.
+    pub title: Option<String>,
+    /// Optional additional CSS classes to add to `<body>` (only relevant
+    /// when `fragment` is `false`).  Default: `None`.
+    pub body_class: Option<String>,
+    /// Optional inline CSS to inject in a `<style>` tag in the head.
+    /// Default: `None`.
+    pub style: Option<String>,
+}
+#[cfg_attr(feature = "npm", napi)]
+impl Default for RenderOptions {
+    fn default() -> Self {
+        Self {
+            fragment: true,
+            charset: true,
+            viewport: true,
+            title: None,
+            body_class: None,
+            style: None,
+        }
+    }
+}
+/// Convenience: create `Some(true)` for fragment mode (backward-compatible
+/// with the old `render_document(doc, Some(bool))` API).
+#[cfg_attr(feature = "npm", napi)]
+impl From<bool> for RenderOptions {
+    fn from(fragment: bool) -> Self {
+        Self {
+            fragment,
+            ..Default::default()
+        }
+    }
+}
 
 /// JavaScript options for Markdown parsing and HTML rendering.
 ///
@@ -92,7 +136,7 @@ pub struct GetOptions {
 /// # Example
 ///
 /// ```
-/// use peisar::markdown::config::{PeisarOptions, get_options};
+/// use peisar::{PeisarOptions, get_options};
 ///
 /// // Passing `None` uses the documented defaults.
 /// let resolved = get_options(None);
