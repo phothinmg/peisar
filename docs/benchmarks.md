@@ -21,6 +21,7 @@ The current benchmark suite uses:
 
 - Tinybench for timing
 - `node --expose-gc` for more stable memory measurements
+- Peisar 1.2.3 on Node.js 24.22.1 for the results below
 - `micromark` configured with its GFM syntax and HTML extensions
 - seven memory batches, with 100 / 25 / 10 render iterations per batch for
   base / medium / large documents
@@ -32,9 +33,9 @@ Average throughput in operations per second (higher is better):
 
 | Scenario | peisar | marked | markdown-it | showdown | micromark |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Base (528 B) | 20,822 | 8,835 | 7,775 | 2,076 | 909 |
-| Medium (4,542 B) | 2,533 | 1,268 | 990 | 345 | 107 |
-| Large (18,220 B) | 731 | 330 | 253 | 83 | 24 |
+| Base (528 B) | 20,588 | 9,653 | 7,886 | 2,155 | 901 |
+| Medium (4,542 B) | 2,625 | 1,329 | 1,001 | 345 | 111 |
+| Large (18,220 B) | 723 | 358 | 261 | 80 | 25 |
 
 ## Average peak heap usage
 
@@ -42,9 +43,9 @@ Measured average peak heap in MiB (lower is better):
 
 | Scenario | peisar | marked | markdown-it | showdown | micromark |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Base | 0.12 | 4.69 | 6.05 | 20.26 | 58.32 |
-| Medium | 0.22 | 9.55 | 13.20 | 50.79 | 62.98 |
-| Large | 0.35 | 15.39 | 20.99 | 63.88 | 88.05 |
+| Base | 0.14 | 4.71 | 6.07 | 20.25 | 58.62 |
+| Medium | 0.23 | 9.54 | 13.18 | 50.79 | 62.88 |
+| Large | 0.35 | 15.29 | 21.01 | 63.88 | 86.15 |
 
 ## Summary
 
