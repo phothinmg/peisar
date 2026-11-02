@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Raised the minimum supported Rust version to 1.88 to match the updated
+  `napi-build` dependency.
+
 ## [1.2.3] - 2026-11-2
 
 ### Changed

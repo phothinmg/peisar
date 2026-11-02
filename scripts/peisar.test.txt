@@ -68,7 +68,7 @@ test("renders GFM task lists by default", () => {
 test("applies JavaScript AST visitors before rendering", () => {
   const document = new Peisar("# Hello", { fragment: true });
 
-  document.useVisitor({
+  document.use({
     visitBlock([block]) {
       if (block.type === "Heading") {
         return { replaceWith: [{ ...block, level: 2 }] };
@@ -87,7 +87,7 @@ test("custom block parser hooks run before built-in parsers", () => {
   });
   const zero = { line: 0, column: 0, offset: 0 };
 
-  document.useParser({
+  document.use({
     parseBlock([{ line, lines }]) {
       if (!line.startsWith(":::")) return; // decline
       const name = line.slice(3).trim();
@@ -118,7 +118,7 @@ test("custom inline parser hooks parse wikilinks", () => {
   const document = new Peisar("See [[Some Page]] here.", { fragment: true });
   const zero = { line: 0, column: 0, offset: 0 };
 
-  document.useParser({
+  document.use({
     parseInline([{ rest }]) {
       if (!rest.startsWith("[[")) return; // decline
       const close = rest.indexOf("]]");
@@ -149,7 +149,7 @@ test("parser hooks and visitors compose", () => {
   });
   const zero = { line: 0, column: 0, offset: 0 };
 
-  document.useParser({
+  document.use({
     parseBlock([{ line }]) {
       if (line.trim() !== "!") return; // decline
       return {
@@ -159,7 +159,7 @@ test("parser hooks and visitors compose", () => {
     },
   });
 
-  document.useVisitor({
+  document.use({
     visitBlock([block]) {
       if (block.type === "ThematicBreak") {
         return {
