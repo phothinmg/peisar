@@ -60,12 +60,13 @@ let mut document = Peisar::new(
 assert_eq!(document.html(), "<h1>Hello</h1>\n");
 ```
 
-The lower-level Rust APIs are optional features:
+The lower-level Rust APIs are available without Cargo features:
 
-- `peisar::ast` with the `ast` feature
-- `peisar::html` with the `html` feature
-- `peisar::plugin` with the `plugin` feature
-- `peisar::yaml` with the `yaml` feature
+- `peisar::ast` for AST types and parser helpers
+- `peisar::plugin` for plugin types and visitors
+
+Use the high-level `Peisar` wrapper for HTML rendering and front matter.
+The `npm` Cargo feature is only needed when building the Node.js bindings.
 
 See the [Rust API reference](../../docs/rust/apis.md) and
 [Node.js API reference](../../docs/nodejs/apis.md) for details.

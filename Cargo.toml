@@ -1,6 +1,6 @@
 [package]
 name = "peisar"
-version = "2.0.0"
+version = "2.0.1"
 edition = "2024"
 rust-version = "1.88"
 license = "Apache-2.0"
@@ -14,8 +14,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["preserve_order"] }
 napi = { version = "3", features = ["serde-json"], optional = true }
 napi-derive = { version = "3", optional = true }
-peisar_yaml = "0.1.2"
-peisar_ast = { path = "../peisar_ast" }
+peisar_ast = "1.2.15"
 
 [build-dependencies]
 napi-build = "2"
@@ -28,4 +27,12 @@ crate-type = ["rlib", "cdylib"]
 
 [features]
 default = []
-npm = ["dep:napi", "dep:napi-derive", "peisar_yaml/npm", "peisar_ast/npm"]
+npm = ["dep:napi", "dep:napi-derive", "peisar_ast/npm"]
+
+[[example]]
+name = "plugin"
+path = "examples/rust/plugin.rs"
+
+[[example]]
+name = "parser_hook"
+path = "examples/rust/parser_hook.rs"

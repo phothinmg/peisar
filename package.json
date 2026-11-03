@@ -1,43 +1,12 @@
 {
   "name": "peisar",
-  "version": "2.0.0",
+  "version": "2.0.1",
+  "gitHead": "fefe667d38f40eef5ba2b33df555d0ada4a9971b",
   "description": "A practical Markdown parser engineered in Rust",
-  "main": "index.cjs",
-  "types": "index.d.ts",
-  "module": "index.mjs",
-  "browser": "browser/peisar.js",
-  "exports": {
-    ".": {
-      "require": {
-        "default": "./index.cjs",
-        "types": "./index.d.ts"
-      },
-      "import": {
-        "default": "./index.mjs",
-        "types": "./index.d.ts"
-      }
-    }
-  },
-  "scripts": {
-    "build": "bash scripts/build.sh",
-    "test": "bash scripts/tests.sh",
-    "ssg:build": "bash scripts/ssg_build.sh",
-    "hooks:install": "bash scripts/install-hooks.sh",
-    "commit": "bash scripts/commit.sh",
-    "benchmark": "cd bench && npm run bench",
-    "fix:gpg": "bash scripts/gpg.sh"
-  },
   "keywords": [
     "markdown",
     "parser"
   ],
-  "type": "module",
-  "devDependencies": {
-    "@emnapi/core": "^2.0.0-alpha.5",
-    "@emnapi/runtime": "^2.0.0-alpha.5",
-    "@napi-rs/cli": "^3.9.1",
-    "emnapi": "^2.0.0-alpha.5"
-  },
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -52,13 +21,47 @@
     "index.mjs",
     "index.d.ts",
     "package.json",
-    "browser"
+    "browser",
+    "prisar.webp"
   ],
+  "type": "module",
+  "main": "index.cjs",
+  "module": "index.mjs",
+  "browser": "browser/peisar.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "require": {
+        "default": "./index.cjs",
+        "types": "./index.d.ts"
+      },
+      "import": {
+        "default": "./index.mjs",
+        "types": "./index.d.ts"
+      }
+    }
+  },
   "publishConfig": {
     "access": "public"
   },
+  "scripts": {
+    "build": "bash scripts/build.sh",
+    "test": "bash scripts/tests.sh",
+    "example:build": "bash scripts/example_build.sh",
+    "hooks:install": "bash scripts/install-hooks.sh",
+    "commit": "bash scripts/commit.sh",
+    "benchmark": "bash scripts/benchmark.sh",
+    "fix:gpg": "bash scripts/gpg.sh"
+  },
+  "devDependencies": {
+    "@emnapi/core": "^2.0.0-alpha.5",
+    "@emnapi/runtime": "^2.0.0-alpha.5",
+    "@napi-rs/cli": "^3.9.1",
+    "emnapi": "^2.0.0-alpha.5",
+    "oxfmt": "^0.76.0",
+    "oxlint": "^1.91.0"
+  },
   "engines": {
     "node": "^20.19.0 || ^22.13.0 || >=23.5.0 || ^24.21.0"
-  },
-  "gitHead": "20019b561f494782ada042f6a1c620f7df21752b"
+  }
 }

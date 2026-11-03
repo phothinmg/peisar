@@ -27,8 +27,9 @@ they can be updated between npm and crates.io releases.
 
 ### Current API reference
 
-The API references describe the single-document parser, optional Rust feature
-modules, and Node.js plugin interface:
+The API references describe the single-document parser and Node.js plugin
+interface. Rust's `ast` and `plugin` modules are available without Cargo
+feature flags; the `npm` feature is only needed to build the Node.js bindings:
 
 - [Node.js API](./nodejs/apis.md)
 - [Rust API](./rust/apis.md)
@@ -40,7 +41,8 @@ modules, and Node.js plugin interface:
 
 ## Releases
 
-- [Release notes](./release-notes/2.0.0.md) for the current major version
+- [Release notes](./release-notes/2.0.1.md) for the current version
+- [Release notes](./release-notes/2.0.0.md) for the previous major release
 - [Full changelog](../CHANGELOG.md)
 - [Security policy](../SECURITY.md) and [threat model](../SECURITY_MODEL.md)
 

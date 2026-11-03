@@ -35,7 +35,22 @@ export const Peisar = peisar.Peisar;
 export const frontmatter = peisar.frontmatter;
 export const yamlParser = peisar.yamlParser;
 export const loadYaml = peisar.loadYaml;
+export const renderDocumentHtml = peisar.renderDocumentHtml;
+export const PeisarAst = peisar.PeisarAst;
 EOF
+
+# 3.1 Lint and format output JS files
+
+# 3.1.1 Lint JS files
+
+npx oxlint index.cjs
+npx oxlint index.mjs
+
+# 3.1.2 Format JS files
+
+npx oxfmt --write index.cjs
+npx oxfmt --write index.mjs
+npx oxfmt --write index.d.ts
 
 # 4. Remove binary and .d.ts
 rm -rf "$BINARY_FILE"
@@ -55,5 +70,9 @@ try {
   console.error('Failed to read git HEAD or write package.json', e);
 }
 "
+
+# Format package.json after write gitHead
+
+npx oxfmt --write package.json
 
 echo "Finished Build"

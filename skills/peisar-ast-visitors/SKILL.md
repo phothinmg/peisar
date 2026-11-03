@@ -56,9 +56,9 @@ the peisar-parse-markdown skill.)
 
 ## Rust
 
-Enable the `ast` and `plugin` Cargo features. AST types are re-exported
-from `peisar::ast`; implement `PluginFactory` (from `peisar::plugin`) and
-run it over a parsed document with `visit_document_mut`.
+No Cargo features are required for Rust AST visitors. AST types are
+re-exported from `peisar::ast`; implement `PluginFactory` (from
+`peisar::plugin`) and run it over a parsed document with `visit_document_mut`.
 
 ```rust
 use peisar::ast::{AstOptions, Block, Document};
@@ -87,6 +87,5 @@ visit_document_mut(&mut document, &mut DemoteHeadings);
 `replace_with`, `remove`, and `recurse`. The high-level `Peisar` class
 does not accept Rust plugins — it registers plugins on the JS side through
 `use()` only. Use `Document::parse` plus `visit_document_mut` for Rust-side
-transformations, then render with `render_document_html` (the `html`
-feature). See the [Rust API reference](../../docs/rust/apis.md) for the
-current dependency interfaces and feature requirements.
+transformations. Use the high-level `Peisar` API for HTML rendering. See the
+[Rust API reference](../../docs/rust/apis.md) for the current public API.

@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-11-04
+
+### Changed
+
+- Rust AST and plugin modules are available without Cargo feature flags. The
+  `npm` feature is the only optional Cargo feature and is needed only for the
+  Node.js bindings.
+- Switched the AST dependency to the published `peisar_ast` 1.2.15 crate and
+  removed the direct `peisar_yaml` dependency.
+- Updated the Rust AST re-exports to expose node types from `peisar::ast`;
+  use `Document::parse` for direct parsing and `md_to_ast_with_hooks` when
+  parser hooks are needed.
+
+### Removed
+
+- Removed the obsolete `peisar::parsers` and `peisar::yaml` modules, along
+  with the `PeisarAst` and `md_to_ast` re-exports. Front matter remains
+  available through the high-level `Peisar` API.
+
 ## [2.0.0] - 2026-11-03
 
 ### Notes
@@ -259,6 +278,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and parse/render options (GFM and Kramdown enabled by default)
 - Rust `rlib` crate and Node.js integration test suite
 
+[2.0.1]: https://github.com/phothinmg/peisar/compare/2.0.0...2.0.1
 [2.0.0]: https://github.com/phothinmg/peisar/compare/1.2.3...2.0.0
 [1.2.0]: https://github.com/phothinmg/peisar/compare/1.1.0...1.2.0
 [1.0.0]: https://github.com/phothinmg/peisar/compare/0.3.0...1.0.0

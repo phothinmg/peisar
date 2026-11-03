@@ -1,13 +1,14 @@
 # Rust API reference
 
-The crate re-exports `Peisar`, `PeisarOptions`, and `get_options` at the root.
-The lower-level APIs are split into optional, feature-gated modules.
+The crate re-exports `Peisar` and `PeisarOptions` at the root. The `ast` and
+`plugin` modules are public without feature flags.
 
 ## `peisar::{Peisar, PeisarOptions}`
 
 `Peisar` is the high-level single-document parser and renderer. It exposes
-`ast()`, `html()`, `frontmatter()`, and `ast_json()` methods. `PeisarOptions`
-configures GFM, Kramdown attributes, file metadata, and HTML output.
+`ast()`, `html()`, `frontmatter()`, and `ast_json()` methods.
+`PeisarOptions` configures GFM, Kramdown attributes, file metadata, and HTML
+output.
 
 ```rust
 use peisar::{Peisar, PeisarOptions};
@@ -22,22 +23,12 @@ let mut document = Peisar::new(
 assert_eq!(document.html(), "<h1>Hello</h1>\n");
 ```
 
-## Feature-gated modules
+## `peisar::ast`
 
-Enable each Cargo feature to expose its corresponding module. The crate's
-default feature set is empty.
+The AST types and parsing helpers are re-exported from `peisar_ast`.
 
-| Feature | Module | Main exports |
-| --- | --- | --- |
-| `ast` | `peisar::ast` | `AstOptions`, `Document`, AST node types, parse and visitor helpers |
-| `html` | `peisar::html` | `RenderOptions`, `render_document_html`, `AstToHtml` |
-| `plugin` | `peisar::plugin` | `Plugin`, `PluginFactory`, `RegisteredPlugin` |
-| `yaml` | `peisar::yaml` | `FrontmatterResult`, `frontmatter`, `load_yaml`, `yaml_parser` |
-
-### `peisar::ast`
-
-Use `Document::parse` to parse Markdown directly. This module re-exports AST
-types and parser helpers from `peisar_ast`.
+Use `Document::parse` to parse Markdown directly. Use
+`md_to_ast_with_hooks` when parsing with custom hooks.
 
 ```rust
 use peisar::ast::{AstOptions, Document};
@@ -46,27 +37,24 @@ let document = Document::parse("# Hello\n", &AstOptions::default(), None);
 assert_eq!(document.children.len(), 1);
 ```
 
-### `peisar::html`
+## `peisar::plugin`
 
-`render_document_html` converts a parsed document to HTML. Pass
-`RenderOptions { fragment: true, .. }` to render only the body. The default
-render options use fragment mode.
-
-### `peisar::plugin`
-
-This module re-exports the plugin interfaces from `peisar_ast`. Enable both
-`ast` and `plugin` when using plugin types alongside AST parsing.
-
-### `peisar::yaml`
-
-`frontmatter` separates leading YAML front matter from Markdown content.
-`yaml_parser` parses YAML text, while `load_yaml` reads and parses a YAML file.
+This module re-exports the plugin interfaces and visitor helpers from
+`peisar_ast`. It is available without enabling a Cargo feature.
 
 ## Cargo features
 
+No Cargo features are required for Rust APIs. The `npm` feature enables the
+N-API bindings used to build the Node.js package.
+
+Rust code should depend on the crate without a feature list:
+
 ```toml
-peisar = { version = "2.0.0", features = ["ast", "html", "plugin", "yaml"] }
+peisar = "2.0.1"
 ```
 
-All features are optional and disabled by default. See the [Rust overview](./README.md)
-for an installation example and end-to-end usage.
+The previous `peisar::parsers`, `peisar::yaml`, `PeisarAst`, and `md_to_ast`
+exports are no longer available. Block and inline node types are re-exported
+from `peisar::ast`; use `Document::parse` or `md_to_ast_with_hooks` instead.
+HTML rendering and front matter are available through the high-level
+`Peisar` API. See the [Rust overview](./README.md) for end-to-end usage.

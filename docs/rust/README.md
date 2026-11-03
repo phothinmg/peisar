@@ -1,31 +1,28 @@
 # Rust usage
 
-Peisar provides a high-level Rust parser wrapper and optional lower-level
-AST, HTML, plugin, and YAML APIs. The implementation is split between this
-crate and its `peisar_ast` / `peisar_yaml` dependencies.
+Peisar provides a high-level Rust parser wrapper and lower-level AST and
+plugin APIs. The `ast` and `plugin` modules are available by default.
 
 ## Install
 
 ```toml
 [dependencies]
-peisar = "2.0.0"
+peisar = "2.0.1"
 ```
 
-The high-level `Peisar` wrapper is available without optional features. Enable
-the feature for each lower-level module you use:
+No Cargo features are needed when using Peisar from Rust. The `npm` feature
+only enables N-API bindings for the Node.js package.
 
-| Cargo feature | Public module | Purpose |
-| --- | --- | --- |
-| `ast` | `peisar::ast` | AST types and parser helpers |
-| `html` | `peisar::html` | HTML rendering |
-| `plugin` | `peisar::plugin` | Plugin types and traits |
-| `yaml` | `peisar::yaml` | Front matter and standalone YAML helpers |
+The public Rust API includes:
 
-For example:
+| Public API | Purpose |
+| --- | --- |
+| `peisar::{Peisar, PeisarOptions}` | High-level parsing, HTML rendering, and front matter |
+| `peisar::ast` | AST types and parser helpers |
+| `peisar::plugin` | Plugin types, traits, and visitor helpers |
 
-```toml
-peisar = { version = "2.0.0", features = ["ast", "html", "yaml"] }
-```
+The lower-level HTML renderer and standalone YAML helpers are not exposed as
+Rust modules.
 
 ## Parse and render
 
@@ -45,34 +42,21 @@ let mut document = Peisar::new(
 assert_eq!(document.html(), "<h1>Hello <strong>world</strong></h1>\n");
 ```
 
-For lower-level parsing and rendering, enable `ast` and `html`:
+For lower-level AST parsing:
 
 ```rust
 use peisar::ast::{AstOptions, Document};
-use peisar::html::{RenderOptions, render_document_html};
 
 let document = Document::parse("# Hello\n", &AstOptions::default(), None);
-let html = render_document_html(
-    &document,
-    Some(RenderOptions {
-        fragment: true,
-        ..RenderOptions::default()
-    }),
-);
-assert_eq!(html, "<h1>Hello</h1>\n");
+assert_eq!(document.children.len(), 1);
 ```
 
-## Front matter and YAML
-
-Enable the `yaml` feature to use the re-exported helpers:
+Use the high-level wrapper for HTML and front matter:
 
 ```rust
-use peisar::yaml::frontmatter;
-
-let parsed = frontmatter("---\ntitle: Hello\n---\n\n# Hello".to_string())?;
-assert_eq!(parsed.yaml_data().unwrap()["title"], "Hello");
-assert_eq!(parsed.clean_content(), "# Hello");
-# Ok::<(), String>(())
+let mut document = Peisar::new("---\ntitle: Hello\n---\n\n# Hello".into(), None);
+assert_eq!(document.frontmatter().unwrap()["title"], "Hello");
+assert_eq!(document.html(), "<h1>Hello</h1>\n");
 ```
 
 See the [Rust API reference](./apis.md) for module details and links to the

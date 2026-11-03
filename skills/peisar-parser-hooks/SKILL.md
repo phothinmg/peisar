@@ -69,7 +69,7 @@ can chain constructs back to back.
 
 ## Rust
 
-Enable the `ast` and `plugin` Cargo features. Implement
+No Cargo features are required for Rust parser hooks. Implement
 `PluginFactory::try_parse_block` / `try_parse_inline` (from
 `peisar::plugin`), register the hook in a `ParserHooks` registry, and parse
 with `md_to_ast_with_hooks` (re-exported from `peisar::ast`).
@@ -102,5 +102,4 @@ claims the position. Block hooks consume at least one line; inline hooks
 return the node and the number of characters consumed from `rest`.
 The high-level `Peisar` class registers plugins on the JS side through
 `use()` only — use `md_to_ast_with_hooks` for Rust-side hooks. See the
-[Rust API reference](../../docs/rust/apis.md) for the current
-feature-gated interfaces.
+[Rust API reference](../../docs/rust/apis.md) for the current public API.

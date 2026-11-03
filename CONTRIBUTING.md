@@ -19,20 +19,17 @@ npm install
 ## Project layout
 
 Peisar builds as both a Rust library (`rlib`) and a native Node.js addon
-(`cdylib`). The high-level wrapper lives in this crate; the AST and YAML
-implementations are provided by the `peisar_ast` and `peisar_yaml`
-dependencies:
+(`cdylib`). The high-level wrapper and HTML integration live in this crate;
+the AST and plugin APIs are re-exported from `peisar_ast`:
 
 ```text
 src/
-├── ast.rs                    feature-gated AST re-exports
+├── ast.rs                    AST type and parser re-exports
 ├── core/
 │   ├── config.rs             parser and rendering options
 │   ├── html.rs               HTML rendering integration
 │   └── parser.rs             Peisar wrapper and N-API binding
-├── html.rs                   feature-gated renderer re-exports
-├── plugin.rs                 feature-gated plugin re-exports
-├── yaml.rs                   feature-gated YAML re-exports
+├── plugin.rs                 plugin API re-exports
 └── lib.rs                    public modules and root re-exports
 
 scripts/peisar.test.txt       Node.js integration tests
@@ -43,10 +40,11 @@ does not auto-discover it.
 skills/                       Agent Skills for AI coding tools
 ```
 
-Rust consumers use `peisar::ast`, `peisar::html`, `peisar::plugin`, and
-`peisar::yaml` when enabling those Cargo features. `Peisar` and its options
-are re-exported at the crate root. The generated TypeScript declarations
-(`index.d.ts`) are produced by the N-API build — never hand-edit them.
+Rust consumers can use `peisar::ast` and `peisar::plugin` without Cargo
+feature flags. HTML rendering and front matter are available through the
+high-level `Peisar` API. The `npm` feature enables N-API bindings. The
+generated TypeScript declarations (`index.d.ts`) are produced by the N-API
+build — never hand-edit them.
 
 ## Development workflow
 
@@ -79,9 +77,8 @@ removing the lock file. Do not run this command on other systems.
 
 ## Change guidelines
 
-- The parser, AST, renderer, plugin, and YAML implementations live in their
-  respective dependency crates. Keep this crate's feature-gated re-exports
-  and N-API wrapper aligned with those dependency APIs.
+- The AST and plugin APIs are provided by `peisar_ast`; keep this crate's
+  re-exports and N-API wrapper aligned with that dependency's API.
 - Use `Peisar.use()` for Node.js plugin integrations.
 - Add or update Node.js integration tests in `scripts/peisar.test.txt` when
   changing the N-API surface; run `cargo test` for Rust changes.

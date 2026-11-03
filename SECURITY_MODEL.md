@@ -1,11 +1,11 @@
 # peisar — threat model
 
-_Built from the code at `phothinmg/peisar` (v2.0.0), the "Trust model" section of `SECURITY.md`, and the maintainer's answers (marked **[maintainer]**)._
+_Built from the code at `phothinmg/peisar` (v2.0.1), the "Trust model" section of `SECURITY.md`, and the maintainer's answers (marked **[maintainer]**)._
 
 ## System overview
 
 peisar is a **library**, not a service: a CommonMark/GFM/Kramdown Markdown parser in Rust, shipped as
-- a Rust crate (`src/lib.rs`, `rlib`) with optional `ast` / `html` / `plugin` / `yaml` feature modules,
+- a Rust crate (`src/lib.rs`, `rlib`) with public `ast` and `plugin` modules,
 - a Node.js native addon via napi-rs (`--features npm`, `cdylib`, `index.cjs` / `index.mjs`),
 - a WASI build (`wasm32-wasip1-threads`) and a separate TypeScript browser bundle (`browser/peisar.js`, built from `suseejs/peisar_browser` in CI).
 
@@ -17,13 +17,13 @@ Since 2.0.0 peisar is a **pure Markdown parser**: it accepts Markdown/YAML strin
 |---|---|---|
 | **Markdown parser & AST** | `peisar_ast` dependency (`parsers/`, `tokens/`, `options.rs`, `control.rs`) | Parses untrusted text into the AST; Kramdown `{: ...}` attributes, link refs, source spans, parser hooks and visitors. |
 | **HTML renderer** | `src/core/html.rs` (delegating to the `peisar_ast` renderer) | AST → HTML; escapes text and attribute values (`esc`, `esc_attr`, `esc_no_quote`). |
-| **Front matter & YAML** | `peisar_yaml` dependency | `---` block extraction; YAML via `noyalib`; `load_yaml` / `loadYaml` read a file by path. |
+| **Front matter & YAML** | `peisar_ast` dependency and Node.js package helpers | `---` block extraction; YAML via `noyalib`; the Node.js `loadYaml` helper reads a file by path. |
 | **JS bindings & plugins** | `src/core/parser.rs`, `src/core/config.rs`, plugin plumbing in `peisar_ast::control` | `Peisar` class, the `use()` plugin callbacks (`FunctionRef`), options mapping. |
 | **Build & release** | `.github/workflows/ci.yml`, `scripts/`, `.githooks/`, `package.json`, `napi.config.json`, `Cargo.toml` | Out of scope **[maintainer]**. |
 
 ## Entry points and who reaches them
 
-- `new Peisar(rawMd, options)` → `.html`, `.ast`, `.astJson`, `.frontmatter`; `document.use(plugin)` (JS); `Document::parse`, `render_document_html` (Rust). **Reached by untrusted end users** of host apps as well as trusted site authors **[maintainer]**.
+- `new Peisar(rawMd, options)` → `.html`, `.ast`, `.astJson`, `.frontmatter`; `document.use(plugin)` (JS); `Document::parse` and `Peisar::html()` (Rust). **Reached by untrusted end users** of host apps as well as trusted site authors **[maintainer]**.
 - `frontmatter(content)`, `yamlParser(str)` — same: untrusted input.
 - `loadYaml(filePath)` (JS) — path chosen by the trusted developer. (Read failures panic in the N-API wrapper; parse failures are returned as errors.)
 - JS plugin callbacks (`visitBlock`, `parseBlock`, …) — developer code; trusted.
@@ -34,7 +34,7 @@ All of these operate on strings supplied by the caller. No peisar API walks dire
 
 1. **Integrity of rendered HTML** in downstream apps — escaping bugs that let untrusted Markdown inject markup/script **beyond** the documented raw-HTML passthrough.
 2. **Availability** of host processes — crafted Markdown/YAML causing hangs (super-linear parsing), unbounded recursion / stack overflow, memory blow-up, or panics that abort a Node process. **In scope [maintainer].**
-3. **Memory safety** of the native addon (Rust + napi FFI). The crate and its `peisar_ast` / `peisar_yaml` dependencies contain no `unsafe` code; the 1.x SIGINT signal handler was removed together with the cache module.
+3. **Memory safety** of the native addon (Rust + napi FFI). The crate and its `peisar_ast` dependency contain no `unsafe` code; the 1.x SIGINT signal handler was removed together with the cache module.
 
 ## Attacker profiles
 
@@ -63,4 +63,3 @@ All of these operate on strings supplied by the caller. No peisar API walks dire
 ## Open questions
 
 - None outstanding.
-

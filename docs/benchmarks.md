@@ -9,6 +9,8 @@ Markdown-to-HTML rendering against:
 - `showdown`
 
 The benchmark implementation lives in [bench/src/index.js](../bench/src/index.js).
+Running it also regenerates [benchmark-results.svg](./benchmark-results.svg)
+from the measured throughput and heap results.
 
 ## What the benchmark measures
 

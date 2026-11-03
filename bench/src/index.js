@@ -5,6 +5,7 @@ const MarkdownIt = require("markdown-it");
 const showdown = require("showdown");
 const { marked } = require("marked");
 const { Peisar } = require("peisar");
+const { writeBenchmarkSvg } = require("./benchmark-svg");
 
 const BASE_MARKDOWN = `# Benchmark document
 
@@ -165,9 +166,7 @@ function validateDocument(document) {
   return renderers.map((renderer) => {
     const html = renderer.render(document.markdown);
     if (typeof html !== "string" || html.length === 0) {
-      throw new Error(
-        `${renderer.name} returned an empty or non-string HTML result.`,
-      );
+      throw new Error(`${renderer.name} returned an empty or non-string HTML result.`);
     }
 
     const failedChecks = validationChecks
@@ -204,9 +203,7 @@ function measureMemory(document, renderer) {
     for (let iteration = 0; iteration < iterations; iteration += 1) {
       const html = renderer.render(document.markdown);
       if (typeof html !== "string" || html.length === 0) {
-        throw new Error(
-          `${renderer.name} produced invalid HTML during memory profiling.`,
-        );
+        throw new Error(`${renderer.name} produced invalid HTML during memory profiling.`);
       }
 
       if ((iteration + 1) % stride === 0 || iteration === iterations - 1) {
@@ -223,15 +220,19 @@ function measureMemory(document, renderer) {
     rssPeakSamples.push(peakRss - before.rss);
   }
 
+  const heapPeakAverageBytes = Math.round(average(heapPeakSamples));
   return {
-    Renderer: renderer.name,
-    Iterations: iterations,
-    Batches: MEMORY_BATCHES,
-    "Heap retained avg": formatBytes(Math.round(average(heapRetainedSamples))),
-    "Heap retained med": formatBytes(Math.round(median(heapRetainedSamples))),
-    "Heap peak avg": formatBytes(Math.round(average(heapPeakSamples))),
-    "Heap peak med": formatBytes(Math.round(median(heapPeakSamples))),
-    "RSS peak avg": formatBytes(Math.round(average(rssPeakSamples))),
+    heapPeakAverageBytes,
+    row: {
+      Renderer: renderer.name,
+      Iterations: iterations,
+      Batches: MEMORY_BATCHES,
+      "Heap retained avg": formatBytes(Math.round(average(heapRetainedSamples))),
+      "Heap retained med": formatBytes(Math.round(median(heapRetainedSamples))),
+      "Heap peak avg": formatBytes(heapPeakAverageBytes),
+      "Heap peak med": formatBytes(Math.round(median(heapPeakSamples))),
+      "RSS peak avg": formatBytes(Math.round(average(rssPeakSamples))),
+    },
   };
 }
 
@@ -241,7 +242,13 @@ async function benchmarkDocument(document) {
     bench.add(renderer.name, () => renderer.render(document.markdown));
   }
   await bench.run();
-  return bench.table();
+  return {
+    table: bench.table(),
+    measurements: bench.tasks.map((task) => ({
+      renderer: task.name,
+      operationsPerSecond: task.result.throughput.mean,
+    })),
+  };
 }
 
 async function main() {
@@ -260,9 +267,7 @@ async function main() {
     },
   });
 
-  console.log(
-    "Markdown benchmark with output validation, speed, and memory profiling.",
-  );
+  console.log("Markdown benchmark with output validation, speed, and memory profiling.");
   console.log(
     `Speed uses tinybench (${BENCH_OPTIONS.time} ms task time, ${BENCH_OPTIONS.warmupTime} ms warmup).`,
   );
@@ -270,6 +275,7 @@ async function main() {
     console.log("Tip: run with --expose-gc for steadier memory numbers.");
   }
 
+  const chartResults = [];
   for (const document of documents) {
     console.log("");
     console.log(
@@ -288,13 +294,27 @@ async function main() {
     }
 
     console.log("Speed");
-    console.table(await benchmarkDocument(document));
+    const speedResults = await benchmarkDocument(document);
+    console.table(speedResults.table);
 
     console.log("Memory");
-    console.table(
-      renderers.map((renderer) => measureMemory(document, renderer)),
-    );
+    const memoryResults = renderers.map((renderer) => measureMemory(document, renderer));
+    console.table(memoryResults.map(({ row }) => row));
+    chartResults.push({
+      name: document.name,
+      throughput: speedResults.measurements.map(({ renderer, operationsPerSecond }) => ({
+        renderer,
+        value: operationsPerSecond,
+      })),
+      peakHeapMiB: memoryResults.map(({ row, heapPeakAverageBytes }) => ({
+        renderer: row.Renderer,
+        value: heapPeakAverageBytes / (1024 * 1024),
+      })),
+    });
   }
+
+  const outputPath = writeBenchmarkSvg(chartResults);
+  console.log(`Benchmark chart written to ${outputPath}`);
 }
 
 main().catch((error) => {

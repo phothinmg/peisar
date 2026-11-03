@@ -55,6 +55,10 @@ impl Peisar {
     pub fn use_plugin(&mut self, env: Env, plugin: Plugin) {
         self.peisar_ast.add_plugin(env, plugin);
     }
+    /// Registers a plugin that can customize parsing and visit AST nodes.
+    ///
+    /// This Rust API accepts a [`Plugin`] value. The JavaScript binding
+    /// exposes the corresponding method as `use`.
     #[cfg(not(feature = "npm"))]
     pub fn use_plugin(&mut self, plugin: Plugin) {
         self.peisar_ast.add_plugin(plugin);

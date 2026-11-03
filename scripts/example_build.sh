@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
-DES_DIR="ssg/peisarssg"
+DES_DIR="examples/nodejs/peisar"
 DTS_FILE="types.d.ts"
 PACKAGE_FILE="$DES_DIR/package.json"
 
@@ -22,7 +22,7 @@ npx napi build --platform --features npm --config-path napi.config.json --output
 
 cat << 'EOF' > "$PACKAGE_FILE"
 {
-  "name": "peisarloc",
+  "name": "peisar",
   "main": "index.js",
   "types": "index.d.ts",
   "type": "commonjs"
