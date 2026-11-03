@@ -6,7 +6,8 @@ Only the latest release series receives security fixes.
 
 | Version         | Supported |
 | --------------- | --------- |
-| 1.2.x (latest)  | ✅ Yes    |
+| 2.0.x (latest)  | ✅ Yes    |
+| 1.2.x           | ❌ No     |
 | 1.1.x and older | ❌ No     |
 
 ## Trust model

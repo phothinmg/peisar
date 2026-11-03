@@ -38,6 +38,12 @@ modules, and Node.js plugin interface:
 - [Benchmark results](./benchmarks.md)
 - [Markdown language spec](./markdown-spec.md)
 
+## Releases
+
+- [Release notes](./release-notes/2.0.0.md) for the current major version
+- [Full changelog](../CHANGELOG.md)
+- [Security policy](../SECURITY.md) and [threat model](../SECURITY_MODEL.md)
+
 ## Package entry points
 
 - Top-level package page: [README.md](../README.md)

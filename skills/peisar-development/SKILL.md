@@ -5,9 +5,11 @@ description: Build, test, and modify Peisar's Rust implementation and native Nod
 
 # Peisar Development
 
-Peisar is a Rust crate that builds both an `rlib` and an N-API `cdylib`.
-The crate provides a high-level parser wrapper and delegates the lower-level
-AST, HTML, plugin, and YAML implementations to `peisar_ast` and `peisar_yaml`.
+Peisar is a pure Markdown parser: it parses and renders Markdown strings
+and never touches the filesystem. There is no cache, watcher, theme, or
+site-generation surface. The crate provides a high-level parser wrapper and
+delegates the lower-level AST, HTML, plugin, and YAML implementations to
+the `peisar_ast` and `peisar_yaml` dependencies.
 
 ## Layout
 
@@ -34,16 +36,21 @@ are output by the N-API build; do not hand-edit them.
 
 ```sh
 npm install
-npm run js:test
+npm run test
 npm run build
 cargo test
 ```
 
-`npm run js:test` builds a fresh addon in a temporary directory, regenerates
-the package loader and TypeScript declarations, and runs the Node integration
-tests in `scripts/peisar.test.txt`. `npm run build` produces the published
-package files (`index.cjs`, `index.mjs`, `index.d.ts`). Use `cargo test` for
-Rust tests.
+`npm run test` builds a fresh addon in a temporary `tests/` directory,
+regenerates the package loader and TypeScript declarations, and runs the
+Node integration tests in `scripts/peisar.test.txt`. `npm run build`
+produces the published package files (`index.cjs`, `index.mjs`,
+`index.d.ts`). Use `cargo test` for Rust tests.
+
+Do not hand-edit the generated `index.d.ts`; the type unions in the
+`types.d.ts` header (`PeisarEmphasisLevel`, `PeisarTaskState`,
+`PeisarTableCellAlignment(s)`) are written by `scripts/tests.sh` and
+`scripts/build.sh`.
 
 ## Change guidelines
 

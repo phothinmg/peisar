@@ -37,9 +37,9 @@ src/
 
 scripts/peisar.test.txt       Node.js integration tests
 
-`npm run js:test` builds the addon in a temporary directory and runs the Node
-integration tests there; the file is kept as `.txt` so `node --test` does not
-auto-discover it.
+`npm run test` builds the addon in a temporary `tests/` directory and runs
+the Node integration tests there; the file is kept as `.txt` so `node --test`
+does not auto-discover it.
 skills/                       Agent Skills for AI coding tools
 ```
 
@@ -54,22 +54,22 @@ Build and test the native addon (this also regenerates the package loader and
 TypeScript declarations):
 
 ```sh
-npm run js:test
+npm run test
 ```
 
 Run all checks before opening a pull request:
 
 ```sh
-npm run js:test        # after changing N-API-annotated Rust code
+npm run test          # after changing N-API-annotated Rust code
                       # Node.js integration tests
-npm run build          # package build (index.cjs / index.mjs / index.d.ts)
-cargo test             # Rust parser and integration tests
-cargo fmt              # formatting (required by the commit helper)
+npm run build         # package build (index.cjs / index.mjs / index.d.ts)
+cargo test            # Rust parser and integration tests
+cargo fmt             # formatting (required by the commit helper)
 ```
 
-`npm run js:test` compiles a fresh addon in a temporary directory and runs the
-Node.js integration tests against it — it covers both the build and the test
-step after N-API-visible Rust types or methods change.
+`npm run test` compiles a fresh addon in a temporary `tests/` directory and
+runs the Node.js integration tests against it — it covers both the build and
+the test step after N-API-visible Rust types or methods change.
 
 ### Fixing a GPG key database lock
 
@@ -115,7 +115,7 @@ npm run commit          # prompts for type and message, formats, commits, pushes
 
 1. Fork the repository and create a branch from `main`.
 2. Make your changes and add tests.
-3. Run the full check list (`cargo fmt`, `npm run js:test`,
+3. Run the full check list (`cargo fmt`, `npm run test`,
    `cargo test`) and make sure everything passes.
 4. Commit using the conventional format above.
 5. Open a pull request against `main` with a short description of the change

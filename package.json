@@ -1,6 +1,6 @@
 {
   "name": "peisar",
-  "version": "1.2.3",
+  "version": "2.0.0",
   "description": "A practical Markdown parser engineered in Rust",
   "main": "index.cjs",
   "types": "index.d.ts",
@@ -20,12 +20,10 @@
   },
   "scripts": {
     "build": "bash scripts/build.sh",
-    "local:build": "bash scripts/local_build.sh",
+    "test": "bash scripts/tests.sh",
     "ssg:build": "bash scripts/ssg_build.sh",
     "hooks:install": "bash scripts/install-hooks.sh",
     "commit": "bash scripts/commit.sh",
-    "wf:test": "bash scripts/wf_tests.sh",
-    "js:test": "bash scripts/js_tests.sh",
     "benchmark": "cd bench && npm run bench",
     "fix:gpg": "bash scripts/gpg.sh"
   },

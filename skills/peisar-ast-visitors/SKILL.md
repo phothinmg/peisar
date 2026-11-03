@@ -56,7 +56,37 @@ the peisar-parse-markdown skill.)
 
 ## Rust
 
-Rust AST types are re-exported from `peisar::ast` with the `ast` Cargo
-feature, and plugin interfaces are available from `peisar::plugin` with the
-`plugin` feature. See the Rust API reference for the current dependency
-interfaces and feature requirements.
+Enable the `ast` and `plugin` Cargo features. AST types are re-exported
+from `peisar::ast`; implement `PluginFactory` (from `peisar::plugin`) and
+run it over a parsed document with `visit_document_mut`.
+
+```rust
+use peisar::ast::{AstOptions, Block, Document};
+use peisar::plugin::{InlineVisitControl, PluginFactory, VisitControl, visit_document_mut};
+
+struct DemoteHeadings;
+
+impl PluginFactory for DemoteHeadings {
+    fn visit_block(&mut self, block: &mut Block) -> VisitControl {
+        if let Block::Heading { level, .. } = block {
+            *level = (*level + 1).min(6);
+        }
+        VisitControl::keep_and_recurse()
+    }
+    fn visit_inline(&mut self, _inline: &mut peisar::ast::Inline) -> InlineVisitControl {
+        InlineVisitControl::default()
+    }
+}
+
+let document = Document::parse("# Hello\n", &AstOptions::default(), None);
+let mut document = document;
+visit_document_mut(&mut document, &mut DemoteHeadings);
+```
+
+`VisitControl` mirrors the JS fields: `insert_before`, `insert_after`,
+`replace_with`, `remove`, and `recurse`. The high-level `Peisar` class
+does not accept Rust plugins — it registers plugins on the JS side through
+`use()` only. Use `Document::parse` plus `visit_document_mut` for Rust-side
+transformations, then render with `render_document_html` (the `html`
+feature). See the [Rust API reference](../../docs/rust/apis.md) for the
+current dependency interfaces and feature requirements.

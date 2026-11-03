@@ -8,7 +8,7 @@ crate and its `peisar_ast` / `peisar_yaml` dependencies.
 
 ```toml
 [dependencies]
-peisar = "1.2.2"
+peisar = "2.0.0"
 ```
 
 The high-level `Peisar` wrapper is available without optional features. Enable
@@ -24,7 +24,7 @@ the feature for each lower-level module you use:
 For example:
 
 ```toml
-peisar = { version = "1.2.2", features = ["ast", "html", "yaml"] }
+peisar = { version = "2.0.0", features = ["ast", "html", "yaml"] }
 ```
 
 ## Parse and render
@@ -71,7 +71,7 @@ use peisar::yaml::frontmatter;
 
 let parsed = frontmatter("---\ntitle: Hello\n---\n\n# Hello".to_string())?;
 assert_eq!(parsed.yaml_data().unwrap()["title"], "Hello");
-assert_eq!(parsed.pure_markdown_content(), "# Hello");
+assert_eq!(parsed.clean_content(), "# Hello");
 # Ok::<(), String>(())
 ```
 

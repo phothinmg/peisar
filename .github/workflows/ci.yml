@@ -40,10 +40,11 @@ jobs:
         run: npm ci
 
       - name: Run JavaScript unit tests
-        run: npm run wf:test
+        run: npm run test
   # ── Native builds for every supported platform ─────────────────────────
   build:
     if: github.event_name == 'release'
+    needs: [test]
     strategy:
       fail-fast: false
       matrix:

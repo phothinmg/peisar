@@ -83,7 +83,7 @@ consumed.
 
 ```ts
 frontmatter(markdown: string): {
-  pureMarkdownContent: string;
+  cleanContent: string;
   yamlData: Record<string, any> | null;
 }
 

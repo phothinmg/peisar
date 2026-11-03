@@ -35,8 +35,6 @@ export const Peisar = peisar.Peisar;
 export const frontmatter = peisar.frontmatter;
 export const yamlParser = peisar.yamlParser;
 export const loadYaml = peisar.loadYaml;
-export const PeisarCache = peisar.PeisarCache;
-export const HostingProvider = peisar.HostingProvider;
 EOF
 
 # 4. Remove binary and .d.ts

@@ -65,7 +65,7 @@ This module re-exports the plugin interfaces from `peisar_ast`. Enable both
 ## Cargo features
 
 ```toml
-peisar = { version = "1.2.2", features = ["ast", "html", "plugin", "yaml"] }
+peisar = { version = "2.0.0", features = ["ast", "html", "plugin", "yaml"] }
 ```
 
 All features are optional and disabled by default. See the [Rust overview](./README.md)

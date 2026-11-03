@@ -7,10 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-03
+
+### Notes
+
+- This is the second major release. Peisar is now a pure Markdown parser
+  written in Rust: parsing, HTML rendering, front matter, and YAML live in
+  the `peisar_ast` and `peisar_yaml` dependency crates, and the `peisar`
+  package ships a single-document parser with no filesystem, watcher, or
+  site-generation surface.
+- Breaking changes: removing the cache module and its exports requires a
+  major version bump. There is no in-package migration path — consumers that
+  used `PeisarCache` for file watching, archives, or site generation should
+  stay on 1.2.x or re-implement that logic on top of the single-document
+  parser APIs.
+- npm's latest release (1.2.3) already ships the `peisar_ast` / `peisar_yaml`
+  split, the `Peisar.use()` plugin API, and the cache removal, while
+  crates.io stayed at 1.2.2. Version 2.0.0 realigns both registries and
+  marks the single-document parser API as the 2.x baseline.
+
 ### Changed
 
 - Raised the minimum supported Rust version to 1.88 to match the updated
   `napi-build` dependency.
+
+### Removed
+
+- Removed the `cache` module and the `PeisarCache` Node.js class with its
+  filesystem, watcher, archive, theme, and site-generation APIs. The
+  package now parses and renders Markdown from strings only.
 
 ## [1.2.3] - 2026-11-2
 
@@ -234,6 +259,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and parse/render options (GFM and Kramdown enabled by default)
 - Rust `rlib` crate and Node.js integration test suite
 
+[2.0.0]: https://github.com/phothinmg/peisar/compare/1.2.3...2.0.0
 [1.2.0]: https://github.com/phothinmg/peisar/compare/1.1.0...1.2.0
 [1.0.0]: https://github.com/phothinmg/peisar/compare/0.3.0...1.0.0
 [0.3.0]: https://github.com/phothinmg/peisar/compare/0.2.0...0.3.0

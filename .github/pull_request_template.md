@@ -10,7 +10,7 @@
 
 <!-- List the commands you ran and their results. -->
 - [ ] `cargo test`
-- [ ] `npm run js:test` (when changing Node.js bindings or behavior)
+- [ ] `npm run test` (when changing Node.js bindings or behavior)
 - [ ] `cargo fmt --check`
 
 ## Checklist

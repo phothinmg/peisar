@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "next": ">=16.4.1",
-    "peisar": "^1.0.0",
+    "peisar": "^2.0.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

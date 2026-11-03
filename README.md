@@ -41,7 +41,7 @@ npm i peisar
 
 ```toml
 [dependencies]
-peisar = "1.2.2"
+peisar = "2.0.0"
 ```
 
 ## Quick start
@@ -127,7 +127,7 @@ input, and parser configuration.
 
 ```sh
 npm install
-npm run js:test
+npm run test
 npm run build
 cargo test
 ```

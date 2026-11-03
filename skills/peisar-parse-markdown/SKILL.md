@@ -23,6 +23,26 @@ console.log(document.frontmatter);
 `Peisar` accepts optional GFM, Kramdown, file-name, and rendering options.
 Use `document.use(plugin)` to register parser hooks or AST visitors.
 
+The package also exports standalone YAML helpers:
+
+```js
+const { frontmatter, yamlParser, loadYaml } = require("peisar");
+
+// Split front matter from Markdown.
+const { cleanContent, yamlData } = frontmatter(
+  "---\ntitle: Hello\n---\n\n# Hello",
+);
+
+// Parse a YAML string.
+const config = yamlParser("name: config\nitems:\n  - one\n");
+
+// Read and parse a YAML file (relative to the process working directory).
+const data = loadYaml("config.yml");
+```
+
+`frontmatter` returns `{ cleanContent, yamlData }`; `yamlData` is `null`
+when no front matter exists.
+
 ## Rust
 
 The high-level wrapper and options are available from the crate root:
