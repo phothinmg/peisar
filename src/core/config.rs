@@ -1,7 +1,7 @@
 #[cfg(feature = "npm")]
 use napi_derive::napi;
 
-use peisar_ast::AstOptions;
+use crate::ast::AstOptions;
 use serde::{Deserialize, Serialize};
 
 /// Options that control how the AST is rendered to HTML.
@@ -131,18 +131,6 @@ pub struct GetOptions {
 
 /// Split a [`PeisarOptions`] (or `None`) into resolved [`AstOptions`] and
 /// [`RenderOptions`], applying documented defaults to every omitted field.
-///
-/// # Example
-///
-/// ```
-/// use peisar::{PeisarOptions, get_options};
-///
-/// // Passing `None` uses the documented defaults.
-/// let resolved = get_options(None);
-/// assert!(resolved.ast_opts.gfm);
-/// assert!(resolved.ast_opts.kramdown);
-/// assert!(!resolved.render_opts.fragment); // full document
-/// ```
 pub fn get_options(options: Option<PeisarOptions>) -> GetOptions {
     let opts = options.unwrap_or_default();
     let ast_opts = AstOptions {

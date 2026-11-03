@@ -15,7 +15,7 @@ serde_json = { version = "1.0.151", features = ["preserve_order"] }
 napi = { version = "3", features = ["serde-json"], optional = true }
 napi-derive = { version = "3", optional = true }
 peisar_yaml = "0.1.2"
-peisar_ast = "1.2.14"
+peisar_ast = { path = "../peisar_ast" }
 
 [build-dependencies]
 napi-build = "2"
@@ -29,7 +29,3 @@ crate-type = ["rlib", "cdylib"]
 [features]
 default = []
 npm = ["dep:napi", "dep:napi-derive", "peisar_yaml/npm", "peisar_ast/npm"]
-yaml = []
-ast = []
-html = []
-plugin = []

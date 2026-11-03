@@ -1,10 +1,10 @@
 use super::config::RenderOptions;
-#[cfg(feature = "npm")]
-use napi_derive::napi;
-use peisar_ast::{
+use crate::ast::{
     Attributes, Block, Document, EmphasisLevel, Inline, ListItem, Table as AstTable,
     TableCellAlignment, TaskState,
 };
+#[cfg(feature = "npm")]
+use napi_derive::napi;
 #[cfg_attr(feature = "npm", napi)]
 pub fn render_document_html(doc: Document, opts: Option<RenderOptions>) -> String {
     let mut r = AstToHtml::new(opts);
