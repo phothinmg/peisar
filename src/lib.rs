@@ -8,4 +8,4 @@ pub mod ast;
 mod core;
 pub mod plugin;
 
-pub use core::{Peisar, PeisarOptions};
+pub use core::{GetOptions, Peisar, PeisarOptions, RenderOptions, get_options};
