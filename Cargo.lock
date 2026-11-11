@@ -267,7 +267,7 @@ dependencies = [
 
 [[package]]
 name = "peisar"
-version = "2.0.13"
+version = "2.0.14"
 dependencies = [
  "napi",
  "napi-build",
@@ -279,9 +279,9 @@ dependencies = [
 
 [[package]]
 name = "peisar_ast"
-version = "1.2.15"
+version = "1.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ceb5a8ee7c7ac5545dcc91cc7ab539e94ddb4fd78f255aece00bf30c0550a780"
+checksum = "0717bedd0d3b7ed5df0cf43f9a95126f7a4318e18df1b89215a0d91b254ff880"
 dependencies = [
  "napi",
  "napi-derive",
