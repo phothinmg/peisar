@@ -11,10 +11,9 @@ description = "A practical Markdown parser engineered in Rust"
 
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = { version = "1.0.151", features = ["preserve_order"] }
-napi = { version = "3", features = ["serde-json"], optional = true }
+napi = { version = "3", optional = true }
 napi-derive = { version = "3", optional = true }
-peisar_ast = "1.2.17"
+
 
 [build-dependencies]
 napi-build = "2"
@@ -27,12 +26,8 @@ crate-type = ["rlib", "cdylib"]
 
 [features]
 default = []
-npm = ["dep:napi", "dep:napi-derive", "peisar_ast/npm"]
+npm = ["dep:napi", "dep:napi-derive"]
 
 [[example]]
 name = "plugin"
 path = "examples/rust/plugin.rs"
-
-[[example]]
-name = "parser_hook"
-path = "examples/rust/parser_hook.rs"

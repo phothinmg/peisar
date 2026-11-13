@@ -1,12 +1,17 @@
 use super::config::RenderOptions;
 use crate::ast::{
-    Attributes, Block, Document, EmphasisLevel, Inline, ListItem, Table as AstTable,
-    TableCellAlignment, TaskState,
+    Attributes, PeisarDocument,
+    token::{
+        Block, EmphasisLevel, Inline, ListItem, Table as AstTable, TableCellAlignment, TaskState,
+    },
 };
+
 #[cfg(feature = "npm")]
 use napi_derive::napi;
+
+///
 #[cfg_attr(feature = "npm", napi)]
-pub fn render_document_html(doc: Document, opts: Option<RenderOptions>) -> String {
+pub fn ast_to_html(doc: PeisarDocument, opts: Option<RenderOptions>) -> String {
     let mut r = AstToHtml::new(opts);
     r.render_document(&doc);
     r.finish()
@@ -46,7 +51,7 @@ impl AstToHtml {
     /// + [`finish`](Self::finish).
     ///
     #[allow(unused)]
-    pub fn render_document_owned(mut self, doc: &Document) -> String {
+    pub fn render_document_owned(mut self, doc: &PeisarDocument) -> String {
         self.render_document(doc);
         self.finish()
     }
@@ -87,7 +92,7 @@ impl AstToHtml {
     /// When `RenderOptions::fragment` is `true` (the default) only the body
     /// content is emitted.  When `false`, a complete `<!DOCTYPE html>`
     /// document with `<html>`, `<head>`, and `<body>` wrappers is produced.
-    pub fn render_document(&mut self, doc: &Document) {
+    pub fn render_document(&mut self, doc: &PeisarDocument) {
         if self.opts.fragment {
             for b in &doc.children {
                 self.render_block(b);
@@ -451,13 +456,13 @@ impl Default for AstToHtml {
 
 #[cfg(test)]
 mod tests {
-    use super::{RenderOptions, render_document_html};
-    use peisar_ast::{AstOptions, Document};
+    use super::{RenderOptions, ast_to_html};
+    use crate::ast::{AstOptions, PeisarDocument};
 
     #[test]
     fn body_class_is_not_written_to_html_element() {
-        let doc = Document::parse("Text", &AstOptions::default(), None);
-        let html = render_document_html(
+        let doc = PeisarDocument::parse("Text", &AstOptions::default(), None);
+        let html = ast_to_html(
             doc,
             Some(RenderOptions {
                 fragment: false,
@@ -474,8 +479,8 @@ mod tests {
     /// Renders a document as a fragment and strips the trailing newline so
     /// assertions read cleanly.
     fn frag(md: &str) -> String {
-        let doc = Document::parse(md, &AstOptions::default(), None);
-        render_document_html(doc, Some(RenderOptions::default()))
+        let doc = PeisarDocument::parse(md, &AstOptions::default(), None);
+        ast_to_html(doc, Some(RenderOptions::default()))
     }
 
     #[test]
@@ -487,8 +492,8 @@ mod tests {
 
     #[test]
     fn full_document_wrapper() {
-        let doc = Document::parse("Hi\n", &AstOptions::default(), None);
-        let html = render_document_html(
+        let doc = PeisarDocument::parse("Hi\n", &AstOptions::default(), None);
+        let html = ast_to_html(
             doc,
             Some(RenderOptions {
                 fragment: false,
@@ -507,8 +512,8 @@ mod tests {
 
     #[test]
     fn full_document_without_charset_and_viewport() {
-        let doc = Document::parse("Hi\n", &AstOptions::default(), None);
-        let html = render_document_html(
+        let doc = PeisarDocument::parse("Hi\n", &AstOptions::default(), None);
+        let html = ast_to_html(
             doc,
             Some(RenderOptions {
                 fragment: false,
@@ -523,8 +528,8 @@ mod tests {
 
     #[test]
     fn title_is_escaped() {
-        let doc = Document::parse("Hi\n", &AstOptions::default(), None);
-        let html = render_document_html(
+        let doc = PeisarDocument::parse("Hi\n", &AstOptions::default(), None);
+        let html = ast_to_html(
             doc,
             Some(RenderOptions {
                 fragment: false,
@@ -656,7 +661,7 @@ mod tests {
 
     #[test]
     fn render_document_owned_is_a_convenience_wrapper() {
-        let doc = Document::parse("Hi\n", &AstOptions::default(), None);
+        let doc = PeisarDocument::parse("Hi\n", &AstOptions::default(), None);
         let html = super::AstToHtml::new(None).render_document_owned(&doc);
         assert_eq!(html, "<p>Hi</p>\n");
     }

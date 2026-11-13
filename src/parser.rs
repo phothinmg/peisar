@@ -1,11 +1,10 @@
 use super::config::{PeisarOptions, RenderOptions, get_options};
-use super::html::render_document_html;
+use super::html::ast_to_html;
+use crate::ast::{Frontmatter, PeisarAst, PeisarDocument, Plugin};
 #[cfg(feature = "npm")]
 use napi::Env;
 #[cfg(feature = "npm")]
 use napi_derive::napi;
-use peisar_ast::{Document, PeisarAst, Plugin};
-use serde_json::Value;
 
 /// Parses one Markdown document and exposes its AST, HTML, and front matter
 /// to JavaScript.
@@ -40,7 +39,7 @@ impl Peisar {
     /// Registered visitors run before the AST is returned. The returned value
     /// is a clone, so reading this property does not consume the parser state.
     #[cfg_attr(feature = "npm", napi(getter))]
-    pub fn ast(&mut self) -> Document {
+    pub fn ast(&mut self) -> PeisarDocument {
         self.peisar_ast.get_ast()
     }
 
@@ -69,21 +68,13 @@ impl Peisar {
     #[cfg_attr(feature = "npm", napi(getter))]
     pub fn html(&mut self) -> String {
         let doc = self.ast();
-        let html = render_document_html(doc, Some(self.render_opts.clone()));
+        let html = ast_to_html(doc, Some(self.render_opts.clone()));
         html
     }
 
     /// Gets the deserialized YAML front matter, or `null` when none exists.
     #[cfg_attr(feature = "npm", napi(getter))]
-    pub fn frontmatter(&mut self) -> Option<Value> {
+    pub fn frontmatter(&mut self) -> Frontmatter {
         self.peisar_ast.get_frontmatter()
-    }
-
-    /// Gets the parsed Markdown AST serialized as JSON.
-    ///
-    /// Registered visitors run before serialization.
-    #[cfg_attr(feature = "npm", napi(getter))]
-    pub fn ast_json(&mut self) -> String {
-        self.peisar_ast.ast_json()
     }
 }

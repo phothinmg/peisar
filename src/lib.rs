@@ -5,9 +5,9 @@
 //! The [`ast`] and [`plugin`] modules re-export the AST types and plugin APIs.
 
 pub mod ast;
-mod core;
-pub mod plugin;
+mod config;
+mod html;
+mod parser;
 
-pub use core::{
-    GetOptions, Peisar, PeisarOptions, RenderOptions, get_options, render_document_html,
-};
+pub use config::PeisarOptions;
+pub use parser::Peisar;
