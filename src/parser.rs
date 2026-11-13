@@ -1,6 +1,6 @@
 use super::config::{PeisarOptions, RenderOptions, get_options};
 use super::html::ast_to_html;
-use crate::ast::{Frontmatter, PeisarAst, PeisarDocument, Plugin};
+use super::{Frontmatter, ast, plugin::Plugin};
 #[cfg(feature = "npm")]
 use napi::Env;
 #[cfg(feature = "npm")]
@@ -15,7 +15,7 @@ use napi_derive::napi;
 #[cfg_attr(feature = "npm", napi)]
 pub struct Peisar {
     render_opts: RenderOptions,
-    peisar_ast: PeisarAst,
+    peisar_ast: ast::PeisarAst,
 }
 #[cfg_attr(feature = "npm", napi)]
 impl Peisar {
@@ -28,7 +28,7 @@ impl Peisar {
         let opts = get_options(options);
         let ast_opts = opts.ast_opts;
         let render_opts = opts.render_opts;
-        let peisar_ast = PeisarAst::new(raw_md, Some(ast_opts));
+        let peisar_ast = ast::PeisarAst::new(raw_md, Some(ast_opts));
         Self {
             render_opts,
             peisar_ast,
@@ -39,7 +39,7 @@ impl Peisar {
     /// Registered visitors run before the AST is returned. The returned value
     /// is a clone, so reading this property does not consume the parser state.
     #[cfg_attr(feature = "npm", napi(getter))]
-    pub fn ast(&mut self) -> PeisarDocument {
+    pub fn ast(&mut self) -> ast::tokens::PeisarDocument {
         self.peisar_ast.get_ast()
     }
 

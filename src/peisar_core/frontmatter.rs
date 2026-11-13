@@ -2,7 +2,7 @@
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 
-#[cfg_attr(feature = "npm", napi(skip_typescript))]
+#[cfg_attr(feature = "npm", napi(string_enum))]
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum FrontmatterType {
     Yaml,
@@ -30,7 +30,6 @@ pub struct FrontmatterResult {
     pub body: String,
 }
 
-#[cfg_attr(feature = "npm", napi)]
 pub fn extract_frontmatter(markdown: String) -> FrontmatterResult {
     let fence = if markdown.starts_with("---\n") || markdown.starts_with("---\r\n") {
         Some(("---", FrontmatterType::Yaml))

@@ -21,12 +21,10 @@ use super::attrs::parse_attrs;
 use super::inline::{LinkRefMap, parse_inline_with_hooks};
 use super::plugin::{BlockParserContext, ParserHooks, finalize_hook_block};
 use super::table::{build_table, is_table_start, parse_delimiter_alignments};
-use crate::ast::options::AstOptions;
-use crate::ast::tokens::token::TaskState;
-use crate::ast::tokens::{
-    Attributes,
+use crate::ast::{
+    AstOptions,
     span::{Position, Span},
-    token::{Block, LinkReferenceDefinition, ListItem},
+    tokens::{Attributes, Block, LinkReferenceDefinition, ListItem, TaskState},
 };
 
 /// Compute the byte offset of the start of each line.
@@ -996,7 +994,7 @@ fn strip_task_marker(content: String) -> String {
 #[cfg(test)]
 mod tests {
     use super::{parse_task_marker, strip_task_marker};
-    use crate::ast::tokens::token::TaskState;
+    use crate::ast::tokens::TaskState;
 
     #[test]
     fn strip_task_marker_removes_marker_and_one_space() {

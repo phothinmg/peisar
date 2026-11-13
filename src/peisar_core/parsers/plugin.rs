@@ -1,7 +1,6 @@
-use crate::ast::tokens::{
-    Attributes,
+use crate::ast::{
     span::Span,
-    token::{Block, Inline},
+    tokens::{Attributes, Block, Inline},
 };
 #[cfg(feature = "npm")]
 use napi_derive::napi;
@@ -261,10 +260,7 @@ fn visit_blocks_vec<V: PluginFactory + ?Sized>(children: &mut Vec<Block>, visito
     }
 }
 
-fn visit_table<V: PluginFactory + ?Sized>(
-    table: &mut crate::ast::tokens::token::Table,
-    visitor: &mut V,
-) {
+fn visit_table<V: PluginFactory + ?Sized>(table: &mut crate::ast::tokens::Table, visitor: &mut V) {
     for cell in table.header.cells.iter_mut() {
         visit_inline_vec(&mut cell.children, visitor);
     }

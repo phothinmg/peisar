@@ -16,28 +16,25 @@
 //! assert_eq!(PeisarDocument.children.len(), 1);
 //! ```
 
-mod control;
-mod frontmatter;
-mod options;
-mod parsers;
+pub mod control;
+pub mod frontmatter;
+pub mod options;
+pub mod parsers;
 #[cfg(test)]
 mod tests;
-mod tokens;
+pub mod tokens;
 
 pub use control::{
     BlockParseResult, InlineParseResult, InlineVisitorControl, Plugin, RegisteredPlugin,
     VisitorControl,
 };
-pub use frontmatter::{Frontmatter, FrontmatterResult, FrontmatterType, extract_frontmatter};
+use frontmatter::{Frontmatter, extract_frontmatter};
 #[cfg(feature = "npm")]
 use napi::Env;
 #[cfg(feature = "npm")]
 use napi_derive::napi;
-pub use options::AstOptions;
-pub use parsers::{PeisarDocument, block, inline, md_to_ast, md_to_ast_with_hooks, plugin};
-pub use tokens::Attributes;
-pub use tokens::span;
-pub use tokens::token;
+use options::AstOptions;
+use parsers::{PeisarDocument, md_to_ast_with_hooks, plugin};
 
 /// Markdown source parsed into an AST, with optional YAML front matter and
 /// registered plugins.
@@ -64,6 +61,7 @@ pub struct PeisarAst {
 #[cfg_attr(feature = "npm", napi)]
 impl PeisarAst {
     /// If `options` is `None`, defaults are used (GFM + Kramdown enabled).
+    #[cfg_attr(feature = "npm", napi(constructor))]
     pub fn new(raw_md: String, options: Option<AstOptions>) -> Self {
         let opts = options.unwrap_or_else(AstOptions::default);
         let f_n = opts.file_name.clone();
@@ -146,6 +144,7 @@ impl PeisarAst {
     }
 
     /// Remove all registered plugins.
+    #[cfg_attr(feature = "npm", napi)]
     pub fn clear_plugins(&mut self) {
         self.plugins.clear();
         self.plugins_applied = true;
@@ -166,6 +165,7 @@ impl PeisarAst {
     /// Applies registered plugins first.  Unlike [`take_ast`](Self::take_ast)
     /// this does **not** consume the AST — subsequent calls still return
     /// the full tree.
+    #[cfg_attr(feature = "npm", napi)]
     pub fn get_ast(&mut self) -> PeisarDocument {
         self.ensure_plugins_applied();
         self.ast.clone()
@@ -173,6 +173,7 @@ impl PeisarAst {
     /// Return a clone of the parsed YAML front matter, if present.
     ///
     /// Applies registered plugins first, matching [`get_ast`](Self::get_ast).
+    #[cfg_attr(feature = "npm", napi)]
     pub fn get_frontmatter(&mut self) -> Frontmatter {
         self.ensure_plugins_applied();
         self.frontmatter.clone()

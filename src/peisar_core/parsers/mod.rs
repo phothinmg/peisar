@@ -13,16 +13,16 @@
 //! - `attrs` — Kramdown block attribute parser.
 //! - [`plugin`] — parser hooks, visitor callbacks, and AST traversal.
 
-mod attrs;
+pub mod attrs;
 pub mod block;
 pub mod inline;
 /// Parser hooks, visitor callbacks, and AST traversal utilities.
 pub mod plugin;
-mod table;
+pub mod table;
 
-use crate::ast::options::AstOptions;
-use crate::ast::parsers::plugin::ParserHooks;
-use crate::ast::tokens::{span::Span, token::Block};
+use crate::peisar_core::options::AstOptions;
+use crate::peisar_core::parsers::plugin::ParserHooks;
+use crate::peisar_core::tokens::{span::Span, token::Block};
 use inline::LinkRefMap;
 #[cfg(feature = "npm")]
 use napi_derive::napi;
@@ -52,7 +52,7 @@ pub struct PeisarDocument {
     pub children: Vec<Block>,
     /// All link reference definitions collected from the document.
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub link_references: Vec<crate::ast::tokens::token::LinkReferenceDefinition>,
+    pub link_references: Vec<crate::peisar_core::tokens::token::LinkReferenceDefinition>,
 }
 
 impl Default for PeisarDocument {
@@ -108,7 +108,7 @@ pub fn md_to_ast_with_hooks(
     // Pre-pass: collect all link reference definitions into a map so that
     // reference-style links can be resolved during inline parsing.
     let mut ref_map: LinkRefMap = LinkRefMap::new();
-    let mut ref_defs: Vec<crate::ast::tokens::token::LinkReferenceDefinition> = Vec::new();
+    let mut ref_defs: Vec<crate::peisar_core::tokens::token::LinkReferenceDefinition> = Vec::new();
     for (line_idx, line) in lines.iter().enumerate() {
         if block::is_link_ref_def(line) {
             if let Some(def) = block::parse_link_ref_def_line(line, line_idx, &line_starts, input) {

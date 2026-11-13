@@ -7,17 +7,6 @@ cd "$repo_root"
 
 MJS_FILE="index.mjs"
 BINARY_FILE="peisar.linux-x64-gnu.node"
-DTS_FILE="types.d.ts"
-
-# 1. Write .d.ts file for napi-rs
-cat << 'EOF' > "$DTS_FILE"
-// Generated from ci.yml
-// napi-rs helper types 
-export type PeisarEmphasisLevel = "Italic" | "Bold";
-export type PeisarTableCellAlignment = "Default" | "Left" | "Center" | "Right";
-export type PeisarTableCellAlignments = PeisarTableCellAlignment[];
-export type PeisarTaskState = "Unchecked" | "Checked";
-EOF
 
 sleep 3
 

@@ -54,7 +54,7 @@ impl From<bool> for RenderOptions {
     }
 }
 
-/// JavaScript options for Markdown parsing and HTML rendering.
+/// JavaScript style options for Markdown parsing and HTML rendering.
 ///
 /// Every property is optional.  Omitted parsing options enable GFM and
 /// Kramdown; omitted rendering options produce a complete HTML document with

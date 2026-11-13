@@ -1,16 +1,9 @@
-use super::config::RenderOptions;
-use crate::ast::{
-    Attributes, PeisarDocument,
-    token::{
-        Block, EmphasisLevel, Inline, ListItem, Table as AstTable, TableCellAlignment, TaskState,
-    },
+use super::ast::tokens::{
+    Attributes, Block, EmphasisLevel, Inline, ListItem, PeisarDocument, Table as AstTable,
+    TableCellAlignment, TaskState,
 };
+use super::config::RenderOptions;
 
-#[cfg(feature = "npm")]
-use napi_derive::napi;
-
-///
-#[cfg_attr(feature = "npm", napi)]
 pub fn ast_to_html(doc: PeisarDocument, opts: Option<RenderOptions>) -> String {
     let mut r = AstToHtml::new(opts);
     r.render_document(&doc);
@@ -457,7 +450,7 @@ impl Default for AstToHtml {
 #[cfg(test)]
 mod tests {
     use super::{RenderOptions, ast_to_html};
-    use crate::ast::{AstOptions, PeisarDocument};
+    use crate::ast::{AstOptions, tokens::PeisarDocument};
 
     #[test]
     fn body_class_is_not_written_to_html_element() {

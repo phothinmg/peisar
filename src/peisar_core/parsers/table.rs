@@ -1,8 +1,8 @@
 use super::inline;
 use super::plugin::ParserHooks;
-use crate::ast::options::AstOptions;
-use crate::ast::tokens::span::Span;
-use crate::ast::tokens::token::{Block, Table, TableCell, TableCellAlignment, TableRow};
+use crate::ast::AstOptions;
+use crate::ast::span::Span;
+use crate::ast::tokens::{Block, Table, TableCell, TableCellAlignment, TableRow};
 
 /// Returns `true` when `line` is a GFM table delimiter row — cells that
 /// contain only `-` and `:` with at least one `-` per cell, optionally
@@ -130,8 +130,8 @@ mod tests {
         build_table, is_table_delimiter, is_table_start, parse_delimiter_alignments,
         split_table_row,
     };
-    use crate::ast::parsers::plugin;
-    use crate::ast::tokens::token::{Block, Inline, TableCellAlignment};
+    use crate::peisar_core::parsers::plugin;
+    use crate::peisar_core::tokens::token::{Block, Inline, TableCellAlignment};
 
     #[test]
     fn delimiter_rows_are_recognized() {

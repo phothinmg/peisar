@@ -1,8 +1,8 @@
-use crate::ast::parsers::plugin::{
+use crate::peisar_core::parsers::plugin::{
     BlockParserContext, InlineParserContext, InlineVisitControl, PluginFactory, VisitControl,
 };
 
-use crate::ast::tokens::token::{Block, Inline};
+use crate::peisar_core::tokens::token::{Block, Inline};
 
 #[cfg(feature = "npm")]
 use napi::bindgen_prelude::{Env, Function, FunctionRef};

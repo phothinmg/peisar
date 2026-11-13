@@ -1,4 +1,5 @@
-use peisar::ast::{BlockParseResult, Plugin, VisitorControl, token::Block};
+use peisar::ast::tokens::Block;
+use peisar::plugin::{BlockParseResult, Plugin, VisitorControl};
 use peisar::{Peisar, PeisarOptions};
 
 /// Adds a thematic break after every heading.

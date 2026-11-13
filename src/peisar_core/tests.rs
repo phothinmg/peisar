@@ -12,6 +12,8 @@
 //!   `compute_line_starts`, `is_link_ref_def`, `is_thematic_break`,
 //!   `parse_task_marker`)
 
+use crate::peisar_core;
+
 use super::AstOptions;
 use super::parsers::block::{
     compute_line_starts, is_link_ref_def, is_list_marker, is_thematic_break, normalize_label,
@@ -265,11 +267,11 @@ fn test_inline_emphasis_underscore() {
     let tokens = parse_inline("__bold__ and _italic_", None);
     assert!(tokens.iter().any(|t| matches!(
         t,
-        Inline::Emphasis { level, .. } if matches!(level, super::tokens::token::EmphasisLevel::Bold)
+        Inline::Emphasis { level, .. } if matches!(level,peisar_core::tokens::token::EmphasisLevel::Bold)
     )));
     assert!(tokens.iter().any(|t| matches!(
         t,
-        Inline::Emphasis { level, .. } if matches!(level, super::tokens::token::EmphasisLevel::Italic)
+        Inline::Emphasis { level, .. } if matches!(level, peisar_core::tokens::token::EmphasisLevel::Italic)
     )));
 }
 
@@ -280,7 +282,7 @@ fn test_nested_emphasis() {
         t,
         Inline::Emphasis { children, .. } if children.iter().any(|c| matches!(
             c,
-            Inline::Emphasis { level, .. } if matches!(level, super::tokens::token::EmphasisLevel::Italic)
+            Inline::Emphasis { level, .. } if matches!(level, peisar_core::tokens::token::EmphasisLevel::Italic)
         ))
     ));
     assert!(found, "expected nested emphasis inside bold");
@@ -895,7 +897,7 @@ fn test_inline_emphasis_bold() {
     let tokens = parse_inline("**bold**", None);
     assert!(tokens.iter().any(|t| matches!(
         t,
-        Inline::Emphasis { level, .. } if matches!(level, super::tokens::token::EmphasisLevel::Bold)
+        Inline::Emphasis { level, .. } if matches!(level, peisar_core::tokens::token::EmphasisLevel::Bold)
     )));
 }
 
@@ -904,7 +906,7 @@ fn test_inline_emphasis_italic() {
     let tokens = parse_inline("*italic*", None);
     assert!(tokens.iter().any(|t| matches!(
         t,
-        Inline::Emphasis { level, .. } if matches!(level, super::tokens::token::EmphasisLevel::Italic)
+        Inline::Emphasis { level, .. } if matches!(level, peisar_core::tokens::token::EmphasisLevel::Italic)
     )));
 }
 

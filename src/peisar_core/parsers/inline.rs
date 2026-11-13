@@ -22,11 +22,12 @@
 //! when you do not need reference resolution.
 
 use super::plugin::{InlineParserContext, ParserHooks, finalize_hook_inline};
-use crate::ast::options::AstOptions;
-use crate::ast::tokens::{
+use crate::ast::{
+    AstOptions,
     span::{Position, Span},
-    token::{EmphasisLevel, Inline},
+    tokens::{EmphasisLevel, Inline},
 };
+
 use std::collections::HashMap;
 
 /// A map of normalise link reference labels to `(url, title)`.

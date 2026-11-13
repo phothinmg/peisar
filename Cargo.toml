@@ -14,7 +14,6 @@ serde = { version = "1.0.229", features = ["derive"] }
 napi = { version = "3", optional = true }
 napi-derive = { version = "3", optional = true }
 
-
 [build-dependencies]
 napi-build = "2"
 
@@ -28,6 +27,7 @@ crate-type = ["rlib", "cdylib"]
 default = []
 npm = ["dep:napi", "dep:napi-derive"]
 
+# How to create Rust plugin
 [[example]]
 name = "plugin"
 path = "examples/rust/plugin.rs"
