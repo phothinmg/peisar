@@ -22,7 +22,7 @@ pub struct Frontmatter {
     /// Format detected in the document.
     #[cfg_attr(
         feature = "npm",
-        napi(ts_type = "\"yaml\" | \"toml\" | \"json\" | \"empty\"")
+        napi(ts_type = "\"Yaml\" | \"Toml\" | \"Json\" | \"Empty\"")
     )]
     pub frontmatter_type: FrontmatterType,
     /// Frontmatter contents without delimiters, or an empty string if absent.
@@ -42,9 +42,10 @@ pub struct FrontmatterResult {
 /// Extracts YAML, TOML, or JSON frontmatter from the start of a Markdown document.
 ///
 /// YAML and TOML use `---` and `+++` delimiter lines, respectively. JSON
-/// frontmatter is recognized as a top-level object. If no complete supported
-/// frontmatter is found, the result has type [`FrontmatterType::Empty`] and
-/// contains the original input as its body.
+/// frontmatter is recognized as a top-level object, optionally wrapped in
+/// `;;;` delimiters. If no complete supported frontmatter is found, the result
+/// has type [`FrontmatterType::Empty`] and contains the original input as its
+/// body.
 pub fn extract_frontmatter(markdown: String) -> FrontmatterResult {
     let fence = if markdown.starts_with("---\n") || markdown.starts_with("---\r\n") {
         Some(("---", FrontmatterType::Yaml))
@@ -91,23 +92,46 @@ pub fn extract_frontmatter(markdown: String) -> FrontmatterResult {
         }
     }
 
-    if markdown.starts_with('{') {
-        if let Some(end_idx) = find_closing_brace(&markdown) {
-            let raw = &markdown[..=end_idx];
-            let rest = &markdown[end_idx + 1..];
-            let body = rest
-                .strip_prefix("\r\n")
-                .or_else(|| rest.strip_prefix('\n'))
-                .unwrap_or(rest)
-                .to_string();
+    let (json, wrapped) = if let Some(json) = markdown.strip_prefix(";;;") {
+        (
+            json.strip_prefix("\r\n")
+                .or_else(|| json.strip_prefix('\n'))
+                .unwrap_or(json),
+            true,
+        )
+    } else {
+        (markdown.as_str(), false)
+    };
 
-            return FrontmatterResult {
-                frontmatter: Frontmatter {
-                    frontmatter_type: FrontmatterType::Json,
-                    raw: raw.to_string(),
-                },
-                body,
+    if json.starts_with('{') {
+        if let Some(end_idx) = find_closing_brace(json) {
+            let raw = &json[..=end_idx];
+            let rest = &json[end_idx + 1..];
+            let after_json = if wrapped {
+                let rest = rest
+                    .strip_prefix("\r\n")
+                    .or_else(|| rest.strip_prefix('\n'))
+                    .unwrap_or(rest);
+                rest.strip_prefix(";;;")
+            } else {
+                Some(rest)
             };
+
+            if let Some(rest) = after_json {
+                let body = rest
+                    .strip_prefix("\r\n")
+                    .or_else(|| rest.strip_prefix('\n'))
+                    .unwrap_or(rest)
+                    .to_string();
+
+                return FrontmatterResult {
+                    frontmatter: Frontmatter {
+                        frontmatter_type: FrontmatterType::Json,
+                        raw: raw.to_string(),
+                    },
+                    body,
+                };
+            }
         }
     }
     FrontmatterResult {
@@ -161,6 +185,24 @@ mod tests {
 
         assert_eq!(parsed.frontmatter.frontmatter_type, FrontmatterType::Yaml);
         assert_eq!(parsed.frontmatter.raw, "title: Test");
+        assert_eq!(parsed.body, "# Body");
+    }
+
+    #[test]
+    fn extracts_json_with_semicolon_delimiters() {
+        let parsed = extract_frontmatter(";;;{\"title\":\"Test\"};;;\n# Body".to_string());
+
+        assert_eq!(parsed.frontmatter.frontmatter_type, FrontmatterType::Json);
+        assert_eq!(parsed.frontmatter.raw, "{\"title\":\"Test\"}");
+        assert_eq!(parsed.body, "# Body");
+    }
+
+    #[test]
+    fn extracts_multiline_json_with_semicolon_delimiters() {
+        let parsed = extract_frontmatter(";;;\n{\"title\":\"Test\"}\n;;;\n# Body".to_string());
+
+        assert_eq!(parsed.frontmatter.frontmatter_type, FrontmatterType::Json);
+        assert_eq!(parsed.frontmatter.raw, "{\"title\":\"Test\"}");
         assert_eq!(parsed.body, "# Body");
     }
 

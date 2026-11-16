@@ -23,6 +23,8 @@ const peisar = require("./index.cjs");
 export const Peisar = peisar.Peisar;
 export const renderDocumentHtml = peisar.FrontmatterType;
 export const PeisarAst = peisar.PeisarAst;
+export const parseToml = peisar.parseToml;
+export const parseTomlAsync = peisar.parseTomlAsync;
 EOF
 
 # 3.1 Lint and format output JS files

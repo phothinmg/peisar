@@ -18,11 +18,14 @@
 //! and limitations under the License.
 //! ***********************************************************************************
 
-mod config;
-mod html;
 mod parser;
 mod peisar_core;
 
+use peisar_core::config;
+use peisar_core::html;
+// ---------------------------------------------------------------------------------------------
+pub mod toml;
+pub mod yaml;
 pub use config::PeisarOptions;
 pub use parser::Peisar;
 pub use peisar_core::frontmatter::{Frontmatter, FrontmatterResult, FrontmatterType};

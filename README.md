@@ -1,15 +1,13 @@
 <!-- markdownlint-disable MD033 -->
 <!-- markdownlint-disable MD041 -->
 <div align="center">
- <img src="peisar.webp" width="160" height="160" alt="prisar" />
+ <img src="https://susee.phothin.dev/logo/peisar.webp" width="160" height="160" alt="prisar" />
   <h1>Peisar</h1>
   <p>A practical Markdown parser engineered in Rust</p>
 </div>
 
 
-![NPM Version](https://img.shields.io/npm/v/peisar?logo=npm&logoColor=%23CB3837) 
-![Crates.io Version](https://img.shields.io/crates/v/peisar?logo=rust) [![Documentation][docs_img]][docs]
-![NPM Downloads](https://img.shields.io/npm/dm/peisar?style=flat-square)
+![NPM Version](https://img.shields.io/npm/v/peisar?logo=npm&logoColor=%23CB3837) ![Crates.io Version](https://img.shields.io/crates/v/peisar?logo=rust) [![Documentation][docs_img]][docs] ![NPM Downloads](https://img.shields.io/npm/dm/peisar?style=flat-square)
 
 <!-- ![NPM Downloads](https://img.shields.io/npm/dm/peisar?logo=npm&logoColor=%23CB3837) -->
 

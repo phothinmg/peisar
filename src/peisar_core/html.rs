@@ -1,8 +1,8 @@
-use super::ast::tokens::{
+use super::config::RenderOptions;
+use crate::ast::tokens::{
     Attributes, Block, EmphasisLevel, Inline, ListItem, PeisarDocument, Table as AstTable,
     TableCellAlignment, TaskState,
 };
-use super::config::RenderOptions;
 
 pub fn ast_to_html(doc: PeisarDocument, opts: Option<RenderOptions>) -> String {
     let mut r = AstToHtml::new(opts);

@@ -16,8 +16,10 @@
 //! assert_eq!(PeisarDocument.children.len(), 1);
 //! ```
 
+pub mod config;
 pub mod control;
 pub mod frontmatter;
+pub mod html;
 pub mod options;
 pub mod parsers;
 #[cfg(test)]
