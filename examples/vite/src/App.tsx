@@ -1,11 +1,12 @@
-import { Peisar } from "@peisar/peisar-wasm32-wasi";
-import content from "../README.md?raw";
-const document = new Peisar(content, { fragment: true });
+import Readme, { html } from "../README.md";
 
-function App() {
+export function App() {
   return (
-   <div dangerouslySetInnerHTML={{ __html: document.html }} />
-  )
+    <main>
+      {/* Renders as a React component */}
+      <Readme className="markdown-body" />
+    </main>
+  );
 }
 
-export default App
+export default App;

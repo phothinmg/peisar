@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - Unreleased
+
+### Fixed
+
+- Table parsing preserves escaped pipe characters inside cells and rejects
+  header/delimiter rows with different column counts.
+- Inline source spans now report correct byte offsets after multibyte UTF-8
+  characters.
+- Backslash-escaped ASCII punctuation renders as literal text.
+
+## [3.0.0] - Unreleased
+
+### Notes
+
+- This section is a release-preparation draft. Version 3.0.0 has not been
+  released.
+- The planned LTS policy is for major releases to receive at least two years
+  of support, starting with 3.0.0.
+
+### Changed
+
+- Frontmatter extraction recognizes YAML (`---`), TOML (`+++`), and JSON
+  objects. The API returns the detected format and raw content; it does not
+  deserialize the content.
 
 
 ## [2.0.1] - 2026-11-04
@@ -281,6 +305,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rust `rlib` crate and Node.js integration test suite
 
 [2.0.1]: https://github.com/phothinmg/peisar/compare/2.0.0...2.0.1
+[2.1.0]: https://github.com/phothinmg/peisar/compare/2.0.1...2.1.0
 [2.0.0]: https://github.com/phothinmg/peisar/compare/1.2.3...2.0.0
 [1.2.0]: https://github.com/phothinmg/peisar/compare/1.1.0...1.2.0
 [1.0.0]: https://github.com/phothinmg/peisar/compare/0.3.0...1.0.0

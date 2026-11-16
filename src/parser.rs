@@ -1,6 +1,6 @@
 use super::config::{PeisarOptions, RenderOptions, get_options};
 use super::html::ast_to_html;
-use super::{Frontmatter, ast, plugin::Plugin};
+use super::{Frontmatter, ast, plugin::PeisarPlugin};
 #[cfg(feature = "npm")]
 use napi::Env;
 #[cfg(feature = "npm")]
@@ -11,7 +11,7 @@ use napi_derive::napi;
 ///
 /// Construct this class with the Markdown source and an optional
 /// [`PeisarOptions`] object. Properties are computed from the source document;
-/// accessing `ast`, `html`, or `astJson` also applies registered visitors.
+/// accessing `ast` or `html` also applies registered visitors.
 #[cfg_attr(feature = "npm", napi)]
 pub struct Peisar {
     render_opts: RenderOptions,
@@ -51,7 +51,7 @@ impl Peisar {
     /// `visitBlock([block]) { return { recurse: true }; }`.
     #[cfg(feature = "npm")]
     #[napi(js_name = "use")]
-    pub fn use_plugin(&mut self, env: Env, plugin: Plugin) {
+    pub fn use_plugin(&mut self, env: Env, plugin: PeisarPlugin) {
         self.peisar_ast.add_plugin(env, plugin);
     }
     /// Registers a plugin that can customize parsing and visit AST nodes.
@@ -59,7 +59,7 @@ impl Peisar {
     /// This Rust API accepts a [`Plugin`] value. The JavaScript binding
     /// exposes the corresponding method as `use`.
     #[cfg(not(feature = "npm"))]
-    pub fn use_plugin(&mut self, plugin: Plugin) {
+    pub fn use_plugin(&mut self, plugin: PeisarPlugin) {
         self.peisar_ast.add_plugin(plugin);
     }
     /// Renders the parsed Markdown as HTML using the configured render options.
@@ -72,7 +72,7 @@ impl Peisar {
         html
     }
 
-    /// Gets the deserialized YAML front matter, or `null` when none exists.
+    /// Gets the extracted frontmatter, including its type and raw contents.
     #[cfg_attr(feature = "npm", napi(getter))]
     pub fn frontmatter(&mut self) -> Frontmatter {
         self.peisar_ast.get_frontmatter()

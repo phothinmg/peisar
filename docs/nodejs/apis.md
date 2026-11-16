@@ -1,17 +1,14 @@
 # Node.js API reference
 
 This document describes the Node.js-facing API exposed by the native
-`peisar` package. The package provides single-document parsing and YAML
-helpers; it does not expose a filesystem cache API.
+`peisar` package. It provides single-document parsing; it does not expose
+standalone YAML helpers or a filesystem cache API.
 
 ## Package exports
 
 | Export | Kind | Notes |
 | --- | --- | --- |
 | `Peisar` | class | Main parse/render API |
-| `frontmatter` | function | Extract YAML front matter and Markdown body |
-| `yamlParser` | function | Parse YAML text into a JavaScript value |
-| `loadYaml` | function | Load and parse a YAML file |
 
 ## `Peisar`
 
@@ -27,8 +24,7 @@ new Peisar(markdown: string, options?: PeisarOptions)
 | --- | --- | --- |
 | `ast` | object | Parsed AST as a JavaScript object |
 | `html` | string | Rendered HTML |
-| `frontmatter` | `Record<string, any> \| null` | Parsed YAML front matter |
-| `astJson` | string | AST serialized as JSON |
+| `frontmatter` | `{ frontmatterType: "yaml" \| "toml" \| "json" \| "empty"; raw: string }` | Detected format and raw frontmatter content; not deserialized |
 
 ### Plugin method
 
@@ -79,16 +75,15 @@ Visitor controls include `insertBefore`, `insertAfter`, `replaceWith`,
 lines consumed; inline hooks return an `inline` and the number of characters
 consumed.
 
-## YAML helpers
+Frontmatter is recognized at the start of the Markdown source:
 
-```ts
-frontmatter(markdown: string): {
-  cleanContent: string;
-  yamlData: Record<string, any> | null;
-}
+| Format | Opening | Closing |
+| --- | --- | --- |
+| YAML | `---` | `---` |
+| TOML | `+++` | `+++` |
+| JSON | `{` | Matching `}` |
 
-yamlParser(yaml: string): Record<string, any>
-loadYaml(filePath: string): Record<string, any>
-```
-
-Use these helpers to process YAML outside the `Peisar` document interface.
+The `raw` property contains the text between YAML/TOML delimiters or the
+complete JSON object. No YAML, TOML, or JSON parsing or validation is done.
+When no complete frontmatter is found, the type is `"empty"` and `raw` is an
+empty string.

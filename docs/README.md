@@ -41,8 +41,8 @@ feature flags; the `npm` feature is only needed to build the Node.js bindings:
 
 ## Releases
 
-- [Release notes](./release-notes/2.0.1.md) for the current version
-- [Release notes](./release-notes/2.0.0.md) for the previous major release
+- [Release notes](./release-notes/2.1.0.md) for the next version
+- [Release notes](./release-notes/2.0.1.md) for the current release
 - [Full changelog](../CHANGELOG.md)
 - [Security policy](../SECURITY.md) and [threat model](../SECURITY_MODEL.md)
 

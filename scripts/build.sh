@@ -21,10 +21,7 @@ const require = createRequire(import.meta.url);
 const peisar = require("./index.cjs");
 
 export const Peisar = peisar.Peisar;
-export const frontmatter = peisar.frontmatter;
-export const yamlParser = peisar.yamlParser;
-export const loadYaml = peisar.loadYaml;
-export const renderDocumentHtml = peisar.renderDocumentHtml;
+export const renderDocumentHtml = peisar.FrontmatterType;
 export const PeisarAst = peisar.PeisarAst;
 EOF
 
@@ -44,7 +41,7 @@ npx oxfmt --write index.d.ts
 # 4. Remove binary and .d.ts
 rm -rf "$BINARY_FILE"
 sleep 3
-rm -rf "$DTS_FILE"
+
 
 # 5. Write gitHead
 

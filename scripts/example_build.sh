@@ -21,5 +21,3 @@ cat << 'EOF' > "$PACKAGE_FILE"
 }
 EOF
 
-rm -r "$DTS_FILE"
-echo "Removed dts file."

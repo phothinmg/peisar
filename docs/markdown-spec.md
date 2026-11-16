@@ -13,7 +13,7 @@ const { Peisar } = require("peisar");
 const doc = new Peisar("# Hello **world**", { fragment: true });
 doc.html;      // <h1>Hello <strong>world</strong></h1>\n
 doc.ast;       // JavaScript AST object
-doc.frontmatter; // YAML object or null
+doc.frontmatter; // { frontmatterType: "empty", raw: "" }
 ```
 
 ---
@@ -24,34 +24,42 @@ A document is a sequence of **block** nodes. Blocks contain **inline** content
 (or nested blocks). Blank lines separate blocks; they carry no meaning
 otherwise. Both `\n` and `\r\n` line endings are accepted.
 
-### 1.1 YAML front matter
+### 1.1 Frontmatter
 
-An optional YAML block at the very top of the document:
+Optional frontmatter must start at the very beginning of the document.
+Supported formats are:
 
 ```markdown
 ---
 title: Guide
-tags:
-  - docs
 ---
 
 # The body
 ```
 
-Rules:
+```markdown
++++
+title = "Guide"
++++
 
-- The opening `---` must be the first non-whitespace line and must be followed
-  immediately by a newline (`---\n` or `---\r\n`). A trailing space after
-  `---` disables front matter.
-- The block closes at the next line that starts with `---`.
-- Everything after the closing marker is the Markdown body (leading blank
-  lines are stripped).
-- YAML is deserialized with a maintained YAML 1.2 parser through Serde, so
-  nested maps, lists, and scalars are preserved as JSON-compatible values.
-- An **unterminated** block is not front matter; the text is parsed as normal
-  Markdown.
-- **Invalid YAML returns an error** from the front-matter parser.
-- `document.frontmatter` returns the deserialized YAML object, or `null`.
+# The body
+```
+
+```markdown
+{"title":"Guide"}
+# The body
+```
+
+- YAML uses an opening `---` followed by a newline and a closing `---` line.
+- TOML uses an opening `+++` followed by a newline and a closing `+++` line.
+- JSON frontmatter is a top-level object beginning with `{`; its closing
+  brace is matched while ignoring braces inside double-quoted strings.
+- The parser only extracts frontmatter; it does not deserialize or validate
+  the YAML, TOML, or JSON content.
+- A missing or incomplete frontmatter block is left in the body unchanged.
+- In the Node.js API, `document.frontmatter` is an object containing
+  `frontmatterType` (`"yaml"`, `"toml"`, `"json"`, or `"empty"`) and `raw`.
+  The Rust API exposes the corresponding `frontmatter_type` and `raw` fields.
 
 ---
 
@@ -442,8 +450,7 @@ Full-document output shape:
 - **Spans of nodes inside containers** (block quotes, list items) are relative
   to that container's sub-document, not the original file.
 - In the JavaScript `ast` property, `type` values are PascalCase (`Heading`,
- `Paragraph`, `Link`); `astJson` mirrors the Rust serialization with
-  snake_case types (`heading`, `paragraph`, `link`).
+ `Paragraph`, `Link`); the Rust API represents node kinds as Rust enums.
 
 Node kinds — blocks: `Heading` (level 1–6), `Paragraph`, `CodeBlock`
 (lang/code), `BlockQuote`, `List` (ordered/items), `ThematicBreak`, `HtmlBlock`,

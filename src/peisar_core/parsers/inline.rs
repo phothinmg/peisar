@@ -50,7 +50,7 @@ pub fn parse_inline_with_refs(
 }
 
 /// Parse inline markdown with custom parser hooks (see
-/// [`hooks`](super::hooks)).
+/// [`ParserHooks`]).
 ///
 /// Hooks run before the built-in inline matchers at every character
 /// position; the first hook to claim a position wins.
@@ -92,6 +92,21 @@ pub fn parse_inline_with_hooks(
                     continue;
                 }
             }
+        }
+
+        // CommonMark backslash escapes for ASCII punctuation.
+        if c == '\\' && i + 1 < chars.len() && is_ascii_punctuation(chars[i + 1]) {
+            flush_text(&mut tokens, &mut text, &mut text_start, &ctx, &chars);
+            tokens.push(Inline::Text {
+                value: chars[i + 1].to_string(),
+                pos: Span::new(
+                    ctx.position(i, chars.len()),
+                    ctx.position(i + 2, chars.len()),
+                ),
+            });
+            i += 2;
+            text_start = i;
+            continue;
         }
 
         // Inline code: `code` or ``code``
@@ -255,14 +270,15 @@ pub fn parse_inline_with_hooks(
 pub struct InlineCtx {
     /// `line_starts_char[l]` = char index at which line `l` begins.
     line_starts_char: Vec<usize>,
-    /// `char_byte_offsets[i]` = byte offset of `chars[i]`.
+    /// `char_byte_offsets[i]` = byte offset at character index `i`,
+    /// including the end-of-input position.
     char_byte_offsets: Vec<usize>,
 }
 
 impl InlineCtx {
-    fn new(input: &str, chars: &[char]) -> Self {
+    fn new(_input: &str, chars: &[char]) -> Self {
         let mut line_starts_char = vec![0usize];
-        let mut char_byte_offsets = Vec::with_capacity(chars.len());
+        let mut char_byte_offsets = Vec::with_capacity(chars.len() + 1);
         let mut byte = 0usize;
         for c in chars {
             char_byte_offsets.push(byte);
@@ -271,7 +287,7 @@ impl InlineCtx {
             }
             byte += c.len_utf8();
         }
-        let _ = input;
+        char_byte_offsets.push(byte);
         Self {
             line_starts_char,
             char_byte_offsets,
@@ -287,22 +303,44 @@ impl InlineCtx {
         };
         let line_start = self.line_starts_char[line];
         let column = i - line_start;
-        let offset = if i < self.char_byte_offsets.len() {
-            self.char_byte_offsets[i]
-        } else {
-            self.char_byte_offsets.last().copied().unwrap_or(0)
-                + if chars_len > 0 && self.char_byte_offsets.len() > 1 {
-                    self.char_byte_offsets[self.char_byte_offsets.len() - 1]
-                        - self.char_byte_offsets[self.char_byte_offsets.len() - 2]
-                } else {
-                    0
-                }
-        };
+        let offset = self.char_byte_offsets[i];
         Position {
             line: line as u32,
             column: column as u32,
             offset: offset as u32,
         }
+    }
+}
+
+fn is_ascii_punctuation(ch: char) -> bool {
+    ch.is_ascii_punctuation()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_inline_with_refs;
+    use crate::peisar_core::tokens::token::Inline;
+
+    #[test]
+    fn inline_end_offsets_count_utf8_bytes() {
+        for (input, expected_offset, expected_column) in [("é", 2, 1), ("aé", 3, 2)] {
+            let nodes = parse_inline_with_refs(input, None, None);
+            let Inline::Text { pos, .. } = nodes.last().unwrap() else {
+                panic!("expected a text node");
+            };
+            assert_eq!(pos.end.offset, expected_offset);
+            assert_eq!(pos.end.column, expected_column);
+        }
+    }
+
+    #[test]
+    fn backslash_escaped_punctuation_is_text() {
+        let nodes = parse_inline_with_refs(r"\|", None, None);
+        assert!(matches!(
+            nodes.as_slice(),
+            [Inline::Text { value, pos }]
+                if value == "|" && pos.start.offset == 0 && pos.end.offset == 2
+        ));
     }
 }
 // ---------------------------------------------------------------------------

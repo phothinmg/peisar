@@ -1,12 +1,13 @@
 # Rust API reference
 
-The crate re-exports `Peisar` and `PeisarOptions` at the root. The `ast` and
-`plugin` modules are public without feature flags.
+The crate re-exports `Peisar`, `PeisarOptions`, and frontmatter types at the
+root. The `ast`, `render`, and `plugin` modules are public without feature
+flags.
 
 ## `peisar::{Peisar, PeisarOptions}`
 
 `Peisar` is the high-level single-document parser and renderer. It exposes
-`ast()`, `html()`, `frontmatter()`, and `ast_json()` methods.
+`ast()`, `html()`, `frontmatter()`, and `use_plugin()` methods.
 `PeisarOptions` configures GFM, Kramdown attributes, file metadata, and HTML
 output.
 
@@ -23,24 +24,34 @@ let mut document = Peisar::new(
 assert_eq!(document.html(), "<h1>Hello</h1>\n");
 ```
 
+`frontmatter()` returns a `Frontmatter` value with `frontmatter_type` and
+`raw` fields. The content is not deserialized.
+
 ## `peisar::ast`
 
-The AST types and parsing helpers are re-exported from `peisar_ast`.
+The AST types and parsing helpers are available from this module.
 
-Use `Document::parse` to parse Markdown directly. Use
-`md_to_ast_with_hooks` when parsing with custom hooks.
+Use `PeisarAst` for parsing and accessing the AST, or `md_to_ast` for direct
+parsing. Custom parser hooks are available through the plugin APIs.
 
 ```rust
-use peisar::ast::{AstOptions, Document};
+use peisar::ast::PeisarAst;
 
-let document = Document::parse("# Hello\n", &AstOptions::default(), None);
-assert_eq!(document.children.len(), 1);
+let mut document = PeisarAst::new("# Hello\n".into(), None);
+let ast = document.get_ast();
+assert_eq!(ast.children.len(), 1);
 ```
+
+## `peisar::render`
+
+This module provides `AstToHtml`, `ast_to_html`, and `RenderOptions` for
+rendering AST documents directly.
 
 ## `peisar::plugin`
 
-This module re-exports the plugin interfaces and visitor helpers from
-`peisar_ast`. It is available without enabling a Cargo feature.
+This module provides the plugin interfaces and visitor helpers. It is
+available without enabling a Cargo feature. Register a `Plugin` with
+`Peisar::use_plugin()` or `PeisarAst::add_plugin()`.
 
 ## Cargo features
 
@@ -50,11 +61,8 @@ N-API bindings used to build the Node.js package.
 Rust code should depend on the crate without a feature list:
 
 ```toml
-peisar = "2.0.1"
+peisar = "2"
 ```
 
-The previous `peisar::parsers`, `peisar::yaml`, `PeisarAst`, and `md_to_ast`
-exports are no longer available. Block and inline node types are re-exported
-from `peisar::ast`; use `Document::parse` or `md_to_ast_with_hooks` instead.
-HTML rendering and front matter are available through the high-level
-`Peisar` API. See the [Rust overview](./README.md) for end-to-end usage.
+The `npm` feature enables the N-API bindings used to build the Node.js
+package. See the [Rust overview](./README.md) for end-to-end usage.

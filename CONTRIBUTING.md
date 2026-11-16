@@ -19,32 +19,37 @@ npm install
 ## Project layout
 
 Peisar builds as both a Rust library (`rlib`) and a native Node.js addon
-(`cdylib`). The high-level wrapper and HTML integration live in this crate;
-the AST and plugin APIs are re-exported from `peisar_ast`:
+(`cdylib`). The Rust crate provides the parser, AST, renderer, frontmatter,
+and plugin APIs:
 
 ```text
 src/
-├── ast.rs                    AST type and parser re-exports
-├── core/
-│   ├── config.rs             parser and rendering options
-│   ├── html.rs               HTML rendering integration
-│   └── parser.rs             Peisar wrapper and N-API binding
-├── plugin.rs                 plugin API re-exports
-└── lib.rs                    public modules and root re-exports
-
-scripts/peisar.test.txt       Node.js integration tests
-
-`npm run test` builds the addon in a temporary `tests/` directory and runs
-the Node integration tests there; the file is kept as `.txt` so `node --test`
-does not auto-discover it.
-skills/                       Agent Skills for AI coding tools
+├── lib.rs                    public modules and root re-exports
+├── config.rs                 parser and rendering options
+├── html.rs                   HTML rendering
+├── parser.rs                 high-level Peisar API and N-API binding
+└── peisar_core/
+    ├── frontmatter.rs        frontmatter extraction and types
+    ├── control.rs            plugin interfaces and visitor controls
+    ├── options.rs            AST parsing options
+    ├── parsers/              block, inline, attribute, and plugin parsers
+    └── tokens/               AST nodes and source spans
 ```
 
-Rust consumers can use `peisar::ast` and `peisar::plugin` without Cargo
-feature flags. HTML rendering and front matter are available through the
-high-level `Peisar` API. The `npm` feature enables N-API bindings. The
-generated TypeScript declarations (`index.d.ts`) are produced by the N-API
-build — never hand-edit them.
+`npm run test` builds the addon in a temporary `tests/` directory and runs
+the Node integration tests there. The test file is kept as `.txt` so
+`node --test` does not auto-discover it. Agent Skills for AI coding tools
+are in `skills/`.
+
+The crate's public APIs are `peisar::{Peisar, PeisarOptions}`,
+`peisar::ast`, `peisar::render`, and `peisar::plugin`; no Cargo feature is
+needed for Rust use. The high-level `Peisar` API exposes `ast()`, `html()`,
+`frontmatter()`, and `use_plugin()`. Its Node.js binding provides `ast`,
+`html`, and `frontmatter` properties and a `use()` method for plugins.
+Frontmatter contains its detected type and raw contents; it is not
+deserialized. The `npm` feature enables N-API bindings. Generated
+TypeScript declarations (`index.d.ts`) come from the N-API build — never
+hand-edit them.
 
 ## Development workflow
 
@@ -77,9 +82,11 @@ removing the lock file. Do not run this command on other systems.
 
 ## Change guidelines
 
-- The AST and plugin APIs are provided by `peisar_ast`; keep this crate's
-  re-exports and N-API wrapper aligned with that dependency's API.
-- Use `Peisar.use()` for Node.js plugin integrations.
+- Keep the public APIs in `peisar::ast`, `peisar::render`, and
+  `peisar::plugin` aligned with their Node.js bindings.
+- Use `Peisar.use()` for Node.js plugin integrations. A plugin can combine
+  AST visitors (`visitBlock`, `visitInline`) and parser hooks (`parseBlock`,
+  `parseInline`).
 - Add or update Node.js integration tests in `scripts/peisar.test.txt` when
   changing the N-API surface; run `cargo test` for Rust changes.
 
@@ -118,9 +125,9 @@ npm run commit          # prompts for type and message, formats, commits, pushes
 5. Open a pull request against `main` with a short description of the change
    and the tests you added.
 
-CI runs the Node.js test suite on Ubuntu, macOS, and Windows, and builds
-the native addon for eight targets (GNU/MUSL Linux x64/arm64, macOS
-x64/arm64, Windows x64/arm64) whenever a release is published. Releases are
+On published releases, CI runs the Node.js test suite on Ubuntu, macOS, and
+Windows, and builds the addon for nine targets (GNU/MUSL Linux x64/arm64,
+macOS x64/arm64, Windows x64/arm64, and WASI threads). Releases are
 tagged as `v<version>` following [Semantic Versioning](https://semver.org/spec/v2.0.0.html),
 and notable changes are recorded in `CHANGELOG.md`.
 

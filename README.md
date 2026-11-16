@@ -17,16 +17,16 @@
 ---
 
 Peisar parses CommonMark Markdown with GitHub Flavored Markdown (GFM),
-Kramdown block attributes, YAML front matter, source spans, AST visitors,
-custom parser hooks, and a Rust-first architecture that is also exposed to
-Node.js through N-API.
+Kramdown block attributes, YAML/TOML/JSON frontmatter extraction, source
+spans, AST visitors, custom parser hooks, and a Rust-first architecture that
+is also exposed to Node.js through N-API.
 
 ## Features
 
 - CommonMark blocks and inlines, including HTML and reference links
 - GFM tables, strikethrough, task lists, and autolinks
 - Kramdown block attributes such as `{:#intro .lead key="value"}`
-- YAML front matter extraction
+- YAML, TOML, and JSON frontmatter extraction (raw content, not deserialized)
 - AST visitors and parser hooks through `Peisar.use()`
 - Native Node.js addon and Rust library surfaces
 
@@ -42,7 +42,7 @@ npm i peisar
 
 ```toml
 [dependencies]
-peisar = "2.0.1"
+peisar = "2.1.0"
 ```
 
 ## Quick start

@@ -41,7 +41,6 @@ title: Hello
 
 console.log(document.html);
 console.log(document.frontmatter);
-console.log(document.astJson);
 ```
 
 ## Current API structure
@@ -50,10 +49,12 @@ The Node.js package currently centers around these exports:
 
 | Export | Purpose |
 | --- | --- |
-| `Peisar` | Parse one Markdown document and read `ast`, `html`, `frontmatter`, or `astJson` |
-| `frontmatter()` | Split Markdown into body content and YAML metadata |
-| `yamlParser()` | Parse inline YAML into a JS object |
-| `loadYaml()` | Load and parse a YAML file |
+| `Peisar` | Parse one Markdown document and read `ast`, `html`, or `frontmatter` |
+| `document.frontmatter` | Read the detected frontmatter type and raw contents |
+
+Frontmatter is returned as `{ frontmatterType, raw }`. The type is `"yaml"`,
+`"toml"`, `"json"`, or `"empty"`; Peisar does not deserialize the raw content.
+See the [API reference](./apis.md) for the formats and shape.
 
 Detailed signatures and option shapes are in the
 [Node.js API reference](./apis.md).

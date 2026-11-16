@@ -38,7 +38,9 @@ pub fn is_table_start(lines: &[&str], pos: usize) -> bool {
     }
     let header = lines[pos];
     let delimiter = lines[pos + 1];
-    header.contains('|') && is_table_delimiter(delimiter)
+    header.contains('|')
+        && is_table_delimiter(delimiter)
+        && split_table_row(header).len() == split_table_row(delimiter).len()
 }
 
 /// Parse a delimiter row into column alignments.
@@ -72,8 +74,40 @@ pub fn parse_delimiter_alignments(line: &str) -> Vec<TableCellAlignment> {
 pub fn split_table_row(line: &str) -> Vec<String> {
     let stripped = line.trim();
     let s = stripped.strip_prefix('|').unwrap_or(stripped);
-    let s = s.strip_suffix('|').unwrap_or(s);
-    s.split('|').map(|c| c.trim().to_string()).collect()
+    let s = if s.ends_with('|') && !trailing_pipe_is_escaped(s) {
+        &s[..s.len() - 1]
+    } else {
+        s
+    };
+
+    let mut cells = Vec::new();
+    let mut cell = String::new();
+    let mut escaped = false;
+    for ch in s.chars() {
+        if ch == '|' && !escaped {
+            cells.push(cell.trim().to_string());
+            cell.clear();
+        } else {
+            cell.push(ch);
+        }
+
+        if ch == '\\' {
+            escaped = !escaped;
+        } else {
+            escaped = false;
+        }
+    }
+    cells.push(cell.trim().to_string());
+    cells
+}
+
+fn trailing_pipe_is_escaped(s: &str) -> bool {
+    let backslashes = s[..s.len() - 1]
+        .chars()
+        .rev()
+        .take_while(|&ch| ch == '\\')
+        .count();
+    backslashes % 2 == 1
 }
 /// Build a [`Block::Table`] from lines `[header_line, delimiter_line, ...body_lines]`.
 ///
@@ -153,6 +187,8 @@ mod tests {
         // Last line has no following delimiter row.
         assert!(!is_table_start(&lines, 2));
         assert!(!is_table_start(&lines, 3));
+        // Header and delimiter must describe the same number of columns.
+        assert!(!is_table_start(&["| a | b |", "| --- |"], 0));
     }
 
     #[test]
@@ -182,6 +218,11 @@ mod tests {
         );
         // Cells are trimmed.
         assert_eq!(split_table_row("|  a  |"), vec!["a".to_string()]);
+        // Escaped pipes remain part of the cell, including at the row end.
+        assert_eq!(
+            split_table_row("| a\\|b | c\\|"),
+            vec!["a\\|b".to_string(), "c\\|".to_string()]
+        );
     }
 
     #[test]

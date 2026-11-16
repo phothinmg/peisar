@@ -1257,11 +1257,11 @@ fn unified_plugin_supports_all_four_callbacks() {
 #[cfg(not(feature = "npm"))]
 fn plugins_apply_once_across_repeated_getter_calls() {
     use super::control::VisitorControl;
-    use super::{PeisarAst, Plugin};
+    use super::{PeisarAst, PeisarPlugin};
 
     // Insert-after on headings: if getters re-applied plugins on every
     // access, each subsequent read would add another ThematicBreak.
-    let plugin = Plugin {
+    let plugin = PeisarPlugin {
         visit_block: Some(Box::new(|block: Block| {
             if matches!(block, Block::Heading { .. }) {
                 Some(VisitorControl {

@@ -6,23 +6,13 @@ cd "$repo_root"
 
 MAIN_DIR="tests"
 DES_DIR="$MAIN_DIR/peisarloc"
-DTS_FILE="types.d.ts"
 PEISAR_PACKAGE="$DES_DIR/package.json"
 TESTS_PACKAGE="$MAIN_DIR/package.json"
 SOURCE_TEST_FILE="scripts/peisar.test.txt"
 DEST_TEST_FILE="$MAIN_DIR/peisar.test.js"
 CONFIG_YAML_FILE="$MAIN_DIR/config.yml"
 
-# 1. DTS
 
-echo "Write .d.ts file for peisar build"
-
-cat << 'EOF' > "$DTS_FILE"
-export type PeisarEmphasisLevel = "Italic" | "Bold";
-export type PeisarTableCellAlignment = "Default" | "Left" | "Center" | "Right";
-export type PeisarTableCellAlignments = PeisarTableCellAlignment[];
-export type PeisarTaskState = "Unchecked" | "Checked";
-EOF
 
 # 2. Peisar Build
 
@@ -100,7 +90,6 @@ sleep 1
 echo "Removing DTS and MAIN_DIR"
 
 cd "$repo_root"
-rm -rf "$DTS_FILE"
 rm -rf "$MAIN_DIR"
 
 sleep 1

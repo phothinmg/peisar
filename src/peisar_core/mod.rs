@@ -3,8 +3,8 @@
 //! Markdown parsing into a structured AST, with optional parser and visitor
 //! plugins.
 //!
-//! [`PeisarAst`] parses Markdown and provides access to its AST and YAML
-//! front matter. Use [`Plugin`] to customize parsing or mutate AST nodes.
+//! [`PeisarAst`] parses Markdown and provides access to its AST and raw
+//! front matter. Use [`PeisarPlugin`] to customize parsing or mutate AST nodes.
 //!
 //! # Example
 //!
@@ -25,7 +25,7 @@ mod tests;
 pub mod tokens;
 
 pub use control::{
-    BlockParseResult, InlineParseResult, InlineVisitorControl, Plugin, RegisteredPlugin,
+    BlockParseResult, InlineParseResult, InlineVisitorControl, PeisarPlugin, RegisteredPlugin,
     VisitorControl,
 };
 use frontmatter::{Frontmatter, extract_frontmatter};
@@ -36,7 +36,7 @@ use napi_derive::napi;
 use options::AstOptions;
 use parsers::{PeisarDocument, md_to_ast_with_hooks, plugin};
 
-/// Markdown source parsed into an AST, with optional YAML front matter and
+/// Markdown source parsed into an AST, with optional raw front matter and
 /// registered plugins.
 #[cfg_attr(feature = "npm", napi)]
 pub struct PeisarAst {
@@ -44,7 +44,7 @@ pub struct PeisarAst {
     /// [`get_ast`][Self::get_ast] or [`frontmatter`][Self::get_frontmatter]
     /// getters which auto-run visitors).
     ast: PeisarDocument,
-    /// Parsed YAML front-matter (if any).
+    /// Extracted frontmatter (if present).
     frontmatter: Frontmatter,
     /// The raw Markdown source (kept for re-parsing when parser hooks are
     /// registered after construction).
@@ -66,7 +66,7 @@ impl PeisarAst {
         let opts = options.unwrap_or_else(AstOptions::default);
         let f_n = opts.file_name.clone();
 
-        // Parse front matter (reuse the same logic as PeisarAst).
+        // Extract front matter before parsing the Markdown body.
         let fmt = extract_frontmatter(raw_md.to_string());
         let ast = parsers::md_to_ast(&fmt.body, &opts, f_n);
 
@@ -82,7 +82,7 @@ impl PeisarAst {
     /// Register a plugin whose parser hooks and visitor callbacks run when
     /// the AST is next accessed.
     #[cfg(feature = "npm")]
-    pub fn add_plugin(&mut self, env: Env, plugin: Plugin) {
+    pub fn add_plugin(&mut self, env: Env, plugin: PeisarPlugin) {
         self.plugins.push(plugin.register(env));
         self.plugins_applied = false;
     }
@@ -90,7 +90,7 @@ impl PeisarAst {
     #[cfg(not(feature = "npm"))]
     /// Register a plugin whose parser hooks and visitor callbacks run when
     /// the AST is next accessed.
-    pub fn add_plugin(&mut self, plugin: Plugin) {
+    pub fn add_plugin(&mut self, plugin: PeisarPlugin) {
         self.plugins.push(plugin.register());
         self.plugins_applied = false;
     }
@@ -170,7 +170,7 @@ impl PeisarAst {
         self.ensure_plugins_applied();
         self.ast.clone()
     }
-    /// Return a clone of the parsed YAML front matter, if present.
+    /// Return a clone of the extracted frontmatter.
     ///
     /// Applies registered plugins first, matching [`get_ast`](Self::get_ast).
     #[cfg_attr(feature = "npm", napi)]

@@ -15,7 +15,7 @@ use napi_derive::napi;
 
 // 1.1 Napi-exported control
 
-/// JS-facing mirror of [`VisitControl`].
+/// JS-facing mirror of `VisitControl`.
 ///
 /// Returned from the JS `visitBlock` callback.  All fields are optional;
 /// omitting a field means "no change" for that operation.
@@ -45,7 +45,7 @@ impl From<VisitorControl> for VisitControl {
         }
     }
 }
-/// JS-facing mirror of [`InlineVisitControl`].
+/// JS-facing mirror of `InlineVisitControl`.
 ///
 /// Returned from the JS `visitInline` callback.  All fields are optional;
 /// omitting a field means "no change" for that operation.
@@ -171,7 +171,7 @@ pub type InlineParseCallback =
 #[derive(Default)]
 /// A plugin containing optional Markdown parser hooks and AST visitor
 /// callbacks.
-pub struct Plugin {
+pub struct PeisarPlugin {
     /// Optional JS callback for block nodes (JS: `visitBlock`).
     pub visit_block: Option<BlockCallback>,
     /// Optional JS callback for inline nodes (JS: `visitInline`).
@@ -182,7 +182,7 @@ pub struct Plugin {
     pub parse_inline: Option<InlineParseCallback>,
 }
 
-impl Plugin {
+impl PeisarPlugin {
     #[cfg(feature = "npm")]
     pub fn register(self, env: Env) -> RegisteredPlugin {
         RegisteredPlugin {

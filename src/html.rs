@@ -37,7 +37,7 @@ impl AstToHtml {
     pub fn finish(self) -> String {
         self.out
     }
-    /// Render a [`Document`] and return the HTML string immediately
+    /// Render a [`PeisarDocument`] and return the HTML string immediately
     /// (consuming the renderer).
     ///
     /// This is a convenience wrapper around [`render_document`](Self::render_document)
@@ -80,7 +80,7 @@ impl AstToHtml {
     // Top-level entry
     // -----------------------------------------------------------------------
 
-    /// Render a full [`Document`] into the internal buffer.
+    /// Render a full [`PeisarDocument`] into the internal buffer.
     ///
     /// When `RenderOptions::fragment` is `true` (the default) only the body
     /// content is emitted.  When `false`, a complete `<!DOCTYPE html>`

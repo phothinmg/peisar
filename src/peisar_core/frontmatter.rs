@@ -5,31 +5,46 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "npm", napi(string_enum))]
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum FrontmatterType {
+    /// YAML frontmatter delimited by `---` lines.
     Yaml,
+    /// TOML frontmatter delimited by `+++` lines.
     Toml,
+    /// JSON frontmatter represented by a top-level object.
     Json,
+    /// No complete, supported frontmatter was found.
     Empty,
 }
 
 #[cfg_attr(feature = "npm", napi(object))]
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-
+/// Frontmatter type and its contents, separated from the document body.
 pub struct Frontmatter {
+    /// Format detected in the document.
     #[cfg_attr(
         feature = "npm",
         napi(ts_type = "\"yaml\" | \"toml\" | \"json\" | \"empty\"")
     )]
     pub frontmatter_type: FrontmatterType,
+    /// Frontmatter contents without delimiters, or an empty string if absent.
     pub raw: String,
 }
 
 #[cfg_attr(feature = "npm", napi(object))]
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+/// The extracted frontmatter and the remaining document body.
 pub struct FrontmatterResult {
+    /// Detected frontmatter.
     pub frontmatter: Frontmatter,
+    /// Document content after the frontmatter, or the original input if none was found.
     pub body: String,
 }
 
+/// Extracts YAML, TOML, or JSON frontmatter from the start of a Markdown document.
+///
+/// YAML and TOML use `---` and `+++` delimiter lines, respectively. JSON
+/// frontmatter is recognized as a top-level object. If no complete supported
+/// frontmatter is found, the result has type [`FrontmatterType::Empty`] and
+/// contains the original input as its body.
 pub fn extract_frontmatter(markdown: String) -> FrontmatterResult {
     let fence = if markdown.starts_with("---\n") || markdown.starts_with("---\r\n") {
         Some(("---", FrontmatterType::Yaml))

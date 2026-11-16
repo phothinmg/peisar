@@ -87,7 +87,7 @@ impl PeisarDocument {
 ///
 /// - `input` — the raw Markdown source text (without front-matter).
 /// - `opts` — parser options (GFM, Kramdown, etc.).
-/// - `file_name` — optional file name to attach to the resulting [`Document`].
+/// - `file_name` — optional file name to attach to the resulting [`PeisarDocument`].
 ///
 pub fn md_to_ast(input: &str, opts: &AstOptions, file_name: Option<String>) -> PeisarDocument {
     md_to_ast_with_hooks(input, opts, file_name, &ParserHooks::empty())
