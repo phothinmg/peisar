@@ -25,6 +25,10 @@ name = "peisar"
 path = "src/lib.rs"
 crate-type = ["rlib", "cdylib"]
 
+[[bin]]
+name = "peisar-example"
+path = "src/main.rs"
+
 [features]
 default = []
 npm = ["dep:napi", "dep:napi-derive", "napi/serde-json"]
