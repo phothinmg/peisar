@@ -25,9 +25,6 @@ name = "peisar"
 path = "src/lib.rs"
 crate-type = ["rlib", "cdylib"]
 
-[[bin]]
-name = "peisar-example"
-path = "src/main.rs"
 
 [features]
 default = []

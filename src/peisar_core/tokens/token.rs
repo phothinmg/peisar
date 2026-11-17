@@ -21,7 +21,7 @@ use serde::Serialize;
 // ---------------------------------------------------------------------------
 
 /// Block-level nodes.
-#[cfg_attr(feature = "npm", napi)]
+#[cfg_attr(feature = "npm", napi(namespace = "peisar"))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Block {
@@ -132,7 +132,7 @@ pub enum Block {
 // ---------------------------------------------------------------------------
 
 /// A link reference definition collected at the document level.
-#[cfg_attr(feature = "npm", napi(object))]
+#[cfg_attr(feature = "npm", napi(object, namespace = "peisar"))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct LinkReferenceDefinition {
     /// Normalized label (lowercased, trimmed).
@@ -151,7 +151,7 @@ pub struct LinkReferenceDefinition {
 // ---------------------------------------------------------------------------
 
 /// A single list item (an `<li>`). Contains nested block content.
-#[cfg_attr(feature = "npm", napi(object))]
+#[cfg_attr(feature = "npm", napi(object, namespace = "peisar"))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ListItem {
     /// Nested block content of the item.
@@ -166,7 +166,10 @@ pub struct ListItem {
 /// GFM task-list checkbox state.
 ///
 /// On the JavaScript side this is a string: `"Unchecked"` / `"Checked"`.
-#[cfg_attr(feature = "npm", napi(string_enum, skip_typescript))]
+#[cfg_attr(
+    feature = "npm",
+    napi(string_enum, skip_typescript, namespace = "peisar")
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum TaskState {
     /// `[ ]` — unchecked
@@ -179,7 +182,7 @@ pub enum TaskState {
 // ---------------------------------------------------------------------------
 
 /// A GFM table.
-#[cfg_attr(feature = "npm", napi(object))]
+#[cfg_attr(feature = "npm", napi(object, namespace = "peisar"))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Table {
     /// The header row.
@@ -195,7 +198,7 @@ pub struct Table {
 }
 
 /// A single table row (header or body).
-#[cfg_attr(feature = "npm", napi(object))]
+#[cfg_attr(feature = "npm", napi(object, namespace = "peisar"))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct TableRow {
     /// The cells in this row.
@@ -203,7 +206,7 @@ pub struct TableRow {
 }
 
 /// A single table cell.
-#[cfg_attr(feature = "npm", napi(object))]
+#[cfg_attr(feature = "npm", napi(object, namespace = "peisar"))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct TableCell {
     /// Inline content of the cell.
@@ -214,7 +217,10 @@ pub struct TableCell {
 ///
 /// On the JavaScript side this is a string: `"Default"` / `"Left"` /
 /// `"Center"` / `"Right"`.
-#[cfg_attr(feature = "npm", napi(string_enum, skip_typescript))]
+#[cfg_attr(
+    feature = "npm",
+    napi(string_enum, skip_typescript, namespace = "peisar")
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
 pub enum TableCellAlignment {
     /// `:---` or `---` — default (left)
@@ -233,7 +239,7 @@ pub enum TableCellAlignment {
 // ---------------------------------------------------------------------------
 
 /// Inline-level nodes.
-#[cfg_attr(feature = "npm", napi)]
+#[cfg_attr(feature = "npm", napi(namespace = "peisar"))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Inline {
@@ -330,7 +336,10 @@ pub enum Inline {
 /// Emphasis strength.
 ///
 /// On the JavaScript side this is a string: `"Italic"` / `"Bold"`.
-#[cfg_attr(feature = "npm", napi(string_enum, skip_typescript))]
+#[cfg_attr(
+    feature = "npm",
+    napi(string_enum, skip_typescript, namespace = "peisar")
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum EmphasisLevel {
     /// `*italic*` / `_italic_`

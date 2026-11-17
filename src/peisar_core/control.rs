@@ -19,7 +19,7 @@ use napi_derive::napi;
 ///
 /// Returned from the JS `visitBlock` callback.  All fields are optional;
 /// omitting a field means "no change" for that operation.
-#[cfg_attr(feature = "npm", napi(object))]
+#[cfg_attr(feature = "npm", napi(object, namespace = "peisar"))]
 #[derive(Debug, Default, Clone)]
 pub struct VisitorControl {
     /// Nodes to insert before the current node.
@@ -49,7 +49,7 @@ impl From<VisitorControl> for VisitControl {
 ///
 /// Returned from the JS `visitInline` callback.  All fields are optional;
 /// omitting a field means "no change" for that operation.
-#[cfg_attr(feature = "npm", napi(object))]
+#[cfg_attr(feature = "npm", napi(object, namespace = "peisar"))]
 #[derive(Debug, Default, Clone)]
 pub struct InlineVisitorControl {
     /// Nodes to insert before the current node.
@@ -88,7 +88,7 @@ impl From<InlineVisitorControl> for InlineVisitControl {
 ///
 /// All fields are optional; omitting `block` (or returning `undefined`)
 /// declines the position so the next hook / built-in parser handles it.
-#[cfg_attr(feature = "npm", napi(object))]
+#[cfg_attr(feature = "npm", napi(object, namespace = "peisar"))]
 #[derive(Debug, Default, Clone)]
 pub struct BlockParseResult {
     /// The parsed block node.
@@ -101,7 +101,7 @@ pub struct BlockParseResult {
 ///
 /// All fields are optional; omitting `inline` (or returning `undefined`)
 /// declines the position so the next hook / built-in parser handles it.
-#[cfg_attr(feature = "npm", napi(object))]
+#[cfg_attr(feature = "npm", napi(object, namespace = "peisar"))]
 #[derive(Debug, Default, Clone)]
 pub struct InlineParseResult {
     /// The parsed inline node.
@@ -130,10 +130,10 @@ pub struct InlineParseResult {
 /// Synchronous block-visitor callback. Receives a `Block`, returns
 /// `VisitControlJs` (or `undefined` for no changes).
 #[cfg(feature = "npm")]
-#[napi]
+#[napi(namespace = "peisar")]
 pub type BlockCallback = FunctionRef<(Block,), Option<VisitorControl>>;
 #[cfg(feature = "npm")]
-#[napi]
+#[napi(namespace = "peisar")]
 /// Synchronous inline-visitor callback. Receives an `Inline`, returns
 /// `InlineVisitControlJs` (or `undefined` for no changes).
 pub type InlineCallback = FunctionRef<(Inline,), Option<InlineVisitorControl>>;
@@ -141,12 +141,12 @@ pub type InlineCallback = FunctionRef<(Inline,), Option<InlineVisitorControl>>;
 /// Synchronous block parser hook. Receives a [`BlockParserContext`], returns
 /// a [`BlockParseResultJs`] (or `undefined` to decline).
 #[cfg(feature = "npm")]
-#[napi]
+#[napi(namespace = "peisar")]
 pub type BlockParseCallback = FunctionRef<(BlockParserContext,), Option<BlockParseResult>>;
 /// Synchronous inline parser hook. Receives an [`InlineParserContext`],
 /// returns an [`InlineParseResultJs`] (or `undefined` to decline).
 #[cfg(feature = "npm")]
-#[napi]
+#[napi(namespace = "peisar")]
 pub type InlineParseCallback = FunctionRef<(InlineParserContext,), Option<InlineParseResult>>;
 
 // 2.2 Callback for rust side
@@ -167,7 +167,10 @@ pub type InlineParseCallback =
 // 3.1 Callback for Registered Plugins
 // New API since 1.0.1
 
-#[cfg_attr(feature = "npm", napi(object, object_to_js = false))]
+#[cfg_attr(
+    feature = "npm",
+    napi(object, object_to_js = false, namespace = "peisar")
+)]
 #[derive(Default)]
 /// A plugin containing optional Markdown parser hooks and AST visitor
 /// callbacks.
@@ -224,6 +227,7 @@ pub struct RegisteredPlugin {
 }
 
 #[cfg(feature = "npm")]
+#[napi(namespace = "peisar")]
 impl PluginFactory for RegisteredPlugin {
     #[cfg(feature = "npm")]
     fn has_parse_hooks(&self) -> bool {

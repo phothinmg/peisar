@@ -1,4 +1,4 @@
-import Readme, { html } from "../README.md";
+import Readme from "../README.md";
 
 export function App() {
   return (

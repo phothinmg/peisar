@@ -1,6 +1,6 @@
 {
   "name": "peisar",
-  "version": "2.1.1",
+  "version": "2.1.11",
   "gitHead": "fefe667d38f40eef5ba2b33df555d0ada4a9971b",
   "description": "A practical Markdown parser engineered in Rust",
   "keywords": [
@@ -22,7 +22,7 @@
     "index.d.ts",
     "package.json",
     "browser",
-    "prisar.webp"
+    "peisar.webp"
   ],
   "type": "module",
   "main": "index.cjs",
@@ -51,8 +51,7 @@
     "hooks:install": "bash scripts/install-hooks.sh",
     "commit": "bash scripts/commit.sh",
     "benchmark": "bash scripts/benchmark.sh",
-    "fix:gpg": "bash scripts/gpg.sh",
-    "dev": "mdbook serve gh-pages"
+    "fix:gpg": "bash scripts/gpg.sh"
   },
   "devDependencies": {
     "@emnapi/core": "^2.0.0-alpha.5",

@@ -15,7 +15,7 @@
   </style>
   <rect width="1140" height="700" rx="12" fill="#ffffff"/>
   <text x="36" y="38" class="heading">Markdown renderer benchmarks</text>
-  <text x="36" y="61" class="subtitle">Peisar 2.0.0 - Node.js v24.22.1 - measured on this run</text>
+  <text x="36" y="61" class="subtitle">Peisar 2.1.1 - Node.js v26.13.0 - measured on this run</text>
   <rect x="64" y="78" width="14" height="14" rx="2" fill="#0969da"/>
   <text x="85" y="90" class="legend">Peisar</text>
   <rect x="274" y="78" width="14" height="14" rx="2" fill="#1a7f37"/>
@@ -43,45 +43,45 @@
 <line x1="805" y1="345" x2="1095" y2="345" class="axis"/>
 <line x1="805" y1="207" x2="1095" y2="207" class="grid"/>
 <line x1="805" y1="276" x2="1095" y2="276" class="grid"/>
-<rect x="106" y="231.3" width="28" height="113.7" rx="2" fill="#0969da"/>
-<text x="120" y="226.3" text-anchor="middle" class="value">20,593</text>
-<rect x="141" y="302.5" width="28" height="42.5" rx="2" fill="#1a7f37"/>
-<text x="155" y="297.5" text-anchor="middle" class="value">7,707</text>
-<rect x="176" y="295.1" width="28" height="49.9" rx="2" fill="#bf8700"/>
-<text x="190" y="290.1" text-anchor="middle" class="value">9,033</text>
-<rect x="211" y="333.1" width="28" height="11.9" rx="2" fill="#cf222e"/>
-<text x="225" y="328.1" text-anchor="middle" class="value">2,164</text>
-<rect x="246" y="339.9" width="28" height="5.1" rx="2" fill="#8250df"/>
-<text x="260" y="334.9" text-anchor="middle" class="value">917</text>
-<rect x="486" y="273.0" width="28" height="72.0" rx="2" fill="#0969da"/>
-<text x="500" y="268.0" text-anchor="middle" class="value">2,609</text>
-<rect x="521" y="317.3" width="28" height="27.7" rx="2" fill="#1a7f37"/>
-<text x="535" y="312.3" text-anchor="middle" class="value">1,004</text>
-<rect x="556" y="311.9" width="28" height="33.1" rx="2" fill="#bf8700"/>
-<text x="570" y="306.9" text-anchor="middle" class="value">1,198</text>
-<rect x="591" y="335.3" width="28" height="9.7" rx="2" fill="#cf222e"/>
-<text x="605" y="330.3" text-anchor="middle" class="value">353</text>
-<rect x="626" y="341.8" width="28" height="3.2" rx="2" fill="#8250df"/>
-<text x="640" y="336.8" text-anchor="middle" class="value">116</text>
-<rect x="866" y="245.1" width="28" height="99.9" rx="2" fill="#0969da"/>
-<text x="880" y="240.1" text-anchor="middle" class="value">724</text>
-<rect x="901" y="308.2" width="28" height="36.8" rx="2" fill="#1a7f37"/>
-<text x="915" y="303.2" text-anchor="middle" class="value">266</text>
-<rect x="936" y="298.9" width="28" height="46.1" rx="2" fill="#bf8700"/>
-<text x="950" y="293.9" text-anchor="middle" class="value">334</text>
-<rect x="971" y="333.2" width="28" height="11.8" rx="2" fill="#cf222e"/>
-<text x="985" y="328.2" text-anchor="middle" class="value">86</text>
-<rect x="1006" y="341.5" width="28" height="3.5" rx="2" fill="#8250df"/>
-<text x="1020" y="336.5" text-anchor="middle" class="value">25</text>
+<rect x="106" y="228.6" width="28" height="116.4" rx="2" fill="#0969da"/>
+<text x="120" y="223.6" text-anchor="middle" class="value">21,081</text>
+<rect x="141" y="301.4" width="28" height="43.6" rx="2" fill="#1a7f37"/>
+<text x="155" y="296.4" text-anchor="middle" class="value">7,895</text>
+<rect x="176" y="287.9" width="28" height="57.1" rx="2" fill="#bf8700"/>
+<text x="190" y="282.9" text-anchor="middle" class="value">10,348</text>
+<rect x="211" y="332.7" width="28" height="12.3" rx="2" fill="#cf222e"/>
+<text x="225" y="327.7" text-anchor="middle" class="value">2,227</text>
+<rect x="246" y="339.6" width="28" height="5.4" rx="2" fill="#8250df"/>
+<text x="260" y="334.6" text-anchor="middle" class="value">971</text>
+<rect x="486" y="268.8" width="28" height="76.2" rx="2" fill="#0969da"/>
+<text x="500" y="263.8" text-anchor="middle" class="value">2,760</text>
+<rect x="521" y="322.3" width="28" height="22.7" rx="2" fill="#1a7f37"/>
+<text x="535" y="317.3" text-anchor="middle" class="value">822</text>
+<rect x="556" y="303.9" width="28" height="41.1" rx="2" fill="#bf8700"/>
+<text x="570" y="298.9" text-anchor="middle" class="value">1,488</text>
+<rect x="591" y="335.2" width="28" height="9.8" rx="2" fill="#cf222e"/>
+<text x="605" y="330.2" text-anchor="middle" class="value">356</text>
+<rect x="626" y="341.9" width="28" height="3.1" rx="2" fill="#8250df"/>
+<text x="640" y="336.9" text-anchor="middle" class="value">113</text>
+<rect x="866" y="242.6" width="28" height="102.4" rx="2" fill="#0969da"/>
+<text x="880" y="237.6" text-anchor="middle" class="value">742</text>
+<rect x="901" y="314.8" width="28" height="30.2" rx="2" fill="#1a7f37"/>
+<text x="915" y="309.8" text-anchor="middle" class="value">219</text>
+<rect x="936" y="289.5" width="28" height="55.5" rx="2" fill="#bf8700"/>
+<text x="950" y="284.5" text-anchor="middle" class="value">402</text>
+<rect x="971" y="333.3" width="28" height="11.7" rx="2" fill="#cf222e"/>
+<text x="985" y="328.3" text-anchor="middle" class="value">85</text>
+<rect x="1006" y="341.6" width="28" height="3.4" rx="2" fill="#8250df"/>
+<text x="1020" y="336.6" text-anchor="middle" class="value">25</text>
   <line x1="380" y1="154" x2="380" y2="362" class="grid"/>
   <line x1="760" y1="154" x2="760" y2="362" class="grid"/>
   <line x1="36" y1="382" x2="1104" y2="382" class="grid"/>
   <text x="36" y="414" class="panel-title">Average peak heap (MiB)</text>
 <text x="36" y="433" class="subtitle">Lower is better - seven batches - independent scale per document size</text>
 <text x="190" y="459" text-anchor="middle" class="category">Base</text>
-<text x="190" y="478" text-anchor="middle" class="scale">Scale: 0 - 100.0 MiB</text>
+<text x="190" y="478" text-anchor="middle" class="scale">Scale: 0 - 50.0 MiB</text>
 <text x="570" y="459" text-anchor="middle" class="category">Medium</text>
-<text x="570" y="478" text-anchor="middle" class="scale">Scale: 0 - 100.0 MiB</text>
+<text x="570" y="478" text-anchor="middle" class="scale">Scale: 0 - 50.0 MiB</text>
 <text x="950" y="459" text-anchor="middle" class="category">Large</text>
 <text x="950" y="478" text-anchor="middle" class="scale">Scale: 0 - 100.0 MiB</text>
 <line x1="45" y1="633" x2="335" y2="633" class="axis"/>
@@ -93,36 +93,36 @@
 <line x1="805" y1="633" x2="1095" y2="633" class="axis"/>
 <line x1="805" y1="495" x2="1095" y2="495" class="grid"/>
 <line x1="805" y1="564" x2="1095" y2="564" class="grid"/>
-<rect x="106" y="632.8" width="28" height="0.5" rx="2" fill="#0969da"/>
-<text x="120" y="627.8" text-anchor="middle" class="value">0.15</text>
-<rect x="141" y="624.6" width="28" height="8.4" rx="2" fill="#1a7f37"/>
-<text x="155" y="619.6" text-anchor="middle" class="value">6.05</text>
-<rect x="176" y="626.4" width="28" height="6.6" rx="2" fill="#bf8700"/>
-<text x="190" y="621.4" text-anchor="middle" class="value">4.80</text>
-<rect x="211" y="605.1" width="28" height="27.9" rx="2" fill="#cf222e"/>
-<text x="225" y="600.1" text-anchor="middle" class="value">20.25</text>
-<rect x="246" y="552.3" width="28" height="80.7" rx="2" fill="#8250df"/>
-<text x="260" y="547.3" text-anchor="middle" class="value">58.47</text>
-<rect x="486" y="632.7" width="28" height="0.5" rx="2" fill="#0969da"/>
-<text x="500" y="627.7" text-anchor="middle" class="value">0.23</text>
-<rect x="521" y="614.8" width="28" height="18.2" rx="2" fill="#1a7f37"/>
-<text x="535" y="609.8" text-anchor="middle" class="value">13.21</text>
-<rect x="556" y="619.5" width="28" height="13.5" rx="2" fill="#bf8700"/>
-<text x="570" y="614.5" text-anchor="middle" class="value">9.80</text>
-<rect x="591" y="562.9" width="28" height="70.1" rx="2" fill="#cf222e"/>
-<text x="605" y="557.9" text-anchor="middle" class="value">50.79</text>
-<rect x="626" y="546.1" width="28" height="86.9" rx="2" fill="#8250df"/>
-<text x="640" y="541.1" text-anchor="middle" class="value">62.99</text>
+<rect x="106" y="632.7" width="28" height="0.5" rx="2" fill="#0969da"/>
+<text x="120" y="627.7" text-anchor="middle" class="value">0.10</text>
+<rect x="141" y="616.1" width="28" height="16.9" rx="2" fill="#1a7f37"/>
+<text x="155" y="611.1" text-anchor="middle" class="value">6.14</text>
+<rect x="176" y="620.5" width="28" height="12.5" rx="2" fill="#bf8700"/>
+<text x="190" y="615.5" text-anchor="middle" class="value">4.53</text>
+<rect x="211" y="577.3" width="28" height="55.7" rx="2" fill="#cf222e"/>
+<text x="225" y="572.3" text-anchor="middle" class="value">20.18</text>
+<rect x="246" y="542.2" width="28" height="90.8" rx="2" fill="#8250df"/>
+<text x="260" y="537.2" text-anchor="middle" class="value">32.91</text>
+<rect x="486" y="632.4" width="28" height="0.6" rx="2" fill="#0969da"/>
+<text x="500" y="627.4" text-anchor="middle" class="value">0.22</text>
+<rect x="521" y="596.2" width="28" height="36.8" rx="2" fill="#1a7f37"/>
+<text x="535" y="591.2" text-anchor="middle" class="value">13.32</text>
+<rect x="556" y="607.6" width="28" height="25.4" rx="2" fill="#bf8700"/>
+<text x="570" y="602.6" text-anchor="middle" class="value">9.21</text>
+<rect x="591" y="554.1" width="28" height="78.9" rx="2" fill="#cf222e"/>
+<text x="605" y="549.1" text-anchor="middle" class="value">28.57</text>
+<rect x="626" y="523.3" width="28" height="109.7" rx="2" fill="#8250df"/>
+<text x="640" y="518.3" text-anchor="middle" class="value">39.74</text>
 <rect x="866" y="632.5" width="28" height="0.5" rx="2" fill="#0969da"/>
 <text x="880" y="627.5" text-anchor="middle" class="value">0.35</text>
-<rect x="901" y="604.2" width="28" height="28.8" rx="2" fill="#1a7f37"/>
-<text x="915" y="599.2" text-anchor="middle" class="value">20.89</text>
-<rect x="936" y="611.6" width="28" height="21.4" rx="2" fill="#bf8700"/>
-<text x="950" y="606.6" text-anchor="middle" class="value">15.54</text>
-<rect x="971" y="544.8" width="28" height="88.2" rx="2" fill="#cf222e"/>
-<text x="985" y="539.8" text-anchor="middle" class="value">63.88</text>
-<rect x="1006" y="511.0" width="28" height="122.0" rx="2" fill="#8250df"/>
-<text x="1020" y="506.0" text-anchor="middle" class="value">88.41</text>
+<rect x="901" y="603.8" width="28" height="29.2" rx="2" fill="#1a7f37"/>
+<text x="915" y="598.8" text-anchor="middle" class="value">21.17</text>
+<rect x="936" y="612.9" width="28" height="20.1" rx="2" fill="#bf8700"/>
+<text x="950" y="607.9" text-anchor="middle" class="value">14.56</text>
+<rect x="971" y="588.7" width="28" height="44.3" rx="2" fill="#cf222e"/>
+<text x="985" y="583.7" text-anchor="middle" class="value">32.08</text>
+<rect x="1006" y="539.6" width="28" height="93.4" rx="2" fill="#8250df"/>
+<text x="1020" y="534.6" text-anchor="middle" class="value">67.67</text>
   <line x1="380" y1="478" x2="380" y2="650" class="grid"/>
   <line x1="760" y1="478" x2="760" y2="650" class="grid"/>
 </svg>

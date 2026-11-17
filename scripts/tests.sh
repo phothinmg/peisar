@@ -5,7 +5,7 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
 MAIN_DIR="tests"
-DES_DIR="$MAIN_DIR/peisarloc"
+DES_DIR="$MAIN_DIR/peisar"
 PEISAR_PACKAGE="$DES_DIR/package.json"
 TESTS_PACKAGE="$MAIN_DIR/package.json"
 SOURCE_TEST_FILE="scripts/peisar.test.txt"

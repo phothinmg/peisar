@@ -47,7 +47,7 @@ pub trait PluginFactory {
 }
 
 /// Context passed to block parser hooks.
-#[cfg_attr(feature = "npm", napi(object))]
+#[cfg_attr(feature = "npm", napi(object, namespace = "peisar"))]
 #[derive(Debug, Clone)]
 pub struct BlockParserContext {
     /// The current (unmodified) source line.
@@ -61,7 +61,7 @@ pub struct BlockParserContext {
 /// Context passed to inline parser hooks.
 ///
 /// On the JavaScript side the fields are exposed as `rest` and `index`.
-#[cfg_attr(feature = "npm", napi(object))]
+#[cfg_attr(feature = "npm", napi(object, namespace = "peisar"))]
 #[derive(Debug, Clone)]
 pub struct InlineParserContext {
     /// Remaining inline text starting at the current character position.

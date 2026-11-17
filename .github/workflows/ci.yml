@@ -15,6 +15,10 @@ env:
   RUST_BACKTRACE: 1
   MACOSX_DEPLOYMENT_TARGET: "10.13"
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   # ── Platform Tests
   test:
@@ -99,7 +103,29 @@ jobs:
 
       - name: Build & package artifacts
         run: |
+          MJS_FILE="peisar.wasi.mjs"
+          DTS_SOURCE="peisar.wasi.d.cts"
+          DTS_DES="peisar.wasi.d.mts"
+
           npx napi build --release --platform --features npm --js index.cjs --config-path napi.config.json --target ${{ matrix.settings.target }} ${{ matrix.settings.flags }}
+
+          if [[ "${{ matrix.settings.target }}" == "wasm32-wasip1-threads"]]; then
+
+          cat << 'EOF' > "$MJS_FILE"
+          // Generated form ci.yml
+          import { createRequire } from "module";
+          const require = createRequire(import.meta.url);
+          const nativeBinding = require("./peisar.wasi.cjs");
+
+          export const peisar = nativeBinding.peisar
+          export const toml = nativeBinding.toml
+          export const yaml = nativeBinding.yaml
+          EOF
+
+          cp "$DTS_SOURCE" "$DTS_DES"
+
+          fi
+
       # Upload artifact step in build job to include the generated WASM JavaScript files
       - name: Upload artifact
         uses: actions/upload-artifact@v7
@@ -110,6 +136,8 @@ jobs:
             ${{ env.APP_NAME }}.*.wasm
             ${{ env.APP_NAME }}.wasi.cjs
             ${{ env.APP_NAME }}.wasi.d.cts
+            ${{ env.APP_NAME }}.wasi.mjs
+            ${{ env.APP_NAME }}.wasi.d.mts
             ${{ env.APP_NAME }}.wasi-browser.js
             wasi-worker.mjs
             wasi-worker-browser.mjs
@@ -173,11 +201,37 @@ jobs:
 
       # 4. Generate target platform package directories under /npm
       - name: Scaffolding platform package dirs
-        run: npx napi create-npm-dirs --config-path napi.config.json
+        run: |
+          npx napi create-npm-dirs --config-path napi.config.json
+          node -e "
+            const fs = require('fs');
+            const pkgPath = './npm/wasm32-wasi/package.json';
+            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+            pkg.module = 'peisar.wasi.mjs';
+            pkg.exports = {
+              '.': {
+                require: {
+                  default: './peisar.wasi.cjs',
+                  types: './peisar.wasi.d.cts',
+                },
+                import: {
+                  default: './peisar.wasi.mjs',
+                  types: './peisar.wasi.d.mts',
+                },
+              },
+            };
+            pkg.files = Array.from(
+              new Set([...(pkg.files || []), 'peisar.wasi.mjs', 'peisar.wasi.d.mts']),
+            );
+            fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+          "
 
       # 5. Move binaries from artifacts folder into target /npm dirs
       - name: Distribute build artifacts to npm dirs
-        run: npx napi artifacts --config-path napi.config.json
+        run: |
+          npx napi artifacts --config-path napi.config.json
+          cp artifacts/peisar-wasm32-wasip1-threads/peisar.wasi.mjs npm/wasm32-wasi/
+          cp artifacts/peisar-wasm32-wasip1-threads/peisar.wasi.d.mts npm/wasm32-wasi/
 
       # 5a. Ensure package.json version matches the release tag so we never
       #     accidentally publish a stale version from a mistagged commit.

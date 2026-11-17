@@ -1,10 +1,10 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { Peisar } = require("./peisarloc");
+const { peisar } = require("./peisar");
 
 test("parses Markdown into an AST and renders a fragment", () => {
-  const document = new Peisar("# Hello **world**", { fragment: true });
+  const document = new peisar.Peisar("# Hello **world**", { fragment: true });
 
   assert.equal(document.html, "<h1>Hello <strong>world</strong></h1>\n");
   assert.deepEqual(document.ast.children[0], {
@@ -46,7 +46,9 @@ test("parses Markdown into an AST and renders a fragment", () => {
 });
 
 test("renders GFM task lists by default", () => {
-  const document = new Peisar("- [x] Done\n- [ ] Todo", { fragment: true });
+  const document = new peisar.Peisar("- [x] Done\n- [ ] Todo", {
+    fragment: true,
+  });
 
   assert.match(document.html, /data-checked="true"/);
   assert.match(document.html, /checked disabled/);
@@ -54,7 +56,7 @@ test("renders GFM task lists by default", () => {
 });
 
 test("applies JavaScript AST visitors before rendering", () => {
-  const document = new Peisar("# Hello", { fragment: true });
+  const document = new peisar.Peisar("# Hello", { fragment: true });
 
   document.use({
     visitBlock([block]) {
@@ -70,7 +72,7 @@ test("applies JavaScript AST visitors before rendering", () => {
 });
 
 test("custom block parser hooks run before built-in parsers", () => {
-  const document = new Peisar(":::note\nsome content\n:::\n\n# After", {
+  const document = new peisar.Peisar(":::note\nsome content\n:::\n\n# After", {
     fragment: true,
   });
   const zero = { line: 0, column: 0, offset: 0 };
@@ -103,7 +105,9 @@ test("custom block parser hooks run before built-in parsers", () => {
 });
 
 test("custom inline parser hooks parse wikilinks", () => {
-  const document = new Peisar("See [[Some Page]] here.", { fragment: true });
+  const document = new peisar.Peisar("See [[Some Page]] here.", {
+    fragment: true,
+  });
   const zero = { line: 0, column: 0, offset: 0 };
 
   document.use({
@@ -132,7 +136,7 @@ test("custom inline parser hooks parse wikilinks", () => {
 });
 
 test("parser hooks and visitors compose", () => {
-  const document = new Peisar("!\n\na lone bang becomes a break", {
+  const document = new peisar.Peisar("!\n\na lone bang becomes a break", {
     fragment: true,
   });
   const zero = { line: 0, column: 0, offset: 0 };
@@ -175,4 +179,3 @@ test("parser hooks and visitors compose", () => {
     "<p>replaced</p>\n<p>a lone bang becomes a break</p>\n",
   );
 });
-
