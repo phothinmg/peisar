@@ -216,7 +216,6 @@ jobs:
         run: |
           npx napi artifacts --config-path napi.config.json
           cp artifacts/peisar-wasm32-wasip1-threads/peisar.wasi.mjs npm/wasm32-wasi/
-          cp artifacts/peisar-wasm32-wasip1-threads/peisar.wasi.d.mts npm/wasm32-wasi/
 
       # 5a. Ensure package.json version matches the release tag so we never
       #     accidentally publish a stale version from a mistagged commit.
