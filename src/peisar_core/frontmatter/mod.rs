@@ -2,7 +2,7 @@
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 
-#[cfg_attr(feature = "npm", napi(string_enum))]
+#[cfg_attr(feature = "npm", napi(string_enum, namespace = "peisar"))]
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum FrontmatterType {
     /// YAML frontmatter delimited by `---` lines.
@@ -15,7 +15,7 @@ pub enum FrontmatterType {
     Empty,
 }
 
-#[cfg_attr(feature = "npm", napi(object))]
+#[cfg_attr(feature = "npm", napi(object, namespace = "peisar"))]
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 /// Frontmatter type and its contents, separated from the document body.
 pub struct Frontmatter {
@@ -29,7 +29,7 @@ pub struct Frontmatter {
     pub raw: String,
 }
 
-#[cfg_attr(feature = "npm", napi(object))]
+#[cfg_attr(feature = "npm", napi(object, namespace = "peisar"))]
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 /// The extracted frontmatter and the remaining document body.
 pub struct FrontmatterResult {

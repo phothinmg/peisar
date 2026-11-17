@@ -1057,7 +1057,7 @@ impl PluginFactory for ExclamationHook {
         ))
     }
 }
-
+// cspell:disable
 #[test]
 fn block_hook_runs_before_builtin_matchers() {
     let hook = ExclamationHook;
@@ -1169,7 +1169,7 @@ impl PluginFactory for DecliningHook {
         None
     }
 }
-
+// cspell:disable
 #[test]
 fn multiple_hooks_tried_in_registration_order() {
     let declining = DecliningHook;
@@ -1287,4 +1287,28 @@ fn plugins_apply_once_across_repeated_getter_calls() {
         3,
         "getter must not stack plugin mutations on repeated access"
     );
+}
+
+#[test]
+fn html_cache_is_opt_in_and_invalidated_by_plugin_registration() {
+    use super::Peisar;
+
+    let mut peisar = Peisar::new("# Cached\n".to_string(), None);
+    let first_html = peisar.html();
+    assert!(peisar.render_cache.get().is_none());
+
+    peisar.set_html_cache_enabled(true);
+    assert_eq!(peisar.html(), first_html);
+    assert_eq!(
+        peisar.render_cache.get().as_deref(),
+        Some(first_html.as_str())
+    );
+
+    #[cfg(not(feature = "npm"))]
+    {
+        use super::PeisarPlugin;
+
+        peisar.use_plugin(PeisarPlugin::default());
+        assert!(peisar.render_cache.get().is_none());
+    }
 }

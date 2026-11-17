@@ -12,7 +12,7 @@ use serde::Serialize;
 /// Parsed Kramdown block attributes (`{:#id .class key="val"}`).
 ///
 
-#[cfg_attr(feature = "npm", napi(object))]
+#[cfg_attr(feature = "npm", napi(object, namespace = "peisar"))]
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
 pub struct Attributes {
     /// HTML `id` attribute.

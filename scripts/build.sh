@@ -18,13 +18,11 @@ cat << 'EOF' > "$MJS_FILE"
 // Generated form ci.yml
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const peisar = require("./index.cjs");
+const nativeBinding = require("./index.cjs");
 
-export const Peisar = peisar.Peisar;
-export const renderDocumentHtml = peisar.FrontmatterType;
-export const PeisarAst = peisar.PeisarAst;
-export const parseToml = peisar.parseToml;
-export const parseTomlAsync = peisar.parseTomlAsync;
+export const peisar = nativeBinding.peisar
+export const toml = nativeBinding.toml
+export const yaml = nativeBinding.yaml
 EOF
 
 # 3.1 Lint and format output JS files

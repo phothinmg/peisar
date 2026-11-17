@@ -5,7 +5,7 @@ use crate::ast::AstOptions;
 use serde::{Deserialize, Serialize};
 
 /// Options that control how the AST is rendered to HTML.
-#[cfg_attr(feature = "npm", napi(object))]
+#[cfg_attr(feature = "npm", napi(object, namespace = "peisar"))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RenderOptions {
     /// If `true`, emit only the body content (no `<!DOCTYPE>`, `<html>`,
@@ -29,7 +29,7 @@ pub struct RenderOptions {
     /// Default: `None`.
     pub style: Option<String>,
 }
-#[cfg_attr(feature = "npm", napi)]
+#[cfg_attr(feature = "npm", napi(namespace = "peisar"))]
 impl Default for RenderOptions {
     fn default() -> Self {
         Self {
@@ -44,7 +44,7 @@ impl Default for RenderOptions {
 }
 /// Convenience: create `Some(true)` for fragment mode (backward-compatible
 /// with the old `render_document(doc, Some(bool))` API).
-#[cfg_attr(feature = "npm", napi)]
+#[cfg_attr(feature = "npm", napi(namespace = "peisar"))]
 impl From<bool> for RenderOptions {
     fn from(fragment: bool) -> Self {
         Self {
@@ -70,7 +70,7 @@ impl From<bool> for RenderOptions {
 /// | `charset`  | `true`      |
 /// | `viewport` | `true`      |
 /// | `file_name`, `title`, `body_class`, `style` | `null` |
-#[cfg_attr(feature = "npm", napi(object))]
+#[cfg_attr(feature = "npm", napi(object, namespace = "peisar"))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PeisarOptions {
     /// Enable GitHub Flavored Markdown (tables, strikethrough, task lists,
@@ -102,7 +102,7 @@ pub struct PeisarOptions {
     /// Default: `None`.
     pub style: Option<String>,
 }
-#[cfg_attr(feature = "npm", napi)]
+#[cfg_attr(feature = "npm", napi(namespace = "peisar"))]
 impl Default for PeisarOptions {
     fn default() -> Self {
         Self {

@@ -8,20 +8,26 @@
     "cSpell.words": [
         "autolinks",
         "cdylib",
+        "emnapi",
         "Frontmatter",
         "inlines",
         "libc",
         "libuv",
         "Maung",
+        "mdbook",
         "NAPI",
         "noyalib",
         "Peekable",
         "peisar",
+        "prisar",
         "rescan",
         "rlib",
         "serde",
         "strikethroughs",
         "threadsafe",
-        "TSFN"
+        "TSFN",
+        "wasi",
+        "wasip",
+        "webp"
     ]
 }

@@ -13,7 +13,7 @@ use napi_derive::napi;
 use serde::Serialize;
 
 /// A zero-based point in the source text.
-#[cfg_attr(feature = "npm", napi(object))]
+#[cfg_attr(feature = "npm", napi(object, namespace = "peisar"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
 pub struct Position {
     /// Line number, 0-based.
@@ -28,7 +28,7 @@ pub struct Position {
 ///
 /// `start` is inclusive and `end` is exclusive; both positions point into the
 /// original source string.
-#[cfg_attr(feature = "npm", napi(object))]
+#[cfg_attr(feature = "npm", napi(object, namespace = "peisar"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
 pub struct Span {
     /// The start position (inclusive).

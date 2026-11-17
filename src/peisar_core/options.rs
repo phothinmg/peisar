@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 /// strict CommonMark only:
 ///
 
-#[cfg_attr(feature = "npm", napi(object))]
+#[cfg_attr(feature = "npm", napi(object, namespace = "peisar"))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AstOptions {
     /// Enable GitHub Flavored Markdown (tables, strikethrough, task lists,

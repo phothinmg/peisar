@@ -22,15 +22,18 @@ pub mod frontmatter;
 pub mod html;
 pub mod options;
 pub mod parsers;
+mod render_cache;
 #[cfg(test)]
 mod tests;
 pub mod tokens;
 
+use config::{PeisarOptions, RenderOptions, get_options};
 pub use control::{
     BlockParseResult, InlineParseResult, InlineVisitorControl, PeisarPlugin, RegisteredPlugin,
     VisitorControl,
 };
 use frontmatter::{Frontmatter, extract_frontmatter};
+use html::ast_to_html;
 #[cfg(feature = "npm")]
 use napi::Env;
 #[cfg(feature = "npm")]
@@ -40,7 +43,7 @@ use parsers::{PeisarDocument, md_to_ast_with_hooks, plugin};
 
 /// Markdown source parsed into an AST, with optional raw front matter and
 /// registered plugins.
-#[cfg_attr(feature = "npm", napi)]
+#[cfg_attr(feature = "npm", napi(namespace = "peisar"))]
 pub struct PeisarAst {
     /// The parsed AST PeisarDocument (private — use the `ast` getter
     /// [`get_ast`][Self::get_ast] or [`frontmatter`][Self::get_frontmatter]
@@ -60,7 +63,7 @@ pub struct PeisarAst {
     /// visitor mutations on every access.
     plugins_applied: bool,
 }
-#[cfg_attr(feature = "npm", napi)]
+#[cfg_attr(feature = "npm", napi(namespace = "peisar"))]
 impl PeisarAst {
     /// If `options` is `None`, defaults are used (GFM + Kramdown enabled).
     #[cfg_attr(feature = "npm", napi(constructor))]
@@ -84,6 +87,7 @@ impl PeisarAst {
     /// Register a plugin whose parser hooks and visitor callbacks run when
     /// the AST is next accessed.
     #[cfg(feature = "npm")]
+    #[napi(namespace = "peisar")]
     pub fn add_plugin(&mut self, env: Env, plugin: PeisarPlugin) {
         self.plugins.push(plugin.register(env));
         self.plugins_applied = false;
@@ -167,7 +171,7 @@ impl PeisarAst {
     /// Applies registered plugins first.  Unlike [`take_ast`](Self::take_ast)
     /// this does **not** consume the AST — subsequent calls still return
     /// the full tree.
-    #[cfg_attr(feature = "npm", napi)]
+    #[cfg_attr(feature = "npm", napi(namespace = "peisar"))]
     pub fn get_ast(&mut self) -> PeisarDocument {
         self.ensure_plugins_applied();
         self.ast.clone()
@@ -175,9 +179,99 @@ impl PeisarAst {
     /// Return a clone of the extracted frontmatter.
     ///
     /// Applies registered plugins first, matching [`get_ast`](Self::get_ast).
-    #[cfg_attr(feature = "npm", napi)]
+    #[cfg_attr(feature = "npm", napi(namespace = "peisar"))]
     pub fn get_frontmatter(&mut self) -> Frontmatter {
         self.ensure_plugins_applied();
         self.frontmatter.clone()
+    }
+}
+
+/// Parses one Markdown document and exposes its AST, HTML, and front matter
+/// to JavaScript.
+///
+/// Construct this class with the Markdown source and an optional
+/// [`PeisarOptions`] object. Properties are computed from the source document;
+/// accessing `ast` or `html` also applies registered visitors.
+#[cfg_attr(feature = "npm", napi(namespace = "peisar"))]
+pub struct Peisar {
+    render_opts: RenderOptions,
+    peisar_ast: PeisarAst,
+    render_cache: render_cache::RenderCache,
+}
+#[cfg_attr(feature = "npm", napi(namespace = "peisar"))]
+impl Peisar {
+    /// Creates a parser for `rawMd`.
+    ///
+    /// When `options` is omitted, GFM and Kramdown parsing are enabled and
+    /// `html` returns a complete HTML document.
+    #[cfg_attr(feature = "npm", napi(constructor, namespace = "peisar"))]
+    pub fn new(raw_md: String, options: Option<PeisarOptions>) -> Self {
+        let opts = get_options(options);
+        let ast_opts = opts.ast_opts;
+        let render_opts = opts.render_opts;
+        let peisar_ast = PeisarAst::new(raw_md, Some(ast_opts));
+        Self {
+            render_opts,
+            peisar_ast,
+            render_cache: render_cache::RenderCache::default(),
+        }
+    }
+    /// Gets the parsed Markdown document as a JavaScript AST object.
+    ///
+    /// Registered visitors run before the AST is returned. The returned value
+    /// is a clone, so reading this property does not consume the parser state.
+    #[cfg_attr(feature = "npm", napi(getter, namespace = "peisar"))]
+    pub fn ast(&mut self) -> parsers::PeisarDocument {
+        self.peisar_ast.get_ast()
+    }
+
+    /// Registers a unified JavaScript plugin.
+    ///
+    /// The plugin can provide `visitBlock` / `visitInline` visitor callbacks
+    /// and `parseBlock` / `parseInline` parser hooks, all in one object.
+    /// Visitor callbacks receive their node as a one-item tuple: for example,
+    /// `visitBlock([block]) { return { recurse: true }; }`.
+    #[cfg(feature = "npm")]
+    #[napi(js_name = "use", namespace = "peisar")]
+    pub fn use_plugin(&mut self, env: Env, plugin: PeisarPlugin) {
+        self.peisar_ast.add_plugin(env, plugin);
+        self.render_cache.invalidate();
+    }
+    /// Registers a plugin that can customize parsing and visit AST nodes.
+    ///
+    /// This Rust API accepts a [`Plugin`] value. The JavaScript binding
+    /// exposes the corresponding method as `use`.
+    #[cfg(not(feature = "npm"))]
+    pub fn use_plugin(&mut self, plugin: PeisarPlugin) {
+        self.peisar_ast.add_plugin(plugin);
+        self.render_cache.invalidate();
+    }
+
+    /// Enables or disables caching the rendered HTML for this instance.
+    ///
+    /// Disabled by default. When enabled, this instance retains its most
+    /// recent HTML result until a plugin is registered or caching is disabled.
+    #[cfg_attr(feature = "npm", napi(namespace = "peisar"))]
+    pub fn set_html_cache_enabled(&mut self, enabled: bool) {
+        self.render_cache.set_enabled(enabled);
+    }
+    /// Renders the parsed Markdown as HTML using the configured render options.
+    ///
+    /// Registered visitors run before rendering.
+    #[cfg_attr(feature = "npm", napi(getter, namespace = "peisar"))]
+    pub fn html(&mut self) -> String {
+        if let Some(html) = self.render_cache.get() {
+            return html;
+        }
+        let doc = self.ast();
+        let html = ast_to_html(doc, Some(self.render_opts.clone()));
+        self.render_cache.store(&html);
+        html
+    }
+
+    /// Gets the extracted frontmatter, including its type and raw contents.
+    #[cfg_attr(feature = "npm", napi(getter, namespace = "peisar"))]
+    pub fn frontmatter(&mut self) -> Frontmatter {
+        self.peisar_ast.get_frontmatter()
     }
 }

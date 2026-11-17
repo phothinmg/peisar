@@ -38,7 +38,7 @@ use serde::Serialize;
 /// collected from the source text.
 ///
 
-#[cfg_attr(feature = "npm", napi(object))]
+#[cfg_attr(feature = "npm", napi(object, namespace = "peisar"))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PeisarDocument {
     /// Always `"root"`.
