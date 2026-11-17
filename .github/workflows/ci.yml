@@ -97,7 +97,7 @@ jobs:
       # Install Zig for musl cross-compilation
       - name: Setup Zig
         if: contains(matrix.settings.flags, '--cross-compile')
-        uses: https://codeberg.org/mlugg/setup-zig@v2
+        uses: mlugg/setup-zig@v2
         with:
           version: 0.15.2
 
