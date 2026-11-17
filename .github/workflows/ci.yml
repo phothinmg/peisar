@@ -109,7 +109,7 @@ jobs:
 
           npx napi build --release --platform --features npm --js index.cjs --config-path napi.config.json --target ${{ matrix.settings.target }} ${{ matrix.settings.flags }}
 
-          if [[ "${{ matrix.settings.target }}" == "wasm32-wasip1-threads"]]; then
+          if [[ "${{ matrix.settings.target }}" == "wasm32-wasip1-threads" ]]; then
 
           cat << 'EOF' > "$MJS_FILE"
           // Generated form ci.yml
