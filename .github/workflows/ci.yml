@@ -97,7 +97,7 @@ jobs:
       # Install Zig for musl cross-compilation
       - name: Setup Zig
         if: contains(matrix.settings.flags, '--cross-compile')
-        uses: mlugg/setup-zig@v2
+        uses: https://codeberg.org/mlugg/setup-zig@v2
         with:
           version: 0.15.2
 
@@ -122,8 +122,6 @@ jobs:
           export const yaml = nativeBinding.yaml
           EOF
 
-          cp "$DTS_SOURCE" "$DTS_DES"
-
           fi
 
       # Upload artifact step in build job to include the generated WASM JavaScript files
@@ -137,7 +135,6 @@ jobs:
             ${{ env.APP_NAME }}.wasi.cjs
             ${{ env.APP_NAME }}.wasi.d.cts
             ${{ env.APP_NAME }}.wasi.mjs
-            ${{ env.APP_NAME }}.wasi.d.mts
             ${{ env.APP_NAME }}.wasi-browser.js
             wasi-worker.mjs
             wasi-worker-browser.mjs
@@ -208,20 +205,8 @@ jobs:
             const pkgPath = './npm/wasm32-wasi/package.json';
             const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
             pkg.module = 'peisar.wasi.mjs';
-            pkg.exports = {
-              '.': {
-                require: {
-                  default: './peisar.wasi.cjs',
-                  types: './peisar.wasi.d.cts',
-                },
-                import: {
-                  default: './peisar.wasi.mjs',
-                  types: './peisar.wasi.d.mts',
-                },
-              },
-            };
             pkg.files = Array.from(
-              new Set([...(pkg.files || []), 'peisar.wasi.mjs', 'peisar.wasi.d.mts']),
+              new Set([...(pkg.files || []), 'peisar.wasi.mjs']),
             );
             fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
           "

@@ -1,6 +1,6 @@
 {
   "name": "peisar",
-  "version": "2.1.11",
+  "version": "2.1.12",
   "gitHead": "fefe667d38f40eef5ba2b33df555d0ada4a9971b",
   "description": "A practical Markdown parser engineered in Rust",
   "keywords": [
