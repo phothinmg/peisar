@@ -109,15 +109,16 @@ jobs:
         run: npm run build
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
+          digest-mismatch: warn
 
       - name: Scaffold platform package dirs
         run: npx napi create-npm-dirs --config-path napi.config.json
 
       - name: Distribute build artifacts to npm dirs
-        run: npx napi artifacts --dir artifacts --config-path napi.config.json
+        run: npx napi artifacts --config-path napi.config.json
 
       - name: Sync package versions
         run: npx napi version --config-path napi.config.json
