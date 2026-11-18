@@ -1,0 +1,126 @@
+# cspell:disable
+name: Continuous Releases
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  APP_NAME: peisar
+  RUST_BACKTRACE: 1
+  MACOSX_DEPLOYMENT_TARGET: "10.13"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - host: macos-latest
+            target: aarch64-apple-darwin
+          - host: macos-latest
+            target: x86_64-apple-darwin
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            flags: --use-napi-cross
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            flags: --use-napi-cross
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            flags: --cross-compile
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            flags: --cross-compile
+          - host: windows-latest
+            target: x86_64-pc-windows-msvc
+          - host: windows-latest
+            target: aarch64-pc-windows-msvc
+          - host: ubuntu-latest
+            target: wasm32-wasip1-threads
+
+    name: Build ${{ matrix.settings.target }}
+    runs-on: ${{ matrix.settings.host }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.settings.target }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Zig
+        if: contains(matrix.settings.flags, '--cross-compile')
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Build & package artifacts
+        run: npx napi build --release --platform --features npm --js index.cjs --config-path napi.config.json --target ${{ matrix.settings.target }} ${{ matrix.settings.flags }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: peisar-${{ matrix.settings.target }}
+          path: |
+            ${{ env.APP_NAME }}.*.node
+            ${{ env.APP_NAME }}.*.wasm
+            ${{ env.APP_NAME }}.wasi.cjs
+            ${{ env.APP_NAME }}.wasi.d.cts
+            ${{ env.APP_NAME }}.wasi-browser.js
+            wasi-worker.mjs
+            wasi-worker-browser.mjs
+          if-no-files-found: error
+
+  publish:
+    name: Publish to pkg.pr.new
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate JS binding & types
+        run: npm run build
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Scaffold platform package dirs
+        run: npx napi create-npm-dirs --config-path napi.config.json
+
+      - name: Distribute build artifacts to npm dirs
+        run: npx napi artifacts --dir artifacts --config-path napi.config.json
+
+      - name: Sync package versions
+        run: npx napi version --config-path napi.config.json
+
+      - name: Publish to pkg.pr.new
+        run: npx pkg-pr-new publish . ./npm/*
