@@ -86,9 +86,6 @@ assert_eq!(html, "<h1>Hello <strong>world</strong></h1>\n");
 - [WASM guide][nodejs-wasm]
 - [Node.js API reference][nodejs-api]
 
-### Browser usage
-
-- [Browser example][browser-example]
 
 ### Rust usage
 
@@ -104,12 +101,10 @@ assert_eq!(html, "<h1>Hello <strong>world</strong></h1>\n");
 - [Markdown parsing spec][markdown-spec]
 - [docs.rs API documentation][docs]
 
-## Packages and examples
+## Packages
 
 - npm: <https://www.npmjs.com/package/peisar>
 - crates.io: <https://crates.io/crates/peisar>
-- Next.js example: <https://github.com/phothinmg/peisar/tree/main/examples/next>
-- Vite example: <https://github.com/phothinmg/peisar/tree/main/examples/vite>
 
 ## Benchmark snapshot
 
@@ -117,7 +112,7 @@ The graph below summarizes the benchmark results documented in
 [docs/benchmarks.md](docs/benchmarks.md). Each panel uses its own vertical
 scale; values are printed above the bars.
 
-![Benchmark results comparing Peisar, marked, markdown-it, and showdown throughput and average peak heap usage across three document sizes](docs/benchmark-results.svg)
+![Benchmark results comparing Peisar, marked, markdown-it, and showdown throughput and average peak heap usage across three document sizes](docs/benchmark-results.svg) [![pkg.pr.new](https://pkg.pr.new/badge/phothinmg/peisa)](https://pkg.pr.new/~/phothinmg/peisa)
 
 Run the benchmark with `npm run benchmark`. Results vary by runtime, hardware,
 input, and parser configuration.
