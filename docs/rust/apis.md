@@ -1,8 +1,8 @@
 # Rust API reference
 
-The crate re-exports `Peisar`, `PeisarOptions`, and frontmatter types at the
-root. The `ast`, `render`, and `plugin` modules are public without feature
-flags.
+The crate re-exports `Peisar`, `PeisarOptions`, and frontmatter types
+(`Frontmatter`, `FrontmatterResult`, and `FrontmatterType`) at the root. The
+`ast`, `render`, and `plugin` modules are public without feature flags.
 
 ## `peisar::{Peisar, PeisarOptions}`
 
@@ -29,10 +29,12 @@ assert_eq!(document.html(), "<h1>Hello</h1>\n");
 
 ## `peisar::ast`
 
-The AST types and parsing helpers are available from this module.
+`PeisarAst`, the AST types, and parsing helpers are available from this module.
+`md_to_ast` parses Markdown directly into a `PeisarDocument`; the input should
+not include frontmatter if you want it extracted separately.
 
-Use `PeisarAst` for parsing and accessing the AST, or `md_to_ast` for direct
-parsing. Custom parser hooks are available through the plugin APIs.
+Use `PeisarAst` for parsing with frontmatter extraction and optional plugins,
+or `md_to_ast` for direct AST parsing.
 
 ```rust
 use peisar::ast::PeisarAst;
@@ -50,8 +52,15 @@ rendering AST documents directly.
 ## `peisar::plugin`
 
 This module provides the plugin interfaces and visitor helpers. It is
-available without enabling a Cargo feature. Register a `Plugin` with
-`Peisar::use_plugin()` or `PeisarAst::add_plugin()`.
+available without enabling a Cargo feature. `PeisarPlugin` contains optional
+`visit_block`, `visit_inline`, `parse_block`, and `parse_inline` callbacks.
+Register it with `Peisar::use_plugin()` or `PeisarAst::add_plugin()`. See the
+[Rust plugin example](../../examples/rust/plugin.rs) for visitor and parser
+hook examples.
+
+The `ast` module also exposes token types through `peisar::ast::tokens`, source
+positions through `peisar::ast::span`, and parser helpers through
+`peisar::ast::parsers`.
 
 ## Cargo features
 

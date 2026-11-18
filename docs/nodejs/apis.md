@@ -1,14 +1,19 @@
 # Node.js API reference
 
-This document describes the Node.js-facing API exposed by the native
-`peisar` package. It provides single-document parsing; it does not expose
-standalone YAML helpers or a filesystem cache API.
+This document covers the Node.js API in the `peisar` namespace exposed by the
+`peisar` package. Its main entry point parses and renders a single Markdown
+document.
 
-## Package exports
+## `peisar` API
 
-| Export | Kind | Notes |
+| Export | Kind | Purpose |
 | --- | --- | --- |
-| `Peisar` | class | Main parse/render API |
+| `Peisar` | class | Parse Markdown and access its AST, HTML, and frontmatter |
+| `PeisarAst` | class | Parse Markdown and access its AST and frontmatter |
+| `PeisarOptions`, `AstOptions`, `RenderOptions` | interfaces | Configure parsing and rendering |
+| `PeisarDocument`, `Block`, `Inline`, and supporting AST types | types | Describe AST nodes, spans, attributes, and table/list data |
+| `PeisarPlugin` and plugin context/result/control types | interfaces and types | Implement parser hooks and AST visitors |
+| `Frontmatter`, `FrontmatterType`, `FrontmatterResult` | interface and type | Describe extracted frontmatter |
 
 ## `Peisar`
 
@@ -22,13 +27,18 @@ new Peisar(markdown: string, options?: PeisarOptions)
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `ast` | object | Parsed AST as a JavaScript object |
+| `ast` | `PeisarDocument` | Parsed AST as a JavaScript object |
 | `html` | string | Rendered HTML |
-| `frontmatter` | `{ frontmatterType: "yaml" \| "toml" \| "json" \| "empty"; raw: string }` | Detected format and raw frontmatter content; not deserialized |
+| `frontmatter` | `Frontmatter` | Detected format and raw frontmatter content; not deserialized |
 
-### Plugin method
+### Methods
 
 `use(plugin)` registers parser hooks, AST visitors, or both on the document.
+Registering a plugin invalidates any cached HTML.
+
+`setHtmlCacheEnabled(enabled)` enables or disables an instance-local cache of
+the most recently rendered HTML. Caching is disabled by default and is cleared
+when disabled or when a plugin is registered.
 
 ```js
 const { Peisar } = require("peisar");
@@ -40,6 +50,26 @@ document.use({
   },
 });
 ```
+
+Visitor callbacks receive a one-element tuple containing the node, so
+`visitBlock([block])` and `visitInline([inline])` are the callback forms.
+Visitors run when the AST or HTML is accessed. Parser hooks run before the
+built-in matchers; registering them reparses the original source.
+
+## `PeisarAst`
+
+`PeisarAst` provides lower-level parsing without rendering:
+
+```js
+const { PeisarAst } = require("peisar");
+
+const parsed = new PeisarAst("# Hello");
+const ast = parsed.getAst();
+const frontmatter = parsed.getFrontmatter();
+```
+
+It also provides `addPlugin(plugin)` and `clearPlugins()`. Its optional
+`AstOptions` supports `gfm`, `kramdown`, and `fileName`.
 
 ## `PeisarOptions`
 
@@ -73,7 +103,11 @@ type Plugin = {
 Visitor controls include `insertBefore`, `insertAfter`, `replaceWith`,
 `remove`, and `recurse`. Block parser hooks return a `block` and the number of
 lines consumed; inline hooks return an `inline` and the number of characters
-consumed.
+consumed. A parser hook can return `undefined` to decline the current input.
+
+The generated TypeScript declarations place these classes and types under
+`peisar`; JavaScript examples can import the classes from the package root as
+shown above.
 
 Frontmatter is recognized at the start of the Markdown source:
 
@@ -81,9 +115,10 @@ Frontmatter is recognized at the start of the Markdown source:
 | --- | --- | --- |
 | YAML | `---` | `---` |
 | TOML | `+++` | `+++` |
-| JSON | `{` | Matching `}` |
+| JSON | `{` or optional `;;;` followed by `{` | Matching `}`; with `;;;`, a closing `;;;` is required |
 
 The `raw` property contains the text between YAML/TOML delimiters or the
-complete JSON object. No YAML, TOML, or JSON parsing or validation is done.
-When no complete frontmatter is found, the type is `"empty"` and `raw` is an
-empty string.
+complete JSON object without optional `;;;` delimiters. `frontmatterType` is
+one of `"Yaml"`, `"Toml"`, `"Json"`, or `"Empty"`. No YAML, TOML, or JSON
+parsing or validation is done. When no complete frontmatter is found, the
+type is `"Empty"` and `raw` is an empty string.

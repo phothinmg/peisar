@@ -13,7 +13,7 @@ const { Peisar } = require("peisar");
 const doc = new Peisar("# Hello **world**", { fragment: true });
 doc.html;      // <h1>Hello <strong>world</strong></h1>\n
 doc.ast;       // JavaScript AST object
-doc.frontmatter; // { frontmatterType: "empty", raw: "" }
+doc.frontmatter; // { frontmatterType: "Empty", raw: "" }
 ```
 
 ---
@@ -50,15 +50,26 @@ title = "Guide"
 # The body
 ```
 
+```markdown
+;;;
+{"title":"Guide"}
+;;;
+
+# The body
+```
+
 - YAML uses an opening `---` followed by a newline and a closing `---` line.
 - TOML uses an opening `+++` followed by a newline and a closing `+++` line.
+- JSON frontmatter may be an unwrapped top-level object or an object enclosed
+  by `;;;` delimiter lines (the opening delimiter may be followed by a newline).
 - JSON frontmatter is a top-level object beginning with `{`; its closing
-  brace is matched while ignoring braces inside double-quoted strings.
+  brace is matched while ignoring braces inside double-quoted strings. When
+  `;;;` delimiters are used, a closing `;;;` is required after the object.
 - The parser only extracts frontmatter; it does not deserialize or validate
   the YAML, TOML, or JSON content.
 - A missing or incomplete frontmatter block is left in the body unchanged.
 - In the Node.js API, `document.frontmatter` is an object containing
-  `frontmatterType` (`"yaml"`, `"toml"`, `"json"`, or `"empty"`) and `raw`.
+  `frontmatterType` (`"Yaml"`, `"Toml"`, `"Json"`, or `"Empty"`) and `raw`.
   The Rust API exposes the corresponding `frontmatter_type` and `raw` fields.
 
 ---

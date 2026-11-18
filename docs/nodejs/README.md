@@ -45,15 +45,17 @@ console.log(document.frontmatter);
 
 ## Current API structure
 
-The Node.js package currently centers around these exports:
+The Node.js API in the `peisar` namespace currently centers around these
+classes and properties:
 
 | Export | Purpose |
 | --- | --- |
 | `Peisar` | Parse one Markdown document and read `ast`, `html`, or `frontmatter` |
+| `PeisarAst` | Parse a document and read its AST or frontmatter without rendering |
 | `document.frontmatter` | Read the detected frontmatter type and raw contents |
 
-Frontmatter is returned as `{ frontmatterType, raw }`. The type is `"yaml"`,
-`"toml"`, `"json"`, or `"empty"`; Peisar does not deserialize the raw content.
+Frontmatter is returned as `{ frontmatterType, raw }`. The type is `"Yaml"`,
+`"Toml"`, `"Json"`, or `"Empty"`; Peisar does not deserialize the raw content.
 See the [API reference](./apis.md) for the formats and shape.
 
 Detailed signatures and option shapes are in the
