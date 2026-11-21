@@ -6,6 +6,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 env:
   APP_NAME: peisar
   RUST_BACKTRACE: 1
