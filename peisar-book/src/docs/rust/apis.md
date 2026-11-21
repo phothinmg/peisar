@@ -55,8 +55,8 @@ This module provides the plugin interfaces and visitor helpers. It is
 available without enabling a Cargo feature. `PeisarPlugin` contains optional
 `visit_block`, `visit_inline`, `parse_block`, and `parse_inline` callbacks.
 Register it with `Peisar::use_plugin()` or `PeisarAst::add_plugin()`. See the
-[Rust plugin example](../../examples/rust/plugin.rs) for visitor and parser
-hook examples.
+[Rust plugin example](https://github.com/phothinmg/peisar/blob/main/examples/rust/plugin.rs)
+for visitor and parser hook examples.
 
 The `ast` module also exposes token types through `peisar::ast::tokens`, source
 positions through `peisar::ast::span`, and parser helpers through

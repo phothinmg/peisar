@@ -55,8 +55,6 @@ export default function Home() {
 }
 ```
 
-This matches the example app in [examples/next](../../examples/next).
-
 ## When not to use the native package
 
 Do not use the native Node.js package in environments that cannot load `.node`

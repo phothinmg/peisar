@@ -12,7 +12,7 @@ runtime, and API-specific guides.
 - Package: `peisar`
 - Module surface: `require("peisar")` or `import ... from "peisar"`
 - Runtime requirement: see the `engines.node` field in the root
-  [package.json](../../package.json)
+  [package.json](https://github.com/phothinmg/peisar/blob/main/package.json)
 - Browser and WASI runtimes: see [WASM](./wasm.md)
 - Full API details: see [Node.js API reference](./apis.md)
 
@@ -92,8 +92,3 @@ document.use({
 - [WASM environments](./wasm.md)
 - [Node.js API reference](./apis.md)
 - [Documentation hub](../README.md)
-
-## Examples
-
-- [Next.js example](../../examples/next)
-- [Vite example](../../examples/vite)

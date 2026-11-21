@@ -109,10 +109,10 @@ assert_eq!(html, "<h1>Hello <strong>world</strong></h1>\n");
 ## Benchmark snapshot
 
 The graph below summarizes the benchmark results documented in
-[docs/benchmarks.md](docs/benchmarks.md). Each panel uses its own vertical
-scale; values are printed above the bars.
+[the benchmark guide](peisar-book/src/docs/benchmarks.md). Each panel uses its
+own vertical scale; values are printed above the bars.
 
-![Benchmark results comparing Peisar, marked, markdown-it, and showdown throughput and average peak heap usage across three document sizes](docs/benchmark-results.svg) [![pkg.pr.new](https://pkg.pr.new/badge/phothinmg/peisa)](https://pkg.pr.new/~/phothinmg/peisa)
+![Benchmark results comparing Peisar, marked, markdown-it, and showdown throughput and average peak heap usage across three document sizes](peisar-book/src/docs/benchmark-results.svg) [![pkg.pr.new](https://pkg.pr.new/badge/phothinmg/peisa)](https://pkg.pr.new/~/phothinmg/peisa)
 
 Run the benchmark with `npm run benchmark`. Results vary by runtime, hardware,
 input, and parser configuration.
@@ -153,14 +153,14 @@ Security policy: [SECURITY.md](SECURITY.md)
 [ptm]: https://github.com/phothinmg
 [docs]: https://docs.rs/peisar "Documentation"
 [docs_img]: https://docs.rs/peisar/badge.svg "Documentation"
-[docs-hub]: https://github.com/phothinmg/peisar/blob/main/docs/README.md
-[nodejs-guide]: https://github.com/phothinmg/peisar/blob/main/docs/nodejs/README.md
-[nodejs-nextjs]: https://github.com/phothinmg/peisar/blob/main/docs/nodejs/nextjs.md
-[nodejs-vite]: https://github.com/phothinmg/peisar/blob/main/docs/nodejs/vite.md
-[nodejs-wasm]: https://github.com/phothinmg/peisar/blob/main/docs/nodejs/wasm.md
-[nodejs-api]: https://github.com/phothinmg/peisar/blob/main/docs/nodejs/apis.md
+[docs-hub]: https://github.com/phothinmg/peisar/blob/main/peisar-book/src/docs/README.md
+[nodejs-guide]: https://github.com/phothinmg/peisar/blob/main/peisar-book/src/docs/nodejs/README.md
+[nodejs-nextjs]: https://github.com/phothinmg/peisar/blob/main/peisar-book/src/docs/nodejs/nextjs.md
+[nodejs-vite]: https://github.com/phothinmg/peisar/blob/main/peisar-book/src/docs/nodejs/vite.md
+[nodejs-wasm]: https://github.com/phothinmg/peisar/blob/main/peisar-book/src/docs/nodejs/wasm.md
+[nodejs-api]: https://github.com/phothinmg/peisar/blob/main/peisar-book/src/docs/nodejs/apis.md
 [browser-example]: https://github.com/phothinmg/peisar/tree/main/examples/browser
-[rust-guide]: https://github.com/phothinmg/peisar/blob/main/docs/rust/README.md
-[rust-api]: https://github.com/phothinmg/peisar/blob/main/docs/rust/apis.md
-[benchmarks]: https://github.com/phothinmg/peisar/blob/main/docs/benchmarks.md
-[markdown-spec]: https://github.com/phothinmg/peisar/blob/main/docs/markdown-spec.md
+[rust-guide]: https://github.com/phothinmg/peisar/blob/main/peisar-book/src/docs/rust/README.md
+[rust-api]: https://github.com/phothinmg/peisar/blob/main/peisar-book/src/docs/rust/apis.md
+[benchmarks]: https://github.com/phothinmg/peisar/blob/main/peisar-book/src/docs/benchmarks.md
+[markdown-spec]: https://github.com/phothinmg/peisar/blob/main/peisar-book/src/docs/markdown-spec.md

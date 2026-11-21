@@ -8,7 +8,8 @@ Markdown-to-HTML rendering against:
 - `micromark` with `micromark-extension-gfm`
 - `showdown`
 
-The benchmark implementation lives in [bench/src/index.js](../bench/src/index.js).
+The benchmark implementation lives in
+[bench/src/index.js](https://github.com/phothinmg/peisar/blob/main/bench/src/index.js).
 Running it also regenerates [benchmark-results.svg](./benchmark-results.svg)
 from the measured throughput and heap results.
 
@@ -58,7 +59,7 @@ the tested scenarios, including micromark configured with GFM.
 ## Notes
 
 - Results reflect the workload and configuration in
-  [bench/src/index.js](../bench/src/index.js).
+  [bench/src/index.js](https://github.com/phothinmg/peisar/blob/main/bench/src/index.js).
 - Memory profiling uses seven batches with 100 / 25 / 10 iterations per batch
   for base / medium / large inputs; heap values are approximate and sensitive
   to the runtime and process state.
@@ -75,7 +76,7 @@ From the repository root:
 npm run benchmark
 ```
 
-Or directly inside [bench/](../bench):
+Or directly inside [bench/](https://github.com/phothinmg/peisar/tree/main/bench):
 
 ```sh
 cd bench

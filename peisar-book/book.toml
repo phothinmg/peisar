@@ -1,0 +1,9 @@
+[book]
+title = "Peisar Documentation"
+authors = ["phothinmg"]
+language = "en"
+
+[output.html]
+git-repository-url = "https://github.com/phothinmg/peisar"
+git-repository-icon = "fab-github"
+site-url = "/peisar/"

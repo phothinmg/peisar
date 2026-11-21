@@ -54,5 +54,5 @@ The lower-level Rust APIs are available without Cargo features:
 raw content. The `npm` Cargo feature is only needed when building the Node.js
 bindings.
 
-See the [Rust API reference](../../docs/rust/apis.md) and
-[Node.js API reference](../../docs/nodejs/apis.md) for details.
+See the [Rust API reference](../../peisar-book/src/docs/rust/apis.md) and
+[Node.js API reference](../../peisar-book/src/docs/nodejs/apis.md) for details.

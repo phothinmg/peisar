@@ -3,7 +3,10 @@ const path = require("node:path");
 const { version } = require("../../package.json");
 
 const COLORS = ["#0969da", "#1a7f37", "#bf8700", "#cf222e", "#8250df"];
-const OUTPUT_PATH = path.resolve(__dirname, "../../docs/benchmark-results.svg");
+const OUTPUT_PATH = path.resolve(
+  __dirname,
+  "../../peisar-book/src/docs/benchmark-results.svg",
+);
 
 function escapeXml(value) {
   return String(value)

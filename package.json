@@ -51,7 +51,8 @@
     "hooks:install": "bash scripts/install-hooks.sh",
     "commit": "bash scripts/commit.sh",
     "benchmark": "bash scripts/benchmark.sh",
-    "fix:gpg": "bash scripts/gpg.sh"
+    "fix:gpg": "bash scripts/gpg.sh",
+    "docs:dev": "mdbook serve peisar-book"
   },
   "devDependencies": {
     "@emnapi/core": "^2.0.0-alpha.5",

@@ -17,8 +17,7 @@ they can be updated between npm and crates.io releases.
 
 ### Browser
 
-- [Browser usage example](../examples/browser/example.md)
-- [Runnable browser example](../examples/browser/index.html)
+- [Browser usage example](https://github.com/phothinmg/peisar/tree/main/examples/browser)
 
 ### Rust
 
@@ -44,10 +43,10 @@ feature is only needed to build the Node.js bindings:
 
 - [Release notes](./release-notes/2.1.0.md) for the next version
 - [Release notes](./release-notes/2.0.1.md) for the current release
-- [Full changelog](../CHANGELOG.md)
-- [Security policy](../SECURITY.md) and [threat model](../SECURITY_MODEL.md)
+- [Full changelog](https://github.com/phothinmg/peisar/blob/main/CHANGELOG.md)
+- [Security policy](https://github.com/phothinmg/peisar/blob/main/SECURITY.md) and [threat model](https://github.com/phothinmg/peisar/blob/main/SECURITY_MODEL.md)
 
 ## Package entry points
 
-- Top-level package page: [README.md](../README.md)
+- Top-level package page: [README.md](https://github.com/phothinmg/peisar/blob/main/README.md)
 - API docs on docs.rs: <https://docs.rs/peisar>

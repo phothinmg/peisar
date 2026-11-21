@@ -88,4 +88,4 @@ visit_document_mut(&mut document, &mut DemoteHeadings);
 does not accept Rust plugins — it registers plugins on the JS side through
 `use()` only. Use `Document::parse` plus `visit_document_mut` for Rust-side
 transformations. Use the high-level `Peisar` API for HTML rendering. See the
-[Rust API reference](../../docs/rust/apis.md) for the current public API.
+[Rust API reference](../../peisar-book/src/docs/rust/apis.md) for the current public API.
