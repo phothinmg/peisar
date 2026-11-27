@@ -276,7 +276,7 @@ dependencies = [
 
 [[package]]
 name = "peisar"
-version = "2.1.16"
+version = "2.1.13"
 dependencies = [
  "html-escape",
  "napi",
