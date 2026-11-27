@@ -56,7 +56,6 @@ impl AstToHtml {
                     '<' => self.out.push_str("&lt;"),
                     '>' => self.out.push_str("&gt;"),
                     '"' => self.out.push_str("&quot;"),
-                    '\'' => self.out.push_str("&#39;"),
                     _ => self.out.push(c),
                 }
             }
@@ -187,6 +186,8 @@ impl AstToHtml {
             }
             Block::List {
                 ordered,
+                start,
+                tight,
                 items,
                 attrs,
                 ..
@@ -194,15 +195,18 @@ impl AstToHtml {
                 let tag = if *ordered { "ol" } else { "ul" };
                 self.out.push('<');
                 self.out.push_str(tag);
+                if let Some(start) = start {
+                    self.out.push_str(&format!(" start=\"{start}\""));
+                }
                 self.emit_attrs(attrs.as_ref());
                 self.out.push_str(">\n");
                 for item in items {
-                    self.render_list_item(item);
+                    self.render_list_item(item, *tight);
                 }
                 self.out.push_str(&format!("</{}>\n", tag));
             }
             Block::ThematicBreak { .. } => {
-                self.out.push_str("<hr>\n");
+                self.out.push_str("<hr />\n");
             }
             Block::HtmlBlock { html, .. } => {
                 self.out.push_str(html);
@@ -217,15 +221,19 @@ impl AstToHtml {
                 // Not rendered as visible HTML.
             }
             Block::Comment { value, .. } => {
-                self.out.push_str("<!-- ");
-                self.out.push_str(value);
-                self.out.push_str(" -->\n");
+                if value.is_empty() {
+                    self.out.push_str("<!-- -->\n");
+                } else {
+                    self.out.push_str("<!-- ");
+                    self.out.push_str(value);
+                    self.out.push_str(" -->\n");
+                }
             }
         }
     }
 
     /// Render a single list item (`<li>`).
-    fn render_list_item(&mut self, item: &ListItem) {
+    fn render_list_item(&mut self, item: &ListItem, tight_list: bool) {
         self.out.push_str("<li");
         if let Some(task) = &item.task {
             let checked = matches!(task, TaskState::Checked);
@@ -247,16 +255,35 @@ impl AstToHtml {
         // Render nested blocks.  If the item contains a single paragraph we
         // render it inline (no wrapping <p>) per CommonMark rendering
         // convention for tight lists.
-        let tight = item.children.len() == 1
-            && matches!(item.children.first(), Some(Block::Paragraph { .. }));
-        if tight {
-            if let Some(Block::Paragraph { children, .. }) = item.children.first() {
-                for inline in children {
-                    self.render_inline(inline);
+        if tight_list {
+            let mut previous_was_paragraph = false;
+            let mut rendered_block = false;
+            for block in &item.children {
+                match block {
+                    Block::Paragraph { children, .. } => {
+                        if previous_was_paragraph {
+                            self.out.push('\n');
+                        }
+                        for inline in children {
+                            self.render_inline(inline);
+                        }
+                        previous_was_paragraph = true;
+                        rendered_block = true;
+                    }
+                    _ => {
+                        if previous_was_paragraph || !rendered_block {
+                            self.out.push('\n');
+                        }
+                        self.render_block(block);
+                        previous_was_paragraph = false;
+                        rendered_block = true;
+                    }
                 }
             }
         } else {
-            self.out.push('\n');
+            if !item.children.is_empty() {
+                self.out.push('\n');
+            }
             for b in &item.children {
                 self.render_block(b);
             }
@@ -351,7 +378,7 @@ impl AstToHtml {
                 self.out.push_str("</del>");
             }
             Inline::HardBreak { .. } => {
-                self.out.push_str("<br>\n");
+                self.out.push_str("<br />\n");
             }
             Inline::SoftBreak { .. } => {
                 self.out.push('\n');
@@ -360,7 +387,7 @@ impl AstToHtml {
                 alt, url, title, ..
             } => {
                 self.out.push_str("<img src=\"");
-                self.esc_attr(url);
+                self.esc_attr(&encode_url(url));
                 self.out.push_str("\" alt=\"");
                 self.esc(alt);
                 self.out.push('"');
@@ -369,13 +396,13 @@ impl AstToHtml {
                     self.esc(t);
                     self.out.push('"');
                 }
-                self.out.push('>');
+                self.out.push_str(" />");
             }
             Inline::Link {
                 text, url, title, ..
             } => {
                 self.out.push_str("<a href=\"");
-                self.esc_attr(url);
+                self.esc_attr(&encode_url(url));
                 self.out.push('"');
                 if let Some(t) = title {
                     self.out.push_str(" title=\"");
@@ -392,7 +419,7 @@ impl AstToHtml {
                 text, url, title, ..
             } => {
                 self.out.push_str("<a href=\"");
-                self.esc_attr(url);
+                self.esc_attr(&encode_url(url));
                 self.out.push('"');
                 if let Some(t) = title {
                     self.out.push_str(" title=\"");
@@ -445,6 +472,43 @@ impl Default for AstToHtml {
     fn default() -> Self {
         Self::new(None)
     }
+}
+
+fn encode_url(url: &str) -> String {
+    let mut encoded = String::with_capacity(url.len());
+    for byte in url.bytes() {
+        if byte.is_ascii_alphanumeric()
+            || matches!(
+                byte,
+                b'-' | b'.'
+                    | b'_'
+                    | b'~'
+                    | b':'
+                    | b'/'
+                    | b'?'
+                    | b'#'
+                    | b'@'
+                    | b'!'
+                    | b'$'
+                    | b'&'
+                    | b'\''
+                    | b'('
+                    | b')'
+                    | b'*'
+                    | b'+'
+                    | b','
+                    | b';'
+                    | b'='
+                    | b'%'
+            )
+        {
+            encoded.push(byte as char);
+        } else {
+            use std::fmt::Write as _;
+            write!(encoded, "%{byte:02X}").expect("writing to a String cannot fail");
+        }
+    }
+    encoded
 }
 
 #[cfg(test)]
@@ -540,16 +604,68 @@ mod tests {
         assert_eq!(frag("Para\n"), "<p>Para</p>\n");
         assert_eq!(
             frag("```rust\nfn f()\n```\n"),
-            "<pre><code class=\"language-rust\">fn f()</code></pre>\n"
+            "<pre><code class=\"language-rust\">fn f()\n</code></pre>\n"
         );
         assert_eq!(
             frag("> quote\n"),
             "<blockquote>\n<p>quote</p>\n</blockquote>\n"
         );
-        assert_eq!(frag("---\n"), "<hr>\n");
+        assert_eq!(frag("---\n"), "<hr />\n");
         assert_eq!(frag("- a\n- b\n"), "<ul>\n<li>a</li>\n<li>b</li>\n</ul>\n");
         assert_eq!(frag("1. a\n"), "<ol>\n<li>a</li>\n</ol>\n");
         assert_eq!(frag("<!-- hi -->\n"), "<!-- hi -->\n");
+    }
+
+    #[test]
+    fn commonmark_atx_heading_rules() {
+        assert_eq!(
+            frag("    # foo\nfoo\n    # bar\n"),
+            "<pre><code># foo\n</code></pre>\n<p>foo\n# bar</p>\n"
+        );
+        assert_eq!(
+            frag("## foo ##\n  ###   bar    ###\n# foo#\n### ###\n"),
+            "<h2>foo</h2>\n<h3>bar</h3>\n<h1>foo#</h1>\n<h3></h3>\n"
+        );
+    }
+
+    #[test]
+    fn commonmark_setext_heading_rules() {
+        assert_eq!(
+            frag("Foo *bar*\n=========\n\nFoo\n-------------------------\n\n  Foo\n  ===\n"),
+            "<h1>Foo <em>bar</em></h1>\n<h2>Foo</h2>\n<h1>Foo</h1>\n"
+        );
+        assert_eq!(
+            frag("Foo\n    ---\n\n---\nFoo\n---\nBar\n---\nBaz\n"),
+            "<p>Foo\n---</p>\n<hr />\n<h2>Foo</h2>\n<h2>Bar</h2>\n<p>Baz</p>\n"
+        );
+        assert_eq!(
+            frag("> Foo\n---\n> foo\nbar\n===\n"),
+            "<blockquote>\n<p>Foo</p>\n</blockquote>\n<hr />\n<blockquote>\n<p>foo\nbar\n===</p>\n</blockquote>\n"
+        );
+        assert_eq!(
+            frag("`Foo\n----\n`\n\n<a title=\"a lot\n---\nof dashes\"/>\n"),
+            "<h2>`Foo</h2>\n<p>`</p>\n<h2>&lt;a title=&quot;a lot</h2>\n<p>of dashes&quot;/&gt;</p>\n"
+        );
+    }
+
+    #[test]
+    fn commonmark_thematic_break_precedence() {
+        assert_eq!(frag("    ***\n"), "<pre><code>***\n</code></pre>\n");
+        assert_eq!(frag("Foo\n    ***\n"), "<p>Foo\n***</p>\n");
+        assert_eq!(
+            frag("* Foo\n* * *\n* Bar\n"),
+            "<ul>\n<li>Foo</li>\n</ul>\n<hr />\n<ul>\n<li>Bar</li>\n</ul>\n"
+        );
+    }
+
+    #[test]
+    fn commonmark_emphasis_delimiter_flanking() {
+        assert_eq!(frag("--\n**\n__\n"), "<p>--\n**\n__</p>\n");
+        assert_eq!(
+            frag("_ _ _ _ a\n\na------\n\n---a---\n"),
+            "<p>_ _ _ _ a</p>\n<p>a------</p>\n<p>---a---</p>\n"
+        );
+        assert_eq!(frag(" *-*\n"), "<p><em>-</em></p>\n");
     }
 
     #[test]
@@ -615,11 +731,11 @@ mod tests {
         );
         assert_eq!(
             frag("![alt](https://e.com/i.png)\n"),
-            "<p><img src=\"https://e.com/i.png\" alt=\"alt\"></p>\n"
+            "<p><img src=\"https://e.com/i.png\" alt=\"alt\" /></p>\n"
         );
-        // Soft break → newline, hard break → <br>.
+        // Soft breaks become newlines; hard breaks use CommonMark's `<br />`.
         assert_eq!(frag("a\nb\n"), "<p>a\nb</p>\n");
-        assert_eq!(frag("a  \nb\n"), "<p>a<br>\nb</p>\n");
+        assert_eq!(frag("a  \nb\n"), "<p>a<br />\nb</p>\n");
     }
 
     #[test]

@@ -52,7 +52,8 @@
     "commit": "bash scripts/commit.sh",
     "benchmark": "bash scripts/benchmark.sh",
     "fix:gpg": "bash scripts/gpg.sh",
-    "docs:dev": "mdbook serve peisar-book"
+    "docs:dev": "mdbook serve peisar-book",
+    "spec:test": "bash scripts/spec_tests.sh"
   },
   "devDependencies": {
     "@emnapi/core": "^2.0.0-alpha.5",

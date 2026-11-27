@@ -8,6 +8,7 @@
 
 
 ![NPM Version](https://img.shields.io/npm/v/peisar?logo=npm&logoColor=%23CB3837) ![Crates.io Version](https://img.shields.io/crates/v/peisar?logo=rust) [![Documentation][docs_img]][docs] ![NPM Downloads](https://img.shields.io/npm/dm/peisar?style=flat-square)
+[![pkg.pr.new](https://pkg.pr.new/badge/phothinmg/peisa)](https://pkg.pr.new/~/phothinmg/peisa)
 
 <!-- ![NPM Downloads](https://img.shields.io/npm/dm/peisar?logo=npm&logoColor=%23CB3837) -->
 
@@ -112,7 +113,7 @@ The graph below summarizes the benchmark results documented in
 [the benchmark guide](peisar-book/src/docs/benchmarks.md). Each panel uses its
 own vertical scale; values are printed above the bars.
 
-![Benchmark results comparing Peisar, marked, markdown-it, and showdown throughput and average peak heap usage across three document sizes](peisar-book/src/docs/benchmark-results.svg) [![pkg.pr.new](https://pkg.pr.new/badge/phothinmg/peisa)](https://pkg.pr.new/~/phothinmg/peisa)
+![Benchmark results comparing Peisar, marked, markdown-it, and showdown throughput and average peak heap usage across three document sizes](peisar-book/src/docs/benchmark-results.svg) 
 
 Run the benchmark with `npm run benchmark`. Results vary by runtime, hardware,
 input, and parser configuration.

@@ -419,7 +419,7 @@ fn test_code_block_indented() {
     let doc = md_to_ast(md, &AstOptions::default(), None);
     assert!(doc.children.iter().any(|b| matches!(
         b,
-        Block::CodeBlock { lang: None, code, .. } if code == "indented code"
+        Block::CodeBlock { lang: None, code, .. } if code == "indented code\n"
     )));
 }
 
@@ -430,7 +430,7 @@ fn test_code_block_tilde_fence() {
     assert!(doc.children.iter().any(|b| matches!(
         b,
         Block::CodeBlock { lang, code, .. }
-            if lang.as_deref() == Some("js") && code == "let x = 1;"
+            if lang.as_deref() == Some("js") && code == "let x = 1;\n"
     )));
 }
 
@@ -846,7 +846,7 @@ fn test_code_block_fenced() {
     assert!(doc.children.iter().any(|b| matches!(
         b,
         Block::CodeBlock { lang, code, .. }
-            if lang.as_deref() == Some("rust") && code == "fn main() {}"
+            if lang.as_deref() == Some("rust") && code == "fn main() {}\n"
     )));
 }
 

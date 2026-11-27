@@ -20,6 +20,10 @@
 - [Overview](docs/rust/README.md)
 - [Rust API reference](docs/rust/apis.md)
 
+# Plugins
+
+- [Vite Plugin Peisar](plugins/vite.md)
+
 # Reference
 
 - [Documentation hub](docs/README.md)

@@ -13,6 +13,8 @@ The benchmark implementation lives in
 Running it also regenerates [benchmark-results.svg](./benchmark-results.svg)
 from the measured throughput and heap results.
 
+![benchmark-results.svg](./benchmark-results.svg)
+
 ## What the benchmark measures
 
 - output validation before timing

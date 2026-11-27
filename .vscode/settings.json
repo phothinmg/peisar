@@ -1,34 +1,47 @@
 {
-    "[markdown]": {
+  "[markdown]": {
     "editor.formatOnSave": false
-},
-"files.associations": {
+  },
+  "files.associations": {
     ".repowikiignore": "plaintext"
-},
-    "cSpell.words": [
-        "autolinks",
-        "cdylib",
-        "emnapi",
-        "Frontmatter",
-        "inlines",
-        "libc",
-        "libuv",
-        "Maung",
-        "mdbook",
-        "NAPI",
-        "noyalib",
-        "Peekable",
-        "peisar",
-        "phothinmg",
-        "prisar",
-        "rescan",
-        "rlib",
-        "serde",
-        "strikethroughs",
-        "threadsafe",
-        "TSFN",
-        "wasi",
-        "wasip",
-        "webp"
-    ]
+  },
+  "cSpell.words": [
+    "autolinks",
+    "basefont",
+    "cdylib",
+    "colgroup",
+    "commonmark",
+    "dlen",
+    "emnapi",
+    "fieldset",
+    "figcaption",
+    "frameset",
+    "Frontmatter",
+    "inlines",
+    "libc",
+    "libuv",
+    "Maung",
+    "mdbook",
+    "NAPI",
+    "noframes",
+    "noyalib",
+    "optgroup",
+    "peaceiris",
+    "Peekable",
+    "peisar",
+    "phothinmg",
+    "prisar",
+    "rescan",
+    "rlib",
+    "serde",
+    "Setext",
+    "strikethroughs",
+    "threadsafe",
+    "TSFN",
+    "wasi",
+    "wasip",
+    "webp",
+    "zoop",
+    "χρῆν"
+  ]
 }

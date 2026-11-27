@@ -436,11 +436,15 @@ pub(crate) fn finalize_hook_block(
         },
         Block::List {
             ordered,
+            start,
+            tight,
             items,
             attrs,
             ..
         } => Block::List {
             ordered,
+            start,
+            tight,
             items,
             pos,
             attrs: trailing_attrs.or(attrs),

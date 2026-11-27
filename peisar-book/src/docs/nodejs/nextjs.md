@@ -43,7 +43,7 @@ module.exports = nextConfig;
 
 ## Example usage
 
-```tsx
+```typescript
 import { Peisar } from "peisar";
 import fs from "node:fs";
 

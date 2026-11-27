@@ -109,12 +109,18 @@ pub fn md_to_ast_with_hooks(
     // reference-style links can be resolved during inline parsing.
     let mut ref_map: LinkRefMap = LinkRefMap::new();
     let mut ref_defs: Vec<crate::peisar_core::tokens::token::LinkReferenceDefinition> = Vec::new();
-    for (line_idx, line) in lines.iter().enumerate() {
-        if block::is_link_ref_def(line) {
-            if let Some(def) = block::parse_link_ref_def_line(line, line_idx, &line_starts, input) {
-                ref_map.insert(def.label.clone(), (def.url.clone(), def.title.clone()));
-                ref_defs.push(def);
-            }
+    let mut line_idx = 0;
+    while line_idx < lines.len() {
+        if let Some((def, lines_consumed)) =
+            block::parse_link_ref_def_lines(&lines, line_idx, &line_starts, input)
+        {
+            ref_map
+                .entry(def.label.clone())
+                .or_insert_with(|| (def.url.clone(), def.title.clone()));
+            ref_defs.push(def);
+            line_idx += lines_consumed;
+        } else {
+            line_idx += 1;
         }
     }
 

@@ -73,6 +73,11 @@ pub enum Block {
     List {
         /// `true` for ordered lists, `false` for unordered.
         ordered: bool,
+        /// Ordered-list start value when it differs from one.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        start: Option<u32>,
+        /// Whether list paragraphs are rendered without `<p>` tags.
+        tight: bool,
         /// The list items.
         items: Vec<ListItem>,
         /// Source span.
