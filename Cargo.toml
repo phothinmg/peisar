@@ -1,6 +1,6 @@
 [package]
 name = "peisar"
-version = "2.1.1"
+version = "2.1.16"
 edition = "2024"
 rust-version = "1.88"
 license = "Apache-2.0"
@@ -40,3 +40,7 @@ path = "examples/rust/plugin.rs"
 [[test]]
 name = "common_mark"
 path = "spec-tests/rust/common_mark.rs"
+
+[[test]]
+name = "gfm"
+path = "spec-tests/rust/gfm.rs"

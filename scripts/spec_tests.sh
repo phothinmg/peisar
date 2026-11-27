@@ -51,6 +51,9 @@ sleep 1
 cargo test --test common_mark html_blocks_v0_31_2
 sleep 1
 cargo test --test common_mark inline_parsing_v0_31_2
+# For GFM
+sleep 1
+cargo test --test gfm
 
 # Testing NodeJs Surface
 # For Commonmark Spec
@@ -64,6 +67,8 @@ sleep 1
 npm test -- --test-name-pattern="HTML blocks Tests" common_mark.test.js
 sleep 1
 npm test -- --test-name-pattern="Inline parsing Tests" common_mark.test.js
+# For GFM
+npm test -- --test-name-pattern="GFM examples" gfm.test.js
 
 # Go back to repo root
 sleep 3
