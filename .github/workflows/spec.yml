@@ -36,4 +36,4 @@ jobs:
         run: npm ci
 
       - name: Run spec tests
-        run: npm run spec:tes
+        run: npm run spec:test
